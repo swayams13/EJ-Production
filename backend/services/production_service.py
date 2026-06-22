@@ -286,8 +286,7 @@ def generate_master_production_register_excel(target_days=15):
                 req_tig, req_mig, req_grind = 0, 0, 0
                 if assignment and assignment.target_date:
                     target_days = (assignment.target_date.date() - datetime.datetime.utcnow().date()).days
-                    if target_days > 0:
-                        req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(p.id, target_days)
+                    req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(p.id, target_days)
                         
                 data.append({
                     "Project No": p.quotation_no,

@@ -136,8 +136,8 @@ if app_mode == "Add Projects":
         session = SessionLocal()
         lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == st.session_state.active_project_id).all()
         if lines:
-            df = pd.DataFrame([{"Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
-            st.table(df)
+            df = pd.DataFrame([{"Sr No": i+1, "Size (NB)": l.size, "Quantity": l.quantity} for i, l in enumerate(lines)])
+            st.table(df.set_index("Sr No"))
         else:
             st.info("No items added yet.")
         session.close()
@@ -230,13 +230,14 @@ elif app_mode == "Progress Dashboard":
                     st.write("No Expansion Joints added to this project.")
                 else:
                     df = pd.DataFrame([{
+                        "Sr No": i+1,
                         "Size (NB)": l.size,
                         "Quantity": l.quantity,
                         "Total TIG (ft)": l.tig_feet,
                         "Total MIG (ft)": l.mig_feet,
                         "Total Grinding (ft)": l.grinding_feet
-                    } for l in lines])
-                    st.dataframe(df, use_container_width=True)
+                    } for i, l in enumerate(lines)])
+                    st.dataframe(df.set_index("Sr No"), use_container_width=True)
                     
                     tot_qty = sum(l.quantity for l in lines)
                     tot_tig = sum(l.tig_feet for l in lines)

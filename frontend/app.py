@@ -35,20 +35,35 @@ st.title("EJ Production Tracker")
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
 
 if not st.session_state.authenticated:
-    st.subheader("Production Manager Login")
+    st.subheader("System Login")
     with st.form("login_form"):
         username = st.text_input("User ID")
         password = st.text_input("Password", type="password")
         submit = st.form_submit_button("Login")
         if submit:
-            if username == os.getenv("ADMIN_USER") and password == os.getenv("ADMIN_PASS"):
+            if username == os.getenv("DEV_USER") and password == os.getenv("DEV_PASS"):
                 st.session_state.authenticated = True
+                st.session_state.user_role = "Developer"
+                st.rerun()
+            elif username == os.getenv("GM_USER") and password == os.getenv("GM_PASS"):
+                st.session_state.authenticated = True
+                st.session_state.user_role = "GM"
+                st.rerun()
+            elif username == os.getenv("PM_USER") and password == os.getenv("PM_PASS"):
+                st.session_state.authenticated = True
+                st.session_state.user_role = "Production Manager"
                 st.rerun()
             else:
                 st.error("Invalid credentials")
     st.stop()
+    
+# Display User Role at top of sidebar
+st.sidebar.markdown(f"**Logged in as:** {st.session_state.user_role}")
+st.sidebar.markdown("---")
 
 app_mode = st.sidebar.radio("Navigation", ["Add Projects", "Edit Projects", "Progress Dashboard", "Production & Capacity Master", "Executive Capacity Dashboard"])
 
@@ -361,7 +376,14 @@ elif app_mode == "Edit Projects":
                 st.warning("⚠️ Deleting this project will permanently remove all of its data, including expansion joints and resource assignments.")
                 del_pass = st.text_input("Enter Admin Password to confirm deletion", type="password")
                 if st.form_submit_button("Delete Project", type="primary"):
-                    if del_pass == os.getenv("ADMIN_PASS"):
+                    # Verify password based on role
+                    role = st.session_state.user_role
+                    valid_pass = False
+                    if role == "Developer" and del_pass == os.getenv("DEV_PASS"): valid_pass = True
+                    elif role == "GM" and del_pass == os.getenv("GM_PASS"): valid_pass = True
+                    elif role == "Production Manager" and del_pass == os.getenv("PM_PASS"): valid_pass = True
+                    
+                    if valid_pass:
                         session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).delete()
                         session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).delete()
                         session.delete(p)
@@ -477,25 +499,34 @@ elif app_mode == "Production & Capacity Master":
     
     with tab_weld:
         st.markdown("Sync **BELLOWS WELDING FEETS PER SIZE** from the server's Excel file to update the Master Database.")
-        if st.button("Sync Data from Server"):
+        if st.button("Sync Latest Welding Master from Server"):
             success, msg = import_welding_master_from_disk()
             if success:
                 st.success(msg)
             else:
                 st.error(msg)
+
+        st.markdown("---")
         
-        st.markdown("#### Latest Welding Master Data")
-        master_data = get_welding_master_latest()
-        if master_data:
-            df_m = pd.DataFrame([{
-                "Size": m.size, "TIG Inches": m.tig_inches, "TIG Feet": m.tig_feet,
-                "MIG Inches": m.mig_inches, "MIG Feet": m.mig_feet,
-                "Total Inches": m.total_welding_inches, "Total Feet": m.total_welding_feet,
-                "Grinding Feet": m.grinding_feet, "Version": m.version
-            } for m in master_data])
-            st.dataframe(df_m, use_container_width=True)
+        if st.session_state.user_role in ["Developer", "GM"]:
+            st.markdown("#### Latest Welding Master Data")
+            master_data = get_welding_master_latest()
+            if not master_data:
+                st.warning("No Master Data Found.")
+            else:
+                df_master = pd.DataFrame([{
+                    "Size (NB)": m.size,
+                    "TIG (in)": m.tig_inches,
+                    "TIG (ft)": m.tig_feet,
+                    "MIG (in)": m.mig_inches,
+                    "MIG (ft)": m.mig_feet,
+                    "Total (in)": m.total_welding_inches,
+                    "Total (ft)": m.total_welding_feet,
+                    "Grinding (ft)": m.grinding_feet
+                } for m in master_data])
+                st.dataframe(df_master.set_index("Size (NB)"), use_container_width=True)
         else:
-            st.info("No welding master data found.")
+            st.info("You do not have permission to view the raw welding master data. Sync operations are permitted.")
             
     with tab_workforce:
         session = SessionLocal()

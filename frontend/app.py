@@ -257,6 +257,22 @@ elif app_mode == "Edit Projects":
                     session.commit()
                     st.success("Project details updated.")
                     st.rerun()
+                    
+            st.markdown("---")
+            st.markdown("#### Delete Project")
+            with st.form("delete_project_form"):
+                st.warning("⚠️ Deleting this project will permanently remove all of its data, including expansion joints and resource assignments.")
+                del_pass = st.text_input("Enter Admin Password to confirm deletion", type="password")
+                if st.form_submit_button("Delete Project", type="primary"):
+                    if del_pass == os.getenv("ADMIN_PASS"):
+                        session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).delete()
+                        session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).delete()
+                        session.delete(p)
+                        session.commit()
+                        st.success(f"Project {p.quotation_no} deleted successfully.")
+                        st.rerun()
+                    else:
+                        st.error("Incorrect Password. Project not deleted.")
             
             st.markdown("#### Edit Expansion Joints")
             st.info("You can edit or delete entries in the table below, then click Save Expansion Joint Changes.")

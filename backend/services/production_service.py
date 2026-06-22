@@ -217,9 +217,9 @@ def get_company_capacity_status(target_days=15):
         req_grind_welders = 0
         
         for p in projects:
+            active_projects_count += 1
             lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
             if lines:
-                active_projects_count += 1
                 proj_tig = sum(l.tig_feet for l in lines)
                 proj_mig = sum(l.mig_feet for l in lines)
                 proj_grind = sum(l.grinding_feet for l in lines)

@@ -54,61 +54,85 @@ app_mode = st.sidebar.radio("Navigation", ["Add Projects", "Edit Projects", "Pro
 if app_mode == "Add Projects":
     st.subheader("Create New Project & Add Expansion Joints")
     
-    if "current_project_lines" not in st.session_state:
-        st.session_state.current_project_lines = []
+    if "active_project_id" not in st.session_state:
+        st.session_state.active_project_id = None
+        st.session_state.active_project_code = None
 
-    master_data = get_welding_master_latest()
-    master_sizes = [m.size for m in master_data]
-    
-    with st.expander("Add Expansion Joint to Project", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            size_option = st.selectbox("Select Size", ["Select", "Manual Entry"] + master_sizes)
-            manual_size = None
-            if size_option == "Manual Entry":
-                manual_size = st.number_input("Enter Manual Size", min_value=1, step=1)
-                st.warning("This value is not present in the master table. Times will be 0.")
-        
-        with col2:
-            qty = st.number_input("Quantity", min_value=1, step=1, value=1)
-            
-        if st.button("Add to Project List"):
-            final_size = manual_size if size_option == "Manual Entry" else size_option
-            if final_size == "Select":
-                st.error("Please select a size.")
-            else:
-                st.session_state.current_project_lines.append({"size": int(final_size), "qty": qty})
-                st.success(f"Added {qty} of size {final_size}")
-
-    st.markdown("#### Current Project Expansion Joints")
-    if len(st.session_state.current_project_lines) > 0:
-        st.table(pd.DataFrame(st.session_state.current_project_lines))
-        
-        with st.form("save_project_form"):
+    if st.session_state.active_project_id is None:
+        st.markdown("#### Step 1: Create Project")
+        with st.form("create_project_form"):
             poc_name = st.text_input("Project / Client Name", value="New Project")
             poc_q_no = st.text_input("Project Code / Ref No", value="PROJ-001")
-            if st.form_submit_button("Save Project"):
+            if st.form_submit_button("Create Project"):
                 session = SessionLocal()
                 import datetime
-                new_proj = Project(
-                    quotation_no=poc_q_no,
-                    client_name=poc_name,
-                    project_name=poc_name,
-                    contact_person="Production User",
-                    created_at=datetime.datetime.utcnow()
-                )
-                session.add(new_proj)
-                session.commit()
-                
-                if sync_project_production_lines(new_proj.id, st.session_state.current_project_lines):
-                    st.success(f"Successfully created Project {poc_q_no} with {len(st.session_state.current_project_lines)} line items!")
-                    st.session_state.current_project_lines = []
+                existing = session.query(Project).filter(Project.quotation_no == poc_q_no).first()
+                if existing:
+                    st.error("Project Code already exists! Please use Edit Projects or enter a different code.")
                 else:
-                    st.error("Failed to calculate production lines.")
+                    new_proj = Project(
+                        quotation_no=poc_q_no,
+                        client_name=poc_name,
+                        project_name=poc_name,
+                        contact_person="Production User",
+                        created_at=datetime.datetime.utcnow()
+                    )
+                    session.add(new_proj)
+                    session.commit()
+                    st.session_state.active_project_id = new_proj.id
+                    st.session_state.active_project_code = new_proj.quotation_no
+                    st.success(f"Project {poc_q_no} created successfully! Now add expansion joints.")
                 session.close()
                 st.rerun()
     else:
-        st.info("No items added yet.")
+        st.markdown(f"#### Step 2: Add Expansion Joints to {st.session_state.active_project_code}")
+        if st.button("Start Another Project"):
+            st.session_state.active_project_id = None
+            st.session_state.active_project_code = None
+            st.rerun()
+
+        master_data = get_welding_master_latest()
+        master_sizes = [m.size for m in master_data]
+        
+        with st.form("add_ej_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                size_option = st.selectbox("Select Size", ["Select", "Manual Entry"] + master_sizes)
+                manual_size = st.number_input("Enter Manual Size (Only used if 'Manual Entry' is selected)", min_value=1, step=1)
+                st.warning("If Manual Entry is used, this value is not present in the master table. Times will be 0.")
+            with col2:
+                qty = st.number_input("Quantity", min_value=1, step=1, value=1)
+                
+            if st.form_submit_button("Add Expansion Joint"):
+                final_size = manual_size if size_option == "Manual Entry" else size_option
+                if final_size == "Select":
+                    st.error("Please select a size.")
+                else:
+                    session = SessionLocal()
+                    m_data = next((m for m in master_data if m.size == int(final_size)), None)
+                    new_line = ProjectProductionLine(
+                        project_id=st.session_state.active_project_id,
+                        size=int(final_size),
+                        quantity=int(qty),
+                        tig_feet=(m_data.tig_feet * int(qty)) if m_data else 0,
+                        mig_feet=(m_data.mig_feet * int(qty)) if m_data else 0,
+                        grinding_feet=(m_data.grinding_feet * int(qty)) if m_data else 0
+                    )
+                    session.add(new_line)
+                    session.commit()
+                    session.close()
+                    st.success(f"Added {qty} of size {final_size}")
+                    st.rerun()
+                    
+        st.markdown("#### Current Expansion Joints")
+        session = SessionLocal()
+        lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == st.session_state.active_project_id).all()
+        if lines:
+            df = pd.DataFrame([{"Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
+            st.table(df)
+        else:
+            st.info("No items added yet.")
+        session.close()
 
 elif app_mode == "Edit Projects":
     st.subheader("Edit Existing Projects")

@@ -141,6 +141,40 @@ if app_mode == "Add Projects":
             st.table(df.set_index("Sr No"))
         else:
             st.info("No items added yet.")
+            
+        st.markdown("---")
+        st.markdown(f"#### Step 3: Schedule & Planning")
+        from backend.services.db_service import ProjectResourceAssignment
+        assign = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == st.session_state.active_project_id).first()
+        
+        with st.form("schedule_form"):
+            start_date = st.date_input("Start Date", value=datetime.date.today() + datetime.timedelta(days=1), format="DD/MM/YYYY")
+            
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                t_weld = st.number_input("TIG Welders", min_value=0, value=assign.assigned_tig_welders if assign else 0)
+            with c2:
+                m_weld = st.number_input("MIG Welders", min_value=0, value=assign.assigned_mig_welders if assign else 0)
+            with c3:
+                grinders = st.number_input("Grinders", min_value=0, value=assign.assigned_grinders if assign else 0)
+                
+            if st.form_submit_button("Calculate Estimated Schedule"):
+                if lines:
+                    from backend.services.production_service import calculate_project_duration
+                    dur, t, m, g = calculate_project_duration(st.session_state.active_project_id, t_weld, m_weld, grinders)
+                    end_date = start_date + datetime.timedelta(days=dur)
+                    
+                    st.info(f"**Start Date:** {start_date.strftime('%d/%m/%Y')} | **Estimated Duration:** {dur} days | **Estimated Completion:** {end_date.strftime('%d/%m/%Y')}")
+                    
+                    if assign and assign.target_date:
+                        deadline_date_val = assign.target_date.date()
+                        if end_date > deadline_date_val:
+                            st.error(f"WARNING: Estimated completion ({end_date.strftime('%d/%m/%Y')}) is PAST the Deadline ({deadline_date_val.strftime('%d/%m/%Y')})!")
+                        else:
+                            st.success(f"Project will finish before the Deadline ({deadline_date_val.strftime('%d/%m/%Y')}).")
+                else:
+                    st.warning("Please add expansion joints first.")
+
         session.close()
 
 elif app_mode == "Edit Projects":

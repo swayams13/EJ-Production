@@ -202,6 +202,7 @@ def get_company_capacity_status(target_days=15):
         tot_tig = 0.0
         tot_mig = 0.0
         tot_grind = 0.0
+        total_estimated_days = 0
         
         active_projects_count = 0
         
@@ -235,6 +236,9 @@ def get_company_capacity_status(target_days=15):
                 req_mig_welders += math.ceil(proj_mig / (proj_target_days * mig_prod)) if proj_target_days > 0 and mig_prod > 0 else 0
                 req_grind_welders += math.ceil(proj_grind / (proj_target_days * grind_prod)) if proj_target_days > 0 and grind_prod > 0 else 0
                 
+                if assignment and assignment.estimated_duration_days:
+                    total_estimated_days += assignment.estimated_duration_days
+                
         # Get Company Resource Pool
         pool = session.query(CompanyResourcePool).first()
         if not pool:
@@ -250,6 +254,7 @@ def get_company_capacity_status(target_days=15):
             "pending_tig": tot_tig,
             "pending_mig": tot_mig,
             "pending_grind": tot_grind,
+            "total_estimated_days": total_estimated_days,
             "pool": {
                 "tig": pool.total_tig_welders,
                 "mig": pool.total_mig_welders,

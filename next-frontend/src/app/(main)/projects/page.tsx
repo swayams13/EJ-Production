@@ -27,6 +27,25 @@ export default function ProjectsList() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total TIG (ft)</p>
+          <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.tig_feet, 0), 0).toFixed(2)}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total MIG (ft)</p>
+          <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.mig_feet, 0), 0).toFixed(2)}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total Grinding (ft)</p>
+          <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.grinding_feet, 0), 0).toFixed(2)}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total Est. Days</p>
+          <p className="text-3xl font-bold text-emerald-600">{projects.reduce((sum, p) => sum + (p.estimated_duration_days || 0), 0)} <span className="text-lg font-medium text-slate-500">days</span></p>
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">

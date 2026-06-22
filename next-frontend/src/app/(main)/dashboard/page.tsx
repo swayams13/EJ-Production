@@ -39,8 +39,9 @@ export default function Dashboard() {
         </button>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
         <MetricCard title="Active Projects" value={data.active_projects} />
+        <MetricCard title="Total Est. Days" value={`${data.total_estimated_days || 0} days`} />
         <MetricCard title="Pending TIG (ft)" value={Math.round(data.pending_tig * 10) / 10} />
         <MetricCard title="Pending MIG (ft)" value={Math.round(data.pending_mig * 10) / 10} />
         <MetricCard title="Pending Grinding (ft)" value={Math.round(data.pending_grind * 10) / 10} />

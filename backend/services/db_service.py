@@ -22,6 +22,7 @@ class Project(Base):
     phone = Column(String, index=True)
     email = Column(String, index=True)
     client_address = Column(Text)
+    status = Column(String, default="Active")
     created_at = Column(DateTime, default=datetime.utcnow)
     
     production_lines = relationship("ProjectProductionLine", back_populates="project", cascade="all, delete-orphan")

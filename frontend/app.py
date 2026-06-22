@@ -560,18 +560,45 @@ elif app_mode == "Executive Capacity Dashboard":
                 session.add(assign)
                 session.commit()
                 
-            with st.expander(f"⚙️ Manage Project: {p.quotation_no} - {p.project_name}", expanded=False):
+            import datetime
+            days_remaining = None
+            if assign and assign.target_date:
+                days_remaining = (assign.target_date.date() - datetime.datetime.utcnow().date()).days
+                
+            status_indicator = "✅" if getattr(p, "status", "Active") == "Completed" else ("🔴" if (days_remaining is not None and days_remaining < 0) else ("🟠" if (days_remaining is not None and days_remaining <= 3) else "🟢"))
+                
+            with st.expander(f"{status_indicator} Manage Project: {p.quotation_no} - {p.project_name}", expanded=False):
+                col_status1, col_status2 = st.columns([3, 1])
+                with col_status1:
+                    if getattr(p, "status", "Active") == "Completed":
+                        st.success("✅ This project has been marked as COMPLETED.")
+                    else:
+                        if days_remaining is not None:
+                            if days_remaining < 0:
+                                st.error(f"⚠️ **DEADLINE EXCEEDED!** Project was due on {assign.target_date.strftime('%d/%m/%Y')} ({abs(days_remaining)} days ago). It is not completed yet.")
+                            elif days_remaining <= 3:
+                                st.warning(f"⚠️ **DEADLINE NEAR!** Project is due on {assign.target_date.strftime('%d/%m/%Y')} (in {days_remaining} days) and is not completed yet.")
+                            else:
+                                st.info(f"**Deadline:** {assign.target_date.strftime('%d/%m/%Y')} ({days_remaining} days remaining).")
+                with col_status2:
+                    current_status = getattr(p, "status", "Active")
+                    toggle_label = "Mark as Active" if current_status == "Completed" else "Mark as Completed"
+                    if st.button(toggle_label, key=f"toggle_status_{p.id}"):
+                        p.status = "Active" if current_status == "Completed" else "Completed"
+                        session.commit()
+                        st.rerun()
+
                 # 1. Update Target Days
                 with st.form(key=f"target_days_form_{p.id}"):
                     col1, col2 = st.columns([3, 1])
                     with col1:
-                        st.markdown(f"**Update Deadline for {p.quotation_no}**")
+                        st.markdown(f"**Update Target Days for {p.quotation_no}**")
                     with col2:
                         new_days = st.number_input("Target Days", min_value=1, max_value=365, value=assign.target_days if assign.target_days else target_days, key=f"days_input_{p.id}")
-                    if st.form_submit_button("Update Deadline"):
+                    if st.form_submit_button("Update Target Days"):
                         assign.target_days = new_days
                         session.commit()
-                        st.success(f"Updated deadline for {p.quotation_no}")
+                        st.success(f"Updated target days for {p.quotation_no}")
                         st.rerun()
 
                 # 2. View Production Lines

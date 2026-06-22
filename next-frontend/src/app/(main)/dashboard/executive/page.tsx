@@ -7,7 +7,7 @@ export default function ExecutiveDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:4500/api/projects")
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/projects`)
       .then((res) => res.json())
       .then((json) => {
         setProjects(json);

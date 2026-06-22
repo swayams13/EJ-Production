@@ -176,6 +176,38 @@ elif app_mode == "Edit Projects":
             st.session_state.edit_authenticated = False
             st.rerun()
 
+elif app_mode == "Progress Dashboard":
+    st.subheader("Project Progress & Overview")
+    
+    session = SessionLocal()
+    projects = session.query(Project).all()
+    
+    if not projects:
+        st.info("No projects added yet.")
+    else:
+        for p in projects:
+            with st.expander(f"Project: {p.quotation_no} - {p.project_name}", expanded=False):
+                lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
+                if not lines:
+                    st.write("No Expansion Joints added to this project.")
+                else:
+                    df = pd.DataFrame([{
+                        "Size (NB)": l.size,
+                        "Quantity": l.quantity,
+                        "Total TIG (ft)": l.tig_feet,
+                        "Total MIG (ft)": l.mig_feet,
+                        "Total Grinding (ft)": l.grinding_feet
+                    } for l in lines])
+                    st.dataframe(df, use_container_width=True)
+                    
+                    tot_qty = sum(l.quantity for l in lines)
+                    tot_tig = sum(l.tig_feet for l in lines)
+                    tot_mig = sum(l.mig_feet for l in lines)
+                    tot_grind = sum(l.grinding_feet for l in lines)
+                    
+                    st.markdown(f"**Total Quantity:** {tot_qty} | **Total TIG:** {tot_tig:.2f} ft | **Total MIG:** {tot_mig:.2f} ft | **Total Grinding:** {tot_grind:.2f} ft")
+    session.close()
+
 elif app_mode == "Production & Capacity Master":
     st.subheader("Production & Capacity Master")
     

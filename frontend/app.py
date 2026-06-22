@@ -1,5 +1,9 @@
 import streamlit as st
 import pandas as pd
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 from backend.services.production_service import (
     import_welding_master_from_disk,
     get_welding_master_latest,
@@ -27,6 +31,23 @@ except Exception as e:
     pass
 
 st.title("EJ Production Tracker")
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.subheader("Production Manager Login")
+    with st.form("login_form"):
+        username = st.text_input("User ID")
+        password = st.text_input("Password", type="password")
+        submit = st.form_submit_button("Login")
+        if submit:
+            if username == os.getenv("ADMIN_USER") and password == os.getenv("ADMIN_PASS"):
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
+    st.stop()
 
 app_mode = st.sidebar.radio("Navigation", ["Production & Capacity Master", "Executive Capacity Dashboard"])
 

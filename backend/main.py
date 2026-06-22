@@ -116,9 +116,9 @@ def get_projects(db = Depends(get_db)):
         bellows = [{
             "size": l.size,
             "quantity": l.quantity,
-            "tig_feet": l.tig_feet,
-            "mig_feet": l.mig_feet,
-            "grinding_feet": l.grinding_feet
+            "tig_feet": round(l.tig_feet, 2) if l.tig_feet else 0,
+            "mig_feet": round(l.mig_feet, 2) if l.mig_feet else 0,
+            "grinding_feet": round(l.grinding_feet, 2) if l.grinding_feet else 0
         } for l in lines]
         
         results.append({
@@ -138,7 +138,7 @@ def get_projects(db = Depends(get_db)):
 @app.get("/api/master/welding")
 def get_welding_master():
     data = get_welding_master_latest()
-    return [{"size": d.size, "tig_feet": d.tig_feet, "mig_feet": d.mig_feet, "grinding_feet": d.grinding_feet} for d in data]
+    return [{"size": d.size, "tig_feet": round(d.tig_feet, 2) if d.tig_feet else 0, "mig_feet": round(d.mig_feet, 2) if d.mig_feet else 0, "grinding_feet": round(d.grinding_feet, 2) if d.grinding_feet else 0} for d in data]
 
 @app.post("/api/master/sync")
 def sync_master():
@@ -180,7 +180,19 @@ def create_project(req: ProjectCreate, db = Depends(get_db)):
     if req.bellows:
         bellows_data = [{"size": b.size, "qty": b.qty} for b in req.bellows]
         sync_project_production_lines(new_proj.id, bellows_data)
-        calculate_project_duration(new_proj.id, req.assigned_tig or 0, req.assigned_mig or 0, req.assigned_grinders or 0)
+        
+        target_days = (dt_deadline.date() - datetime.utcnow().date()).days if req.target_date else 15
+        target_days = max(1, target_days)
+        
+        if req.assigned_tig == 0 or req.assigned_mig == 0 or req.assigned_grinders == 0:
+            from backend.services.production_service import calculate_required_resources_for_deadline
+            req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(new_proj.id, target_days)
+            if req.assigned_tig == 0: assign.assigned_tig_welders = req_tig
+            if req.assigned_mig == 0: assign.assigned_mig_welders = req_mig
+            if req.assigned_grinders == 0: assign.assigned_grinders = req_grind
+            db.commit()
+            
+        calculate_project_duration(new_proj.id, assign.assigned_tig_welders or 0, assign.assigned_mig_welders or 0, assign.assigned_grinders or 0)
         
     return {"id": new_proj.id, "message": "Project created successfully"}
 

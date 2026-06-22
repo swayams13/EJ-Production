@@ -200,17 +200,17 @@ if app_mode == "Add Projects":
                     if existing_line:
                         existing_line.quantity += int(qty)
                         if m_data:
-                            existing_line.tig_feet = m_data.tig_feet * existing_line.quantity
-                            existing_line.mig_feet = m_data.mig_feet * existing_line.quantity
-                            existing_line.grinding_feet = m_data.grinding_feet * existing_line.quantity
+                            existing_line.tig_feet = (m_data.tig_feet or 0.0) * existing_line.quantity
+                            existing_line.mig_feet = (m_data.mig_feet or 0.0) * existing_line.quantity
+                            existing_line.grinding_feet = (m_data.grinding_feet or 0.0) * existing_line.quantity
                     else:
                         new_line = ProjectProductionLine(
                             project_id=st.session_state.active_project_id,
                             size=int(final_size),
                             quantity=int(qty),
-                            tig_feet=(m_data.tig_feet * int(qty)) if m_data else 0,
-                            mig_feet=(m_data.mig_feet * int(qty)) if m_data else 0,
-                            grinding_feet=(m_data.grinding_feet * int(qty)) if m_data else 0
+                            tig_feet=((m_data.tig_feet or 0.0) * int(qty)) if m_data else 0,
+                            mig_feet=((m_data.mig_feet or 0.0) * int(qty)) if m_data else 0,
+                            grinding_feet=((m_data.grinding_feet or 0.0) * int(qty)) if m_data else 0
                         )
                         session.add(new_line)
                         

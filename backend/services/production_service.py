@@ -169,6 +169,29 @@ def calculate_project_duration(project_id, tig_welders, mig_welders, grinders):
     finally:
         session.close()
 
+def calculate_required_resources_for_deadline(project_id, target_days):
+    session = SessionLocal()
+    try:
+        lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
+        tot_tig = sum(l.tig_feet for l in lines)
+        tot_mig = sum(l.mig_feet for l in lines)
+        tot_grind = sum(l.grinding_feet for l in lines)
+        
+        workforce = session.query(WorkforceMaster).all()
+        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+        
+        tig_prod = prod.get("TIG Welder", 180)
+        mig_prod = prod.get("MIG Welder", 120)
+        grind_prod = prod.get("Grinder", 80)
+        
+        req_tig = math.ceil(tot_tig / (target_days * tig_prod)) if target_days > 0 and tig_prod > 0 else 0
+        req_mig = math.ceil(tot_mig / (target_days * mig_prod)) if target_days > 0 and mig_prod > 0 else 0
+        req_grind = math.ceil(tot_grind / (target_days * grind_prod)) if target_days > 0 and grind_prod > 0 else 0
+        
+        return req_tig, req_mig, req_grind
+    finally:
+        session.close()
+
 def get_company_capacity_status(target_days=15):
     session = SessionLocal()
     try:

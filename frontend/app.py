@@ -95,7 +95,29 @@ if app_mode == "Add Projects":
                 session.close()
     else:
         st.markdown(f"#### Step 2: Add Expansion Joints to {st.session_state.active_project_code}")
-        if st.button("⬅️ Go Back to Previous Menu"):
+        
+        session = SessionLocal()
+        p = session.query(Project).filter(Project.id == st.session_state.active_project_id).first()
+        from backend.services.db_service import ProjectResourceAssignment
+        assign = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
+        current_deadline = assign.target_date.date() if assign and assign.target_date else datetime.datetime.utcnow().date()
+        
+        with st.expander("✏️ Edit Project Details (Code & Deadline)"):
+            with st.form("quick_edit_project"):
+                new_q_no = st.text_input("Project Code", value=p.quotation_no)
+                new_deadline = st.date_input("Deadline Date", value=current_deadline)
+                if st.form_submit_button("Update Project Details"):
+                    p.quotation_no = new_q_no
+                    p.project_name = new_q_no
+                    if assign:
+                        assign.target_date = datetime.datetime.combine(new_deadline, datetime.datetime.min.time())
+                    session.commit()
+                    st.session_state.active_project_code = new_q_no
+                    st.success("Project details updated.")
+                    st.rerun()
+        session.close()
+
+        if st.button("⬅️ Cancel / Start New Project"):
             st.session_state.active_project_id = None
             st.session_state.active_project_code = None
             st.rerun()
@@ -103,7 +125,7 @@ if app_mode == "Add Projects":
         master_data = get_welding_master_latest()
         master_sizes = [m.size for m in master_data]
         
-        with st.form("add_ej_form"):
+        with st.form("add_ej_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
                 size_option = st.selectbox("Select Size", ["Select"] + master_sizes)
@@ -117,15 +139,28 @@ if app_mode == "Add Projects":
                 else:
                     session = SessionLocal()
                     m_data = next((m for m in master_data if m.size == int(final_size)), None)
-                    new_line = ProjectProductionLine(
-                        project_id=st.session_state.active_project_id,
-                        size=int(final_size),
-                        quantity=int(qty),
-                        tig_feet=(m_data.tig_feet * int(qty)) if m_data else 0,
-                        mig_feet=(m_data.mig_feet * int(qty)) if m_data else 0,
-                        grinding_feet=(m_data.grinding_feet * int(qty)) if m_data else 0
-                    )
-                    session.add(new_line)
+                    existing_line = session.query(ProjectProductionLine).filter(
+                        ProjectProductionLine.project_id == st.session_state.active_project_id,
+                        ProjectProductionLine.size == int(final_size)
+                    ).first()
+                    
+                    if existing_line:
+                        existing_line.quantity += int(qty)
+                        if m_data:
+                            existing_line.tig_feet = m_data.tig_feet * existing_line.quantity
+                            existing_line.mig_feet = m_data.mig_feet * existing_line.quantity
+                            existing_line.grinding_feet = m_data.grinding_feet * existing_line.quantity
+                    else:
+                        new_line = ProjectProductionLine(
+                            project_id=st.session_state.active_project_id,
+                            size=int(final_size),
+                            quantity=int(qty),
+                            tig_feet=(m_data.tig_feet * int(qty)) if m_data else 0,
+                            mig_feet=(m_data.mig_feet * int(qty)) if m_data else 0,
+                            grinding_feet=(m_data.grinding_feet * int(qty)) if m_data else 0
+                        )
+                        session.add(new_line)
+                        
                     session.commit()
                     session.close()
                     st.success(f"Added {qty} of size {final_size}")

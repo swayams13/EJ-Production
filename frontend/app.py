@@ -544,9 +544,59 @@ elif app_mode == "Executive Capacity Dashboard":
     
     target_days = st.slider("Default Target Completion Days (Global Fallback)", min_value=1, max_value=365, value=15)
     
-    st.markdown("### Per-Project Deadlines & Assignments")
     session = SessionLocal()
     projects = session.query(Project).all()
+
+    st.markdown("### Executive Dashboard (Global)")
+    status = get_company_capacity_status(target_days)
+    
+    completed_projects = sum(1 for p in projects if getattr(p, "status", "Active") == "Completed")
+    exceeded_projects = 0
+    import datetime
+    for p in projects:
+        if getattr(p, "status", "Active") != "Completed":
+            assign = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
+            if assign and assign.target_date:
+                days_remaining = (assign.target_date.date() - datetime.datetime.utcnow().date()).days
+                if days_remaining < 0:
+                    exceeded_projects += 1
+    
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    with col1:
+        with st.container(border=True):
+            st.metric("Active Projects", status["active_projects"])
+    with col2:
+        with st.container(border=True):
+            st.metric("Completed", completed_projects)
+    with col3:
+        with st.container(border=True):
+            st.metric("Overdue", exceeded_projects)
+    with col4:
+        with st.container(border=True):
+            st.metric("Pending TIG", f"{round(status['pending_tig'], 1)} ft")
+    with col5:
+        with st.container(border=True):
+            st.metric("Pending MIG", f"{round(status['pending_mig'], 1)} ft")
+    with col6:
+        with st.container(border=True):
+            st.metric("Pending Grinding", f"{round(status['pending_grind'], 1)} ft")
+            
+    st.markdown("#### Manpower Requirement Engine")
+    req_df = pd.DataFrame([
+        {"Resource": "TIG Welders", "Required (Daily Avg)": status["required"]["tig"], "Available": status["pool"]["tig"], "Shortage": status["shortage"]["tig"]},
+        {"Resource": "MIG Welders", "Required (Daily Avg)": status["required"]["mig"], "Available": status["pool"]["mig"], "Shortage": status["shortage"]["mig"]},
+        {"Resource": "Grinders", "Required (Daily Avg)": status["required"]["grinders"], "Available": status["pool"]["grinders"], "Shortage": status["shortage"]["grinders"]}
+    ])
+    
+    def highlight_shortage(s):
+        if s["Shortage"] > 0:
+            return ['background-color: rgba(255, 0, 0, 0.2)'] * len(s)
+        return [''] * len(s)
+        
+    st.dataframe(req_df.style.apply(highlight_shortage, axis=1), use_container_width=True)
+    st.markdown("---")
+
+    st.markdown("### Per-Project Deadlines & Assignments")
     
     if not projects:
         st.info("No active projects found. Go to 'Production & Capacity Master' to create projects.")
@@ -638,38 +688,7 @@ elif app_mode == "Executive Capacity Dashboard":
 
     session.close()
 
-    st.markdown("---")
-    st.markdown("### Executive Dashboard (Global)")
-    status = get_company_capacity_status(target_days)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        with st.container(border=True):
-            st.metric("Active Projects", status["active_projects"])
-    with col2:
-        with st.container(border=True):
-            st.metric("Pending TIG Feet", round(status["pending_tig"], 2))
-    with col3:
-        with st.container(border=True):
-            st.metric("Pending MIG Feet", round(status["pending_mig"], 2))
-    with col4:
-        with st.container(border=True):
-            st.metric("Pending Grinding Feet", round(status["pending_grind"], 2))
-            
-    st.markdown("### Manpower Requirement Engine")
-    req_df = pd.DataFrame([
-        {"Resource": "TIG Welders", "Required (Daily Avg)": status["required"]["tig"], "Available": status["pool"]["tig"], "Shortage": status["shortage"]["tig"]},
-        {"Resource": "MIG Welders", "Required (Daily Avg)": status["required"]["mig"], "Available": status["pool"]["mig"], "Shortage": status["shortage"]["mig"]},
-        {"Resource": "Grinders", "Required (Daily Avg)": status["required"]["grinders"], "Available": status["pool"]["grinders"], "Shortage": status["shortage"]["grinders"]}
-    ])
-    
-    def highlight_shortage(s):
-        if s["Shortage"] > 0:
-            return ['background-color: rgba(255, 0, 0, 0.2)'] * len(s)
-        return [''] * len(s)
-        
-    st.dataframe(req_df.style.apply(highlight_shortage, axis=1), use_container_width=True)
-    
+
     st.markdown("### 📥 Download Reports")
     excel_data = generate_master_production_register_excel(target_days)
     st.download_button(

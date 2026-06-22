@@ -185,9 +185,10 @@ def calculate_required_resources_for_deadline(project_id, target_days):
         mig_prod = prod.get("MIG Welder", 120)
         grind_prod = prod.get("Grinder", 80)
         
-        req_tig = math.ceil(tot_tig / (target_days * tig_prod)) if target_days > 0 and tig_prod > 0 else 0
-        req_mig = math.ceil(tot_mig / (target_days * mig_prod)) if target_days > 0 and mig_prod > 0 else 0
-        req_grind = math.ceil(tot_grind / (target_days * grind_prod)) if target_days > 0 and grind_prod > 0 else 0
+        effective_target_days = max(1, target_days)
+        req_tig = math.ceil(tot_tig / (effective_target_days * tig_prod)) if tig_prod > 0 else 0
+        req_mig = math.ceil(tot_mig / (effective_target_days * mig_prod)) if mig_prod > 0 else 0
+        req_grind = math.ceil(tot_grind / (effective_target_days * grind_prod)) if grind_prod > 0 else 0
         
         return req_tig, req_mig, req_grind
     finally:

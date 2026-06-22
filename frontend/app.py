@@ -138,7 +138,7 @@ if app_mode == "Add Projects":
         lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == st.session_state.active_project_id).all()
         if lines:
             st.info("You can edit or delete entries in the table below, then click Save.")
-            df = pd.DataFrame([{"Delete": False, "Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
+            df = pd.DataFrame([{"Size (NB)": l.size, "Quantity": l.quantity, "Delete": False} for l in lines])
             df.index += 1
             df.index.name = "Sr No"
             edited_df = st.data_editor(
@@ -150,19 +150,30 @@ if app_mode == "Add Projects":
                 }
             )
             if st.button("Save Edits/Deletions"):
-                session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == st.session_state.active_project_id).delete()
-                session.commit()
-                
-                new_sq_list = []
+                master_sizes = [m.size for m in get_welding_master_latest()]
+                invalid_sizes = []
                 for _, row in edited_df.iterrows():
-                    if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
-                        new_sq_list.append({"size": int(row['Size (NB)']), "qty": int(row['Quantity'])})
+                    if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')):
+                        size_val = int(row['Size (NB)'])
+                        if size_val not in master_sizes:
+                            invalid_sizes.append(size_val)
                 
-                if sync_project_production_lines(st.session_state.active_project_id, new_sq_list):
-                    st.success("Items updated!")
+                if invalid_sizes:
+                    st.error(f"Please enter suitable value from table. The following sizes are not in the master table: {invalid_sizes}")
                 else:
-                    st.error("Failed to update items.")
-                st.rerun()
+                    session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == st.session_state.active_project_id).delete()
+                    session.commit()
+                    
+                    new_sq_list = []
+                    for _, row in edited_df.iterrows():
+                        if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
+                            new_sq_list.append({"size": int(row['Size (NB)']), "qty": int(row['Quantity'])})
+                    
+                    if sync_project_production_lines(st.session_state.active_project_id, new_sq_list):
+                        st.success("Items updated!")
+                    else:
+                        st.error("Failed to update items.")
+                    st.rerun()
         else:
             st.info("No items added yet.")
             
@@ -251,7 +262,7 @@ elif app_mode == "Edit Projects":
             
             st.markdown("#### Edit Expansion Joints")
             st.info("You can edit or delete entries in the table below, then click Save Expansion Joint Changes.")
-            df_lines = pd.DataFrame([{"Delete": False, "Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
+            df_lines = pd.DataFrame([{"Size (NB)": l.size, "Quantity": l.quantity, "Delete": False} for l in lines])
             df_lines.index += 1
             df_lines.index.name = "Sr No"
             edited_df = st.data_editor(
@@ -263,19 +274,30 @@ elif app_mode == "Edit Projects":
                 }
             )
             if st.button("Save Expansion Joint Changes"):
-                session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).delete()
-                session.commit()
-                
-                new_sq_list = []
+                master_sizes = [m.size for m in get_welding_master_latest()]
+                invalid_sizes = []
                 for _, row in edited_df.iterrows():
-                    if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
-                        new_sq_list.append({"size": int(row['Size (NB)']), "qty": int(row['Quantity'])})
+                    if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')):
+                        size_val = int(row['Size (NB)'])
+                        if size_val not in master_sizes:
+                            invalid_sizes.append(size_val)
                 
-                if sync_project_production_lines(p.id, new_sq_list):
-                    st.success("Updated project items.")
+                if invalid_sizes:
+                    st.error(f"Please enter suitable value from table. The following sizes are not in the master table: {invalid_sizes}")
                 else:
-                    st.error("Failed to update project items.")
-                st.rerun()
+                    session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).delete()
+                    session.commit()
+                    
+                    new_sq_list = []
+                    for _, row in edited_df.iterrows():
+                        if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
+                            new_sq_list.append({"size": int(row['Size (NB)']), "qty": int(row['Quantity'])})
+                    
+                    if sync_project_production_lines(p.id, new_sq_list):
+                        st.success("Updated project items.")
+                    else:
+                        st.error("Failed to update project items.")
+                    st.rerun()
         
         session.close()
         

@@ -201,22 +201,12 @@ if app_mode == "Add Projects":
         with c3:
             grinders = st.number_input("Grinders", min_value=0, value=assign.assigned_grinders if assign else 0)
             
-        if st.button("Calculate Estimated Schedule"):
-            if lines:
-                from backend.services.production_service import calculate_project_duration
-                dur, t, m, g = calculate_project_duration(st.session_state.active_project_id, t_weld, m_weld, grinders)
-                end_date = start_date + datetime.timedelta(days=dur)
-                
-                st.info(f"**Start Date:** {start_date.strftime('%d/%m/%Y')} | **Estimated Duration:** {dur} days | **Estimated Completion:** {end_date.strftime('%d/%m/%Y')}")
-                
-                if assign and assign.target_date:
-                    deadline_date_val = assign.target_date.date()
-                    if end_date > deadline_date_val:
-                        st.error(f"WARNING: Estimated completion ({end_date.strftime('%d/%m/%Y')}) is PAST the Deadline ({deadline_date_val.strftime('%d/%m/%Y')})!")
-                    else:
-                        st.success(f"Project will finish before the Deadline ({deadline_date_val.strftime('%d/%m/%Y')}).")
-            else:
-                st.warning("Please add expansion joints first.")
+        if lines:
+            from backend.services.production_service import calculate_project_duration
+            dur, t, m, g = calculate_project_duration(st.session_state.active_project_id, t_weld, m_weld, grinders)
+            st.info(f"**Estimated Time Required:** {dur} working days to complete based on these assigned resources.")
+        else:
+            st.warning("Please add expansion joints to see estimated schedule.")
 
         session.close()
 

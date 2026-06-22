@@ -90,8 +90,9 @@ if app_mode == "Add Projects":
                     st.session_state.active_project_id = new_proj.id
                     st.session_state.active_project_code = new_proj.quotation_no
                     st.success(f"Project {poc_q_no} created successfully! Now add expansion joints.")
+                    session.close()
+                    st.rerun()
                 session.close()
-                st.rerun()
     else:
         st.markdown(f"#### Step 2: Add Expansion Joints to {st.session_state.active_project_code}")
         if st.button("Start Another Project"):

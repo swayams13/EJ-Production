@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -61,8 +62,8 @@ if app_mode == "Add Projects":
     if st.session_state.active_project_id is None:
         st.markdown("#### Step 1: Create Project")
         with st.form("create_project_form"):
-            poc_name = st.text_input("Project / Client Name", value="New Project")
-            poc_q_no = st.text_input("Project Code / Ref No", value="PROJ-001")
+            poc_q_no = st.text_input("Project Code", value="PROJ-001")
+            deadline_date = st.date_input("Deadline Date")
             if st.form_submit_button("Create Project"):
                 session = SessionLocal()
                 import datetime
@@ -72,13 +73,20 @@ if app_mode == "Add Projects":
                 else:
                     new_proj = Project(
                         quotation_no=poc_q_no,
-                        client_name=poc_name,
-                        project_name=poc_name,
+                        client_name="",
+                        project_name=poc_q_no,
                         contact_person="Production User",
                         created_at=datetime.datetime.utcnow()
                     )
                     session.add(new_proj)
                     session.commit()
+                    
+                    from backend.services.db_service import ProjectResourceAssignment
+                    dt_deadline = datetime.datetime.combine(deadline_date, datetime.datetime.min.time())
+                    assign = ProjectResourceAssignment(project_id=new_proj.id, target_date=dt_deadline)
+                    session.add(assign)
+                    session.commit()
+                    
                     st.session_state.active_project_id = new_proj.id
                     st.session_state.active_project_code = new_proj.quotation_no
                     st.success(f"Project {poc_q_no} created successfully! Now add expansion joints.")
@@ -166,12 +174,18 @@ elif app_mode == "Edit Projects":
             
             st.markdown(f"Editing Project: **{p.quotation_no}**")
             
+            from backend.services.db_service import ProjectResourceAssignment
+            assign = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
+            current_deadline = assign.target_date.date() if assign and assign.target_date else datetime.datetime.utcnow().date()
+            
             with st.form("edit_project_metadata"):
-                new_name = st.text_input("Project Name", value=p.project_name)
                 new_q_no = st.text_input("Project Code", value=p.quotation_no)
+                new_deadline = st.date_input("Deadline Date", value=current_deadline)
                 if st.form_submit_button("Update Project Details"):
-                    p.project_name = new_name
                     p.quotation_no = new_q_no
+                    p.project_name = new_q_no
+                    if assign:
+                        assign.target_date = datetime.datetime.combine(new_deadline, datetime.datetime.min.time())
                     session.commit()
                     st.success("Project details updated.")
                     st.rerun()

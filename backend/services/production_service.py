@@ -197,8 +197,8 @@ def calculate_required_resources_for_deadline(project_id, target_days):
 def get_company_capacity_status(target_days=15):
     session = SessionLocal()
     try:
-        # Aggregation of all projects (Assuming all projects are active for now)
-        projects = session.query(Project).all()
+        # Aggregation of all projects (Exclude completed projects)
+        projects = session.query(Project).filter((Project.status != "Completed") | (Project.status == None)).all()
         tot_tig = 0.0
         tot_mig = 0.0
         tot_grind = 0.0

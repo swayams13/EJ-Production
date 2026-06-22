@@ -573,13 +573,13 @@ elif app_mode == "Executive Capacity Dashboard":
             st.metric("Overdue", exceeded_projects)
     with col4:
         with st.container(border=True):
-            st.metric("Pending TIG", f"{round(status['pending_tig'], 1)} ft")
+            st.metric("Pending TIG (ft)", round(status['pending_tig'], 1))
     with col5:
         with st.container(border=True):
-            st.metric("Pending MIG", f"{round(status['pending_mig'], 1)} ft")
+            st.metric("Pending MIG (ft)", round(status['pending_mig'], 1))
     with col6:
         with st.container(border=True):
-            st.metric("Pending Grinding", f"{round(status['pending_grind'], 1)} ft")
+            st.metric("Pending Grinding (ft)", round(status['pending_grind'], 1))
             
     st.markdown("#### Manpower Requirement Engine")
     req_df = pd.DataFrame([

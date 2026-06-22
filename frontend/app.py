@@ -110,6 +110,72 @@ if app_mode == "Add Projects":
     else:
         st.info("No items added yet.")
 
+elif app_mode == "Edit Projects":
+    st.subheader("Edit Existing Projects")
+    
+    if "edit_authenticated" not in st.session_state:
+        st.session_state.edit_authenticated = False
+        
+    if not st.session_state.edit_authenticated:
+        with st.form("edit_login"):
+            st.warning("Re-authentication required to edit projects.")
+            pwd = st.text_input("Enter Production Manager Password", type="password")
+            if st.form_submit_button("Authenticate"):
+                if pwd == os.getenv("ADMIN_PASS"):
+                    st.session_state.edit_authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect password")
+    else:
+        session = SessionLocal()
+        projects = session.query(Project).all()
+        
+        if not projects:
+            st.info("No projects found.")
+        else:
+            proj_dict = {f"{p.quotation_no} - {p.project_name}": p.id for p in projects}
+            selected_proj_str = st.selectbox("Select Project to Edit", list(proj_dict.keys()))
+            selected_proj_id = proj_dict[selected_proj_str]
+            
+            p = session.query(Project).filter(Project.id == selected_proj_id).first()
+            lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
+            
+            st.markdown(f"Editing Project: **{p.quotation_no}**")
+            
+            with st.form("edit_project_metadata"):
+                new_name = st.text_input("Project Name", value=p.project_name)
+                new_q_no = st.text_input("Project Code", value=p.quotation_no)
+                if st.form_submit_button("Update Project Details"):
+                    p.project_name = new_name
+                    p.quotation_no = new_q_no
+                    session.commit()
+                    st.success("Project details updated.")
+                    st.rerun()
+            
+            st.markdown("#### Edit Expansion Joints")
+            df_lines = pd.DataFrame([{"size": l.size, "qty": l.quantity} for l in lines])
+            edited_df = st.data_editor(df_lines, num_rows="dynamic", hide_index=True)
+            if st.button("Save Expansion Joint Changes"):
+                session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).delete()
+                session.commit()
+                
+                new_sq_list = []
+                for _, row in edited_df.iterrows():
+                    if pd.notna(row.get('size')) and pd.notna(row.get('qty')):
+                        new_sq_list.append({"size": int(row['size']), "qty": int(row['qty'])})
+                
+                if sync_project_production_lines(p.id, new_sq_list):
+                    st.success("Updated project items.")
+                else:
+                    st.error("Failed to update project items.")
+                st.rerun()
+        
+        session.close()
+        
+        if st.button("Lock Editing"):
+            st.session_state.edit_authenticated = False
+            st.rerun()
+
 elif app_mode == "Production & Capacity Master":
     st.subheader("Production & Capacity Master")
     

@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from services.production_service import (
+from backend.services.production_service import (
     import_welding_master_from_disk,
     get_welding_master_latest,
     sync_project_production_lines,
@@ -8,7 +8,7 @@ from services.production_service import (
     get_company_capacity_status,
     generate_master_production_register_excel
 )
-from services.db_service import (
+from backend.services.db_service import (
     SessionLocal,
     WorkforceMaster,
     CompanyResourcePool,

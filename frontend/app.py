@@ -312,6 +312,17 @@ elif app_mode == "Progress Dashboard":
     if not projects:
         st.info("No projects added yet.")
     else:
+        from backend.services.production_service import generate_master_production_register_excel
+        excel_data = generate_master_production_register_excel()
+        if excel_data:
+            st.download_button(
+                label="📥 Download Projects Status Report (Excel)",
+                data=excel_data,
+                file_name="Projects_Status_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            st.markdown("---")
+            
         for p in projects:
             with st.expander(f"Project Code: {p.quotation_no}", expanded=False):
                 lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()

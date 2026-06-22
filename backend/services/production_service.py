@@ -281,20 +281,26 @@ def generate_master_production_register_excel(target_days=15):
             tot_grind = sum(l.grinding_feet for l in lines)
             
             if lines or assignment:
+                req_tig, req_mig, req_grind = 0, 0, 0
+                if assignment and assignment.target_date:
+                    target_days = (assignment.target_date.date() - datetime.datetime.utcnow().date()).days
+                    if target_days > 0:
+                        req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(p.id, target_days)
+                        
                 data.append({
                     "Project No": p.quotation_no,
-                    "Customer": p.client_name,
                     "Project Status": "Active",
                     "Total TIG Feet": tot_tig,
                     "Total MIG Feet": tot_mig,
                     "Total Grinding Feet": tot_grind,
+                    "Required TIG Welders": req_tig,
+                    "Required MIG Welders": req_mig,
+                    "Required Grinders": req_grind,
                     "Assigned TIG Welders": assignment.assigned_tig_welders if assignment else 0,
                     "Assigned MIG Welders": assignment.assigned_mig_welders if assignment else 0,
                     "Assigned Grinders": assignment.assigned_grinders if assignment else 0,
-                    "Target Days": assignment.target_days if assignment and assignment.target_days else target_days,
-                    "Estimated Duration": assignment.estimated_duration_days if assignment else 0,
-                    "Target Date": assignment.target_date.strftime("%Y-%m-%d") if assignment and assignment.target_date else "",
-                    "Forecast Date": assignment.forecast_date.strftime("%Y-%m-%d") if assignment and assignment.forecast_date else ""
+                    "Estimated Duration (Days)": assignment.estimated_duration_days if assignment else 0,
+                    "Deadline Date": assignment.target_date.strftime("%d/%m/%Y") if assignment and assignment.target_date else ""
                 })
         df_projects = pd.DataFrame(data)
         

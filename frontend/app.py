@@ -49,12 +49,71 @@ if not st.session_state.authenticated:
                 st.error("Invalid credentials")
     st.stop()
 
-app_mode = st.sidebar.radio("Navigation", ["Production & Capacity Master", "Executive Capacity Dashboard"])
+app_mode = st.sidebar.radio("Navigation", ["Add Projects", "Edit Projects", "Progress Dashboard", "Production & Capacity Master", "Executive Capacity Dashboard"])
 
-if app_mode == "Production & Capacity Master":
+if app_mode == "Add Projects":
+    st.subheader("Create New Project & Add Expansion Joints")
+    
+    if "current_project_lines" not in st.session_state:
+        st.session_state.current_project_lines = []
+
+    master_data = get_welding_master_latest()
+    master_sizes = [m.size for m in master_data]
+    
+    with st.expander("Add Expansion Joint to Project", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            size_option = st.selectbox("Select Size", ["Select", "Manual Entry"] + master_sizes)
+            manual_size = None
+            if size_option == "Manual Entry":
+                manual_size = st.number_input("Enter Manual Size", min_value=1, step=1)
+                st.warning("This value is not present in the master table. Times will be 0.")
+        
+        with col2:
+            qty = st.number_input("Quantity", min_value=1, step=1, value=1)
+            
+        if st.button("Add to Project List"):
+            final_size = manual_size if size_option == "Manual Entry" else size_option
+            if final_size == "Select":
+                st.error("Please select a size.")
+            else:
+                st.session_state.current_project_lines.append({"size": int(final_size), "qty": qty})
+                st.success(f"Added {qty} of size {final_size}")
+
+    st.markdown("#### Current Project Expansion Joints")
+    if len(st.session_state.current_project_lines) > 0:
+        st.table(pd.DataFrame(st.session_state.current_project_lines))
+        
+        with st.form("save_project_form"):
+            poc_name = st.text_input("Project / Client Name", value="New Project")
+            poc_q_no = st.text_input("Project Code / Ref No", value="PROJ-001")
+            if st.form_submit_button("Save Project"):
+                session = SessionLocal()
+                import datetime
+                new_proj = Project(
+                    quotation_no=poc_q_no,
+                    client_name=poc_name,
+                    project_name=poc_name,
+                    contact_person="Production User",
+                    created_at=datetime.datetime.utcnow()
+                )
+                session.add(new_proj)
+                session.commit()
+                
+                if sync_project_production_lines(new_proj.id, st.session_state.current_project_lines):
+                    st.success(f"Successfully created Project {poc_q_no} with {len(st.session_state.current_project_lines)} line items!")
+                    st.session_state.current_project_lines = []
+                else:
+                    st.error("Failed to calculate production lines.")
+                session.close()
+                st.rerun()
+    else:
+        st.info("No items added yet.")
+
+elif app_mode == "Production & Capacity Master":
     st.subheader("Production & Capacity Master")
     
-    tab_weld, tab_workforce, tab_pool, tab_poc = st.tabs(["Welding Workload Engine", "Workforce Master", "Company Resource Pool", "POC Project Creator"])
+    tab_weld, tab_workforce, tab_pool = st.tabs(["Welding Workload Engine", "Workforce Master", "Company Resource Pool"])
     
     with tab_weld:
         st.markdown("Sync **BELLOWS WELDING FEETS PER SIZE** from the server's Excel file to update the Master Database.")
@@ -119,51 +178,6 @@ if app_mode == "Production & Capacity Master":
                     st.rerun()
         session.close()
 
-    with tab_poc:
-        st.markdown("#### Create Project / Requirements")
-        st.markdown("Add projects and their requirements here to track production capacities.")
-        
-        with st.form("poc_form"):
-            poc_name = st.text_input("Project / Client Name", value="New Project")
-            poc_q_no = st.text_input("Project Code / Ref No", value="PROJ-001")
-            
-            st.markdown("**Enter Sizes and Quantities** (comma-separated, e.g. 50:2, 100:5 for two 50NB and five 100NB)")
-            size_qty_str = st.text_input("Sizes & Quantities (Format -> Size:Qty, Size:Qty)", placeholder="e.g. 80:2, 150:1, 300:4")
-            
-            if st.form_submit_button("Create Project"):
-                if size_qty_str:
-                    try:
-                        pairs = size_qty_str.split(",")
-                        sq_list = []
-                        for p in pairs:
-                            if ":" in p:
-                                s, q = p.split(":")
-                                sq_list.append({"size": int(s.strip()), "qty": int(q.strip())})
-                        
-                        if sq_list:
-                            session = SessionLocal()
-                            import datetime
-                            new_proj = Project(
-                                quotation_no=poc_q_no,
-                                client_name=poc_name,
-                                project_name=poc_name,
-                                contact_person="Production User",
-                                created_at=datetime.datetime.utcnow()
-                            )
-                            session.add(new_proj)
-                            session.commit()
-                            
-                            if sync_project_production_lines(new_proj.id, sq_list):
-                                st.success(f"Successfully created Project {poc_q_no} with {len(sq_list)} line items!")
-                            else:
-                                st.error("Failed to calculate production lines.")
-                            session.close()
-                        else:
-                            st.warning("Invalid format. Use Size:Qty, Size:Qty")
-                    except Exception as e:
-                        st.error(f"Error parsing input: {e}")
-                else:
-                    st.warning("Please enter at least one Size:Qty pair.")
 
 elif app_mode == "Executive Capacity Dashboard":
     st.subheader("Multi-Project Capacity & Workforce Planning")

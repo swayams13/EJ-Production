@@ -138,17 +138,24 @@ if app_mode == "Add Projects":
         lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == st.session_state.active_project_id).all()
         if lines:
             st.info("You can edit or delete entries in the table below, then click Save.")
-            df = pd.DataFrame([{"Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
+            df = pd.DataFrame([{"Delete": False, "Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
             df.index += 1
             df.index.name = "Sr No"
-            edited_df = st.data_editor(df, num_rows="dynamic", hide_index=False)
+            edited_df = st.data_editor(
+                df, 
+                num_rows="dynamic", 
+                hide_index=False,
+                column_config={
+                    "Delete": st.column_config.CheckboxColumn("Delete?", default=False)
+                }
+            )
             if st.button("Save Edits/Deletions"):
                 session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == st.session_state.active_project_id).delete()
                 session.commit()
                 
                 new_sq_list = []
                 for _, row in edited_df.iterrows():
-                    if pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
+                    if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
                         new_sq_list.append({"size": int(row['Size (NB)']), "qty": int(row['Quantity'])})
                 
                 if sync_project_production_lines(st.session_state.active_project_id, new_sq_list):
@@ -244,17 +251,24 @@ elif app_mode == "Edit Projects":
             
             st.markdown("#### Edit Expansion Joints")
             st.info("You can edit or delete entries in the table below, then click Save Expansion Joint Changes.")
-            df_lines = pd.DataFrame([{"Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
+            df_lines = pd.DataFrame([{"Delete": False, "Size (NB)": l.size, "Quantity": l.quantity} for l in lines])
             df_lines.index += 1
             df_lines.index.name = "Sr No"
-            edited_df = st.data_editor(df_lines, num_rows="dynamic", hide_index=False)
+            edited_df = st.data_editor(
+                df_lines, 
+                num_rows="dynamic", 
+                hide_index=False,
+                column_config={
+                    "Delete": st.column_config.CheckboxColumn("Delete?", default=False)
+                }
+            )
             if st.button("Save Expansion Joint Changes"):
                 session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).delete()
                 session.commit()
                 
                 new_sq_list = []
                 for _, row in edited_df.iterrows():
-                    if pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
+                    if not row.get('Delete', False) and pd.notna(row.get('Size (NB)')) and pd.notna(row.get('Quantity')):
                         new_sq_list.append({"size": int(row['Size (NB)']), "qty": int(row['Quantity'])})
                 
                 if sync_project_production_lines(p.id, new_sq_list):

@@ -215,28 +215,34 @@ elif app_mode == "Edit Projects":
     
     if "edit_authenticated" not in st.session_state:
         st.session_state.edit_authenticated = False
+    if "authenticated_edit_project_id" not in st.session_state:
+        st.session_state.authenticated_edit_project_id = None
         
-    if not st.session_state.edit_authenticated:
-        with st.form("edit_login"):
-            st.warning("Re-authentication required to edit projects.")
-            pwd = st.text_input("Enter Production Manager Password", type="password")
-            if st.form_submit_button("Authenticate"):
-                if pwd == os.getenv("ADMIN_PASS"):
-                    st.session_state.edit_authenticated = True
-                    st.rerun()
-                else:
-                    st.error("Incorrect password")
+    session = SessionLocal()
+    projects = session.query(Project).all()
+    
+    if not projects:
+        st.info("No projects found.")
     else:
-        session = SessionLocal()
-        projects = session.query(Project).all()
+        proj_dict = {f"{p.quotation_no} - {p.project_name}": p.id for p in projects}
+        selected_proj_str = st.selectbox("Select Project to Edit", list(proj_dict.keys()))
+        selected_proj_id = proj_dict[selected_proj_str]
         
-        if not projects:
-            st.info("No projects found.")
-        else:
-            proj_dict = {f"{p.quotation_no} - {p.project_name}": p.id for p in projects}
-            selected_proj_str = st.selectbox("Select Project to Edit", list(proj_dict.keys()))
-            selected_proj_id = proj_dict[selected_proj_str]
+        if st.session_state.authenticated_edit_project_id != selected_proj_id:
+            st.session_state.edit_authenticated = False
             
+        if not st.session_state.edit_authenticated:
+            with st.form("edit_login"):
+                st.warning(f"Re-authentication required to edit project {selected_proj_str}.")
+                pwd = st.text_input("Enter Production Manager Password", type="password")
+                if st.form_submit_button("Authenticate"):
+                    if pwd == os.getenv("ADMIN_PASS"):
+                        st.session_state.edit_authenticated = True
+                        st.session_state.authenticated_edit_project_id = selected_proj_id
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password")
+        else:
             p = session.query(Project).filter(Project.id == selected_proj_id).first()
             lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
             
@@ -256,6 +262,8 @@ elif app_mode == "Edit Projects":
                         assign.target_date = datetime.datetime.combine(new_deadline, datetime.datetime.min.time())
                     session.commit()
                     st.success("Project details updated.")
+                    st.session_state.edit_authenticated = False
+                    st.session_state.authenticated_edit_project_id = None
                     st.rerun()
                     
             st.markdown("---")
@@ -270,6 +278,8 @@ elif app_mode == "Edit Projects":
                         session.delete(p)
                         session.commit()
                         st.success(f"Project {p.quotation_no} deleted successfully.")
+                        st.session_state.edit_authenticated = False
+                        st.session_state.authenticated_edit_project_id = None
                         st.rerun()
                     else:
                         st.error("Incorrect Password. Project not deleted.")
@@ -311,13 +321,11 @@ elif app_mode == "Edit Projects":
                         st.success("Updated project items.")
                     else:
                         st.error("Failed to update project items.")
+                    st.session_state.edit_authenticated = False
+                    st.session_state.authenticated_edit_project_id = None
                     st.rerun()
         
         session.close()
-        
-        if st.button("Lock Editing"):
-            st.session_state.edit_authenticated = False
-            st.rerun()
 
 elif app_mode == "Progress Dashboard":
     st.subheader("Project Progress & Overview")

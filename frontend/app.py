@@ -262,8 +262,6 @@ elif app_mode == "Edit Projects":
                         assign.target_date = datetime.datetime.combine(new_deadline, datetime.datetime.min.time())
                     session.commit()
                     st.success("Project details updated.")
-                    st.session_state.edit_authenticated = False
-                    st.session_state.authenticated_edit_project_id = None
                     st.rerun()
                     
             st.markdown("---")
@@ -321,8 +319,6 @@ elif app_mode == "Edit Projects":
                         st.success("Updated project items.")
                     else:
                         st.error("Failed to update project items.")
-                    st.session_state.edit_authenticated = False
-                    st.session_state.authenticated_edit_project_id = None
                     st.rerun()
         
         session.close()

@@ -106,14 +106,12 @@ if app_mode == "Add Projects":
         with st.form("add_ej_form"):
             col1, col2 = st.columns(2)
             with col1:
-                size_option = st.selectbox("Select Size", ["Select", "Manual Entry"] + master_sizes)
-                manual_size = st.number_input("Enter Manual Size (Only used if 'Manual Entry' is selected)", min_value=1, step=1)
-                st.warning("If Manual Entry is used, this value is not present in the master table. Times will be 0.")
+                size_option = st.selectbox("Select Size", ["Select"] + master_sizes)
             with col2:
                 qty = st.number_input("Quantity", min_value=1, step=1, value=1)
                 
             if st.form_submit_button("Add Expansion Joint"):
-                final_size = manual_size if size_option == "Manual Entry" else size_option
+                final_size = size_option
                 if final_size == "Select":
                     st.error("Please select a size.")
                 else:

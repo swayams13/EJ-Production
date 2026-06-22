@@ -95,7 +95,7 @@ if app_mode == "Add Projects":
                 session.close()
     else:
         st.markdown(f"#### Step 2: Add Expansion Joints to {st.session_state.active_project_code}")
-        if st.button("Start Another Project"):
+        if st.button("⬅️ Go Back to Previous Menu"):
             st.session_state.active_project_id = None
             st.session_state.active_project_code = None
             st.rerun()

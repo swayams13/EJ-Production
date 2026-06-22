@@ -313,7 +313,7 @@ elif app_mode == "Progress Dashboard":
         st.info("No projects added yet.")
     else:
         for p in projects:
-            with st.expander(f"Project: {p.quotation_no} - {p.project_name}", expanded=False):
+            with st.expander(f"Project Code: {p.quotation_no}", expanded=False):
                 lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
                 if not lines:
                     st.write("No Expansion Joints added to this project.")

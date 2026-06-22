@@ -184,12 +184,12 @@ def create_project(req: ProjectCreate, db = Depends(get_db)):
         target_days = (dt_deadline.date() - datetime.utcnow().date()).days if req.target_date else 15
         target_days = max(1, target_days)
         
-        if req.assigned_tig == 0 or req.assigned_mig == 0 or req.assigned_grinders == 0:
+        if req.assigned_tig in (0, None) or req.assigned_mig in (0, None) or req.assigned_grinders in (0, None):
             from backend.services.production_service import calculate_required_resources_for_deadline
             req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(new_proj.id, target_days)
-            if req.assigned_tig == 0: assign.assigned_tig_welders = req_tig
-            if req.assigned_mig == 0: assign.assigned_mig_welders = req_mig
-            if req.assigned_grinders == 0: assign.assigned_grinders = req_grind
+            if req.assigned_tig in (0, None): assign.assigned_tig_welders = req_tig
+            if req.assigned_mig in (0, None): assign.assigned_mig_welders = req_mig
+            if req.assigned_grinders in (0, None): assign.assigned_grinders = req_grind
             db.commit()
             
         calculate_project_duration(new_proj.id, assign.assigned_tig_welders or 0, assign.assigned_mig_welders or 0, assign.assigned_grinders or 0)

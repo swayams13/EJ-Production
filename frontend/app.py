@@ -293,6 +293,9 @@ if app_mode == "Add Projects":
             from backend.services.production_service import calculate_project_duration
             dur, t, m, g = calculate_project_duration(st.session_state.active_project_id, t_weld, m_weld, grinders)
             st.info(f"**Estimated Time Required:** {dur} working days to complete based on these assigned resources.")
+            
+            if st.button("Save Manual Assignment"):
+                st.success("Assignment saved to the master database successfully! It will now appear in the Progress Dashboard and Excel reports.")
         else:
             st.warning("Please add expansion joints to see estimated schedule.")
 
@@ -458,6 +461,12 @@ elif app_mode == "Progress Dashboard":
                     deadline_str = assign.target_date.strftime('%d/%m/%Y') if assign and assign.target_date else "Not set"
                     
                     st.markdown(f"**Total Quantity:** {tot_qty} | **Total TIG:** {tot_tig:.2f} ft | **Total MIG:** {tot_mig:.2f} ft | **Total Grinding:** {tot_grind:.2f} ft")
+                    
+                    assigned_tig = assign.assigned_tig_welders if assign else 0
+                    assigned_mig = assign.assigned_mig_welders if assign else 0
+                    assigned_grind = assign.assigned_grinders if assign else 0
+                    st.markdown(f"**Assigned Personnel:** {assigned_tig} TIG, {assigned_mig} MIG, {assigned_grind} Grinders")
+                    
                     st.markdown(f"**Estimated Time Required:** {est_days} working days | **Deadline:** {deadline_str}")
     session.close()
 

@@ -43,13 +43,13 @@ def import_welding_master_from_disk():
                     continue
                 seen_sizes.add(size)
                 
-                tig_in = float(row.get(col_tig_in, 0)) if pd.notna(row.get(col_tig_in)) else 0.0
-                tig_ft = float(row.get(col_tig_ft, 0)) if pd.notna(row.get(col_tig_ft)) else 0.0
-                mig_in = float(row.get(col_mig_in, 0)) if pd.notna(row.get(col_mig_in)) else 0.0
-                mig_ft = float(row.get(col_mig_ft, 0)) if pd.notna(row.get(col_mig_ft)) else 0.0
-                tot_in = float(row.get(col_tot_in, 0)) if pd.notna(row.get(col_tot_in)) else 0.0
-                tot_ft = float(row.get(col_tot_ft, 0)) if pd.notna(row.get(col_tot_ft)) else 0.0
-                grind = float(row.get(col_grind, 0)) if pd.notna(row.get(col_grind)) else 0.0
+                tig_in = round(float(row.get(col_tig_in, 0)), 2) if pd.notna(row.get(col_tig_in)) else 0.0
+                tig_ft = round(float(row.get(col_tig_ft, 0)), 2) if pd.notna(row.get(col_tig_ft)) else 0.0
+                mig_in = round(float(row.get(col_mig_in, 0)), 2) if pd.notna(row.get(col_mig_in)) else 0.0
+                mig_ft = round(float(row.get(col_mig_ft, 0)), 2) if pd.notna(row.get(col_mig_ft)) else 0.0
+                tot_in = round(float(row.get(col_tot_in, 0)), 2) if pd.notna(row.get(col_tot_in)) else 0.0
+                tot_ft = round(float(row.get(col_tot_ft, 0)), 2) if pd.notna(row.get(col_tot_ft)) else 0.0
+                grind = round(float(row.get(col_grind, 0)), 2) if pd.notna(row.get(col_grind)) else 0.0
                 
                 wm = WeldingMaster(
                     size=size,

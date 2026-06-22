@@ -72,14 +72,14 @@ export default function Dashboard() {
             </tr>
             <tr className="bg-slate-50">
               <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">Deficit / Surplus</td>
-              <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${data.shortage?.tig < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                {data.shortage?.tig || 0}
+              <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${((data.pool?.tig || 0) - (data.required?.tig || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {((data.pool?.tig || 0) - (data.required?.tig || 0)) > 0 ? '+' : ''}{(data.pool?.tig || 0) - (data.required?.tig || 0)}
               </td>
-              <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${data.shortage?.mig < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                {data.shortage?.mig || 0}
+              <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${((data.pool?.mig || 0) - (data.required?.mig || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {((data.pool?.mig || 0) - (data.required?.mig || 0)) > 0 ? '+' : ''}{(data.pool?.mig || 0) - (data.required?.mig || 0)}
               </td>
-              <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${data.shortage?.grinders < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                {data.shortage?.grinders || 0}
+              <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${((data.pool?.grinders || 0) - (data.required?.grinders || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {((data.pool?.grinders || 0) - (data.required?.grinders || 0)) > 0 ? '+' : ''}{(data.pool?.grinders || 0) - (data.required?.grinders || 0)}
               </td>
             </tr>
           </tbody>

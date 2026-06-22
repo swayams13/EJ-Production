@@ -58,42 +58,88 @@ if app_mode == "Add Projects":
     if "active_project_id" not in st.session_state:
         st.session_state.active_project_id = None
         st.session_state.active_project_code = None
+        
+    if "current_step" not in st.session_state:
+        st.session_state.current_step = 1
 
-    if st.session_state.active_project_id is None:
-        st.markdown("#### Step 1: Create Project")
+    if st.session_state.current_step == 1:
+        st.markdown("#### Step 1: Create or Update Project")
+        session = SessionLocal()
+        import datetime
+        existing_q_no = ""
+        existing_deadline = datetime.date.today()
+        is_editing = False
+        
+        if st.session_state.active_project_id:
+            is_editing = True
+            p = session.query(Project).filter(Project.id == st.session_state.active_project_id).first()
+            if p:
+                existing_q_no = p.quotation_no
+                from backend.services.db_service import ProjectResourceAssignment
+                assign = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
+                if assign and assign.target_date:
+                    existing_deadline = assign.target_date.date()
+        else:
+            count = session.query(Project).count() + 1
+            existing_q_no = f"PROJ-{count:03d}"
+
         with st.form("create_project_form"):
-            poc_q_no = st.text_input("Project Code", value="PROJ-001")
-            deadline_date = st.date_input("Deadline Date")
-            if st.form_submit_button("Create Project"):
-                session = SessionLocal()
-                import datetime
-                existing = session.query(Project).filter(Project.quotation_no == poc_q_no).first()
-                if existing:
-                    st.error("Project Code already exists! Please use Edit Projects or enter a different code.")
+            poc_q_no = st.text_input("Project Code", value=existing_q_no)
+            deadline_date = st.date_input("Deadline Date", value=existing_deadline)
+            
+            submit_label = "Update & Continue to Step 2" if is_editing else "Create Project & Continue"
+            if st.form_submit_button(submit_label):
+                if is_editing:
+                    p = session.query(Project).filter(Project.id == st.session_state.active_project_id).first()
+                    if p:
+                        p.quotation_no = poc_q_no
+                        p.project_name = poc_q_no
+                        from backend.services.db_service import ProjectResourceAssignment
+                        assign = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
+                        if assign:
+                            assign.target_date = datetime.datetime.combine(deadline_date, datetime.datetime.min.time())
+                        session.commit()
+                        st.session_state.active_project_code = poc_q_no
+                        st.session_state.current_step = 2
+                        st.success("Project updated.")
+                        st.rerun()
                 else:
-                    new_proj = Project(
-                        quotation_no=poc_q_no,
-                        client_name="",
-                        project_name=poc_q_no,
-                        contact_person="Production User",
-                        created_at=datetime.datetime.utcnow()
-                    )
-                    session.add(new_proj)
-                    session.commit()
-                    
-                    from backend.services.db_service import ProjectResourceAssignment
-                    dt_deadline = datetime.datetime.combine(deadline_date, datetime.datetime.min.time())
-                    assign = ProjectResourceAssignment(project_id=new_proj.id, target_date=dt_deadline)
-                    session.add(assign)
-                    session.commit()
-                    
-                    st.session_state.active_project_id = new_proj.id
-                    st.session_state.active_project_code = new_proj.quotation_no
-                    st.success(f"Project {poc_q_no} created successfully! Now add expansion joints.")
-                    session.close()
-                    st.rerun()
-                session.close()
-    else:
+                    existing = session.query(Project).filter(Project.quotation_no == poc_q_no).first()
+                    if existing:
+                        st.error("Project Code already exists! Please use Edit Projects or enter a different code.")
+                    else:
+                        new_proj = Project(
+                            quotation_no=poc_q_no,
+                            client_name="",
+                            project_name=poc_q_no,
+                            contact_person="Production User",
+                            created_at=datetime.datetime.utcnow()
+                        )
+                        session.add(new_proj)
+                        session.commit()
+                        
+                        from backend.services.db_service import ProjectResourceAssignment
+                        dt_deadline = datetime.datetime.combine(deadline_date, datetime.datetime.min.time())
+                        assign = ProjectResourceAssignment(project_id=new_proj.id, target_date=dt_deadline)
+                        session.add(assign)
+                        session.commit()
+                        
+                        st.session_state.active_project_id = new_proj.id
+                        st.session_state.active_project_code = new_proj.quotation_no
+                        st.session_state.current_step = 2
+                        st.success(f"Project {poc_q_no} created successfully! Now add expansion joints.")
+                        st.rerun()
+        session.close()
+        
+        if is_editing:
+            st.markdown("---")
+            if st.button("Start a Completely New Project"):
+                st.session_state.active_project_id = None
+                st.session_state.active_project_code = None
+                st.session_state.current_step = 1
+                st.rerun()
+
+    elif st.session_state.current_step == 2:
         st.markdown(f"#### Step 2: Add Expansion Joints to {st.session_state.active_project_code}")
         
         session = SessionLocal()
@@ -117,10 +163,17 @@ if app_mode == "Add Projects":
                     st.rerun()
         session.close()
 
-        if st.button("⬅️ Cancel / Start New Project"):
-            st.session_state.active_project_id = None
-            st.session_state.active_project_code = None
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("⬅️ Go Back to Step 1"):
+                st.session_state.current_step = 1
+                st.rerun()
+        with col2:
+            if st.button("Start Completely New Project"):
+                st.session_state.active_project_id = None
+                st.session_state.active_project_code = None
+                st.session_state.current_step = 1
+                st.rerun()
 
         master_data = get_welding_master_latest()
         master_sizes = [m.size for m in master_data]

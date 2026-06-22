@@ -364,7 +364,13 @@ elif app_mode == "Progress Dashboard":
                     tot_mig = sum(l.mig_feet for l in lines)
                     tot_grind = sum(l.grinding_feet for l in lines)
                     
+                    from backend.services.db_service import ProjectResourceAssignment
+                    assign = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
+                    est_days = assign.estimated_duration_days if assign else 0
+                    deadline_str = assign.target_date.strftime('%d/%m/%Y') if assign and assign.target_date else "Not set"
+                    
                     st.markdown(f"**Total Quantity:** {tot_qty} | **Total TIG:** {tot_tig:.2f} ft | **Total MIG:** {tot_mig:.2f} ft | **Total Grinding:** {tot_grind:.2f} ft")
+                    st.markdown(f"**Estimated Time Required:** {est_days} working days | **Deadline:** {deadline_str}")
     session.close()
 
 elif app_mode == "Production & Capacity Master":

@@ -92,12 +92,23 @@ class SimulateDurationRequest(BaseModel):
 # Endpoints
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
+    # Check hardcoded roles first for specific role names
     if req.username == os.getenv("DEV_USER") and req.password == os.getenv("DEV_PASS"):
         return {"role": "Developer"}
     elif req.username == os.getenv("GM_USER") and req.password == os.getenv("GM_PASS"):
         return {"role": "GM"}
     elif req.username == os.getenv("PM_USER") and req.password == os.getenv("PM_PASS"):
         return {"role": "Production Manager"}
+        
+    # Dynamically check any other custom users added to Railway variables
+    for key, value in os.environ.items():
+        if key.endswith("_USER") and value == req.username:
+            prefix = key[:-5]
+            pass_key = f"{prefix}_PASS"
+            if os.getenv(pass_key) == req.password:
+                role_name = prefix.replace("_", " ").title()
+                return {"role": role_name}
+                
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.get("/api/dashboard/status")

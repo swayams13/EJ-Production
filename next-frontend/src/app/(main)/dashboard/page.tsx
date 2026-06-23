@@ -86,6 +86,41 @@ export default function Dashboard() {
           </tbody>
         </table>
       </div>
+
+      <h2 className="text-xl font-semibold text-slate-800 mt-12 mb-4">Month-wise Pending Work & Requirements</h2>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Month</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">TIG (ft)</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">MIG (ft)</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Grind (ft)</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Req. TIG</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Req. MIG</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Req. Grind</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-slate-200">
+            {data.months_breakdown && Object.entries(data.months_breakdown).map(([month, details]: [string, any]) => (
+              <tr key={month} className="hover:bg-slate-50 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{month}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{Math.round(details.tig_feet * 10) / 10}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{Math.round(details.mig_feet * 10) / 10}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{Math.round(details.grind_feet * 10) / 10}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{details.req_tig}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{details.req_mig}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{details.req_grind}</td>
+              </tr>
+            ))}
+            {(!data.months_breakdown || Object.keys(data.months_breakdown).length === 0) && (
+              <tr>
+                <td colSpan={7} className="px-6 py-4 text-center text-sm text-slate-500">No data available</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

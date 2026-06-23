@@ -217,6 +217,8 @@ def get_company_capacity_status(target_days=15):
         req_mig_welders = 0
         req_grind_welders = 0
         
+        months_breakdown = {}
+        
         for p in projects:
             active_projects_count += 1
             lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
@@ -232,9 +234,35 @@ def get_company_capacity_status(target_days=15):
                 assignment = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
                 proj_target_days = assignment.target_days if assignment and assignment.target_days else target_days
                 
-                req_tig_welders += math.ceil(proj_tig / (proj_target_days * tig_prod)) if proj_target_days > 0 and tig_prod > 0 else 0
-                req_mig_welders += math.ceil(proj_mig / (proj_target_days * mig_prod)) if proj_target_days > 0 and mig_prod > 0 else 0
-                req_grind_welders += math.ceil(proj_grind / (proj_target_days * grind_prod)) if proj_target_days > 0 and grind_prod > 0 else 0
+                p_req_tig = math.ceil(proj_tig / (proj_target_days * tig_prod)) if proj_target_days > 0 and tig_prod > 0 else 0
+                p_req_mig = math.ceil(proj_mig / (proj_target_days * mig_prod)) if proj_target_days > 0 and mig_prod > 0 else 0
+                p_req_grind = math.ceil(proj_grind / (proj_target_days * grind_prod)) if proj_target_days > 0 and grind_prod > 0 else 0
+                
+                req_tig_welders += p_req_tig
+                req_mig_welders += p_req_mig
+                req_grind_welders += p_req_grind
+                
+                if assignment and assignment.target_date:
+                    month_key = assignment.target_date.strftime("%b %Y")
+                else:
+                    month_key = "No Deadline"
+                    
+                if month_key not in months_breakdown:
+                    months_breakdown[month_key] = {
+                        "tig_feet": 0.0,
+                        "mig_feet": 0.0,
+                        "grind_feet": 0.0,
+                        "req_tig": 0,
+                        "req_mig": 0,
+                        "req_grind": 0
+                    }
+                    
+                months_breakdown[month_key]["tig_feet"] += proj_tig
+                months_breakdown[month_key]["mig_feet"] += proj_mig
+                months_breakdown[month_key]["grind_feet"] += proj_grind
+                months_breakdown[month_key]["req_tig"] += p_req_tig
+                months_breakdown[month_key]["req_mig"] += p_req_mig
+                months_breakdown[month_key]["req_grind"] += p_req_grind
                 
                 if assignment and assignment.estimated_duration_days:
                     total_estimated_days += assignment.estimated_duration_days
@@ -269,7 +297,8 @@ def get_company_capacity_status(target_days=15):
                 "tig": max(0, int(req_tig_welders) - pool.total_tig_welders),
                 "mig": max(0, int(req_mig_welders) - pool.total_mig_welders),
                 "grinders": max(0, int(req_grind_welders) - pool.total_grinders)
-            }
+            },
+            "months_breakdown": months_breakdown
         }
     finally:
         session.close()

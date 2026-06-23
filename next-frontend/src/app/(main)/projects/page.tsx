@@ -37,7 +37,7 @@ export default function ProjectsList() {
           <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.mig_feet, 0), 0).toFixed(2)}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total Grinding (ft)</p>
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total Grinding (sq ft)</p>
           <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.grinding_feet, 0), 0).toFixed(2)}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
@@ -106,7 +106,7 @@ export default function ProjectsList() {
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Quantity</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Total TIG (ft)</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Total MIG (ft)</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Grinding (ft)</th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Grinding (sq ft)</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">

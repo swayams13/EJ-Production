@@ -44,7 +44,7 @@ export default function Dashboard() {
         <MetricCard title="Total Est. Days" value={`${data.total_estimated_days || 0} days`} />
         <MetricCard title="Pending TIG (ft)" value={Math.round(data.pending_tig * 10) / 10} />
         <MetricCard title="Pending MIG (ft)" value={Math.round(data.pending_mig * 10) / 10} />
-        <MetricCard title="Pending Grinding (ft)" value={Math.round(data.pending_grind * 10) / 10} />
+        <MetricCard title="Pending Grinding (sq ft)" value={Math.round(data.pending_grind * 10) / 10} />
       </div>
 
       <h2 className="text-xl font-semibold text-slate-800 mb-4">Company Manpower Requirements</h2>

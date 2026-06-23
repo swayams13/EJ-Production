@@ -112,7 +112,7 @@ export default function MasterData() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">TIG (ft)</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">MIG (ft)</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (ft)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-200">

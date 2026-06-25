@@ -1,5 +1,4 @@
 "use client";
-import { fetchWithAuth } from "@/lib/api";
 
 import { useState, useEffect } from "react";
 
@@ -9,7 +8,7 @@ export default function MDDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/dashboard/executive`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/dashboard/executive`)
       .then(res => res.json())
       .then(data => {
         setKpis(data.kpis);

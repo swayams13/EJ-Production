@@ -1,5 +1,4 @@
 "use client";
-import { fetchWithAuth } from "@/lib/api";
 
 import { useState, useEffect } from "react";
 
@@ -15,7 +14,7 @@ export default function VisualTracking() {
 
   // Initial load
   useEffect(() => {
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects`)
       .then(res => res.json())
       .then(data => setProjects(data));
   }, []);
@@ -27,7 +26,7 @@ export default function VisualTracking() {
       setRequirementId("");
       return;
     }
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects/${projectId}/requirements`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects/${projectId}/requirements`)
       .then(res => res.json())
       .then(data => setRequirements(data));
   }, [projectId]);
@@ -39,7 +38,7 @@ export default function VisualTracking() {
       return;
     }
     setLoading(true);
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/requirements/${requirementId}/parts`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/requirements/${requirementId}/parts`)
       .then(res => res.json())
       .then(data => {
         setProgressData(data);

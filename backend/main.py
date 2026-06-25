@@ -548,6 +548,86 @@ def get_executive_dashboard(db = Depends(get_db)):
         "departments": dept_loads
     }
 
+@app.get("/api/dashboard/planning")
+def get_planning_dashboard(db: Session = Depends(get_db)):
+    active_projects = db.query(Project).filter(Project.status != "Completed").all()
+    total_target = 0
+    
+    for p in active_projects:
+        for r in p.requirements:
+            total_target += r.total_qty
+            
+    total_progress = 0
+    if active_projects:
+        total_progress = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects]) / len(active_projects)
+        
+    current_load = round(100 - total_progress, 1) if active_projects else 0
+
+    late_projects = 0
+    for p in active_projects:
+        if p.deadline_date and p.deadline_date < date.today():
+            late_projects += 1
+            
+    total_projects = db.query(Project).count()
+    on_time = 100
+    if total_projects > 0:
+        on_time = round(((total_projects - late_projects) / total_projects) * 100, 1)
+
+    return {
+        "weekly_target": total_target,
+        "current_load": current_load,
+        "on_time_delivery": on_time
+    }
+
+
+@app.get("/api/audit")
+def get_audit_logs(db: Session = Depends(get_db)):
+    logs = db.query(AuditLog, User).join(User, AuditLog.user_id == User.id).order_by(AuditLog.timestamp.desc()).limit(50).all()
+    result = []
+    for log, user in logs:
+        result.append({
+            "id": log.id,
+            "user": user.full_name,
+            "role": user.role,
+            "action": log.action,
+            "entity": log.table_name,
+            "details": log.details,
+            "time": log.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        })
+    return result
+
+
+class UserCreate(BaseModel):
+    username: str
+    full_name: str
+    password: str
+    role: str = "Operator"
+
+@router.get("/users")
+def get_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username} for u in users]
+
+from passlib.context import CryptContext
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+@app.post("/api/users")
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    existing = db.query(User).filter_by(username=user.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+        
+    hashed_pw = pwd_context.hash(user.password)
+    new_user = User(
+        username=user.username,
+        full_name=user.full_name,
+        hashed_password=hashed_pw,
+        role=user.role
+    )
+    db.add(new_user)
+    db.commit()
+    return {"message": "User created successfully", "id": new_user.id}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8003, reload=True)

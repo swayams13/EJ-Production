@@ -1,5 +1,4 @@
 "use client";
-import { fetchWithAuth } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 
@@ -8,7 +7,7 @@ export default function WipDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/dashboard/wip`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/dashboard/wip`)
       .then(res => res.json())
       .then(data => {
         setWipData(data);

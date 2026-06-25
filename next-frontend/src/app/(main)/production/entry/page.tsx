@@ -1,5 +1,4 @@
 "use client";
-import { fetchWithAuth } from "@/lib/api";
 
 import { useState, useEffect } from "react";
 
@@ -24,11 +23,11 @@ export default function OperatorEntry() {
 
   // Initial load
   useEffect(() => {
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects`)
       .then(res => res.json())
       .then(data => setProjects(data.filter((p: any) => p.status !== "Completed")));
       
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/users`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/users`)
       .then(res => res.json())
       .then(data => setOperators(data.filter((u: any) => u.role === "Operator")));
   }, []);
@@ -40,7 +39,7 @@ export default function OperatorEntry() {
       setRequirementId("");
       return;
     }
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects/${projectId}/requirements`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects/${projectId}/requirements`)
       .then(res => res.json())
       .then(data => setRequirements(data));
   }, [projectId]);
@@ -53,7 +52,7 @@ export default function OperatorEntry() {
       setTotalQty(0);
       return;
     }
-    fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/requirements/${requirementId}/parts`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/requirements/${requirementId}/parts`)
       .then(res => res.json())
       .then(data => {
         setTotalQty(data.total_qty);
@@ -81,7 +80,7 @@ export default function OperatorEntry() {
     setErrorMsg("");
 
     try {
-      const res = await fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/processes/${processId}/transactions`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/processes/${processId}/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

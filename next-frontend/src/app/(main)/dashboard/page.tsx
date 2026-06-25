@@ -7,7 +7,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "https://ej-production-production.up.railway.app"}/api/dashboard/status`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/dashboard/status`)
       .then((res) => res.json())
       .then((json) => {
         setData(json);
@@ -16,7 +16,7 @@ export default function Dashboard() {
   }, []);
 
   const handleDownloadExcel = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "https://ej-production-production.up.railway.app"}/api/dashboard/export`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/dashboard/export`;
   };
 
   if (loading) return <div className="text-slate-500">Loading dashboard...</div>;

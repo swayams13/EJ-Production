@@ -120,6 +120,7 @@ def dashboard_status(target_days: int = 15):
 def get_projects(db = Depends(get_db)):
     projects = db.query(Project).all()
     results = []
+    from backend.services.mes_service import MESService
     for p in projects:
         assign = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
         lines = db.query(ProjectProductionLine).filter_by(project_id=p.id).all()
@@ -132,6 +133,8 @@ def get_projects(db = Depends(get_db)):
             "grinding_feet": round(l.grinding_feet, 2) if l.grinding_feet else 0
         } for l in lines]
         
+        progress = MESService.calculate_project_progress(db, p.id)
+        
         results.append({
             "id": p.id,
             "quotation_no": p.quotation_no,
@@ -142,7 +145,8 @@ def get_projects(db = Depends(get_db)):
             "assigned_tig": assign.assigned_tig_welders if assign else 0,
             "assigned_mig": assign.assigned_mig_welders if assign else 0,
             "assigned_grinders": assign.assigned_grinders if assign else 0,
-            "bellows": bellows
+            "bellows": bellows,
+            "progress_percentage": round(progress, 2)
         })
     return results
 
@@ -389,6 +393,160 @@ def simulate_duration(req: SimulateDurationRequest, db = Depends(get_db)):
     dur = math.ceil(max(days_tig, days_mig, days_grind))
     if dur == 999: dur = 0
     return {"estimated_duration_days": dur}
+
+# --- MES Endpoints ---
+
+from backend.services.db_service import Part, PartProcess, ProductionLog, User, AuditLog
+
+class TransactionCreate(BaseModel):
+    operator_id: int
+    quantity_completed: int
+
+class UserCreate(BaseModel):
+    username: str
+    full_name: str
+    password: str
+    role: str = "Operator"
+
+@app.get("/api/projects/{project_id}/requirements")
+def get_requirements(project_id: int, db = Depends(get_db)):
+    lines = db.query(ProjectProductionLine).filter_by(project_id=project_id).all()
+    return [{"id": l.id, "type": "EJ", "size": str(l.size), "total_qty": l.quantity} for l in lines]
+
+@app.get("/api/requirements/{req_id}/parts")
+def get_requirement_parts(req_id: int, db = Depends(get_db)):
+    line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
+    if not line:
+        raise HTTPException(status_code=404)
+    parts_data = []
+    for part in line.parts:
+        proc_data = []
+        for proc in part.processes:
+            proc_data.append({
+                "id": proc.id,
+                "process_name": proc.process_name,
+                "completed_qty": proc.completed_qty
+            })
+        parts_data.append({
+            "id": part.id,
+            "name": part.name,
+            "weight_percentage": part.weight_percentage,
+            "processes": proc_data
+        })
+    return {"requirement_id": line.id, "total_qty": line.quantity, "parts": parts_data}
+
+@app.post("/api/processes/{process_id}/transactions")
+def add_transaction(process_id: int, tx: TransactionCreate, db = Depends(get_db)):
+    proc = db.query(PartProcess).filter_by(id=process_id).first()
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+        
+    user = db.query(User).filter_by(id=tx.operator_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid operator")
+        
+    line = proc.part.production_line
+    
+    if proc.completed_qty + tx.quantity_completed > line.quantity:
+        raise HTTPException(status_code=400, detail=f"Cannot exceed total line quantity ({line.quantity})")
+        
+    proc.completed_qty += tx.quantity_completed
+    
+    log = ProductionLog(
+        part_process_id=process_id,
+        operator_id=tx.operator_id,
+        qty_done=tx.quantity_completed
+    )
+    db.add(log)
+    
+    audit = AuditLog(
+        user_id=tx.operator_id,
+        action="Update",
+        table_name="part_processes",
+        record_id=proc.id,
+        details=f"Produced {tx.quantity_completed}x of size {line.size} for {proc.process_name}"
+    )
+    db.add(audit)
+    
+    db.commit()
+    return {"message": f"Added {tx.quantity_completed} to {proc.process_name}"}
+
+@app.get("/api/dashboard/wip")
+def get_wip_dashboard(db = Depends(get_db)):
+    active_projects = db.query(Project).filter(Project.status != "Completed").all()
+    
+    wip_data = {
+        "Bellows Shop": {"required": 0, "completed": 0, "pending": 0},
+        "Fabrication Shop": {"required": 0, "completed": 0, "pending": 0},
+        "Machining Shop": {"required": 0, "completed": 0, "pending": 0},
+        "Assembly Shop": {"required": 0, "completed": 0, "pending": 0},
+        "QC": {"required": 0, "completed": 0, "pending": 0},
+        "Stores": {"required": 0, "completed": 0, "pending": 0},
+        "Dispatch": {"required": 0, "completed": 0, "pending": 0}
+    }
+    
+    for p in active_projects:
+        for line in db.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all():
+            for part in line.parts:
+                for proc in part.processes:
+                    shop = "Fabrication Shop"
+                    name_lower = part.name.lower()
+                    proc_lower = proc.process_name.lower()
+                    
+                    if "assembly" in name_lower:
+                        shop = "Assembly Shop"
+                    elif "bellow" in name_lower:
+                        shop = "Bellows Shop"
+                    
+                    if proc_lower in ["m/c", "drilling", "machining"]:
+                        shop = "Machining Shop"
+                    elif "test" in proc_lower or "insp" in proc_lower or "qc" in proc_lower:
+                        shop = "QC"
+                        
+                    wip_data[shop]["required"] += line.quantity
+                    wip_data[shop]["completed"] += proc.completed_qty
+                    
+    for shop in wip_data:
+        wip_data[shop]["pending"] = max(0, wip_data[shop]["required"] - wip_data[shop]["completed"])
+        
+    return wip_data
+
+@app.get("/api/users")
+def get_users(db = Depends(get_db)):
+    users = db.query(User).all()
+    return [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username} for u in users]
+
+@app.get("/api/dashboard/executive")
+def get_executive_dashboard(db = Depends(get_db)):
+    total_active = db.query(Project).filter(Project.status != "Completed").count()
+    critical = 0 # Priority not yet tracked in unified schema
+    
+    active_projects = db.query(Project).filter(Project.status != "Completed").all()
+    avg_progress = 0
+    if active_projects:
+        from backend.services.mes_service import MESService
+        total_p = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects])
+        avg_progress = round(total_p / len(active_projects), 1)
+        
+    wip = get_wip_dashboard(db)
+    dept_loads = []
+    colors = ["orange", "emerald", "blue", "purple"]
+    for i, shop in enumerate(["Fabrication Shop", "Assembly Shop", "Bellows Shop", "Machining Shop"]):
+        data = wip.get(shop, {"required": 0, "completed": 0})
+        load = 0
+        if data["required"] > 0:
+            load = round(((data["required"] - data["completed"]) / data["required"]) * 100)
+        dept_loads.append({"name": shop, "load": load, "color": colors[i]})
+    
+    return {
+        "kpis": [
+            {"label": "Active Projects", "value": str(total_active), "trend": "Ongoing jobs", "color": "blue"},
+            {"label": "Avg Progress", "value": f"{avg_progress}%", "trend": "Overall completion", "color": "emerald"},
+            {"label": "Critical Projects", "value": str(critical), "trend": "High priority", "color": "rose"},
+            {"label": "Completed", "value": str(db.query(Project).filter(Project.status == "Completed").count()), "trend": "All time", "color": "amber"}
+        ],
+        "departments": dept_loads
+    }
 
 if __name__ == "__main__":
     import uvicorn

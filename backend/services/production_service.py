@@ -90,41 +90,54 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
     """
     sizes_and_qtys: list of dicts {"size": int, "qty": int}
     Syncs the production lines for a project based on the latest welding master.
+    Preserves existing lines to keep MES Part/Process tracking data intact.
     """
     session = SessionLocal()
     try:
-        # Get latest welding master data
         master_data = {m.size: m for m in get_welding_master_latest()}
+        existing_lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
+        existing_map = {l.size: l for l in existing_lines}
         
-        # Clear existing
-        session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).delete()
+        new_sizes = {item['size'] for item in sizes_and_qtys}
         
-        lines = []
+        # Delete lines that are no longer needed
+        for size, line in existing_map.items():
+            if size not in new_sizes:
+                session.delete(line)
+                
+        # Update or Create lines
+        from backend.services.mes_service import MESService
+        
         for item in sizes_and_qtys:
             size = item['size']
             qty = item['qty']
             m = master_data.get(size)
-            if m:
-                lines.append(ProjectProductionLine(
-                    project_id=project_id,
-                    size=size,
-                    quantity=qty,
-                    tig_feet=m.tig_feet * qty,
-                    mig_feet=m.mig_feet * qty,
-                    grinding_feet=m.grinding_feet * qty
-                ))
+            
+            tig = m.tig_feet * qty if m else 0
+            mig = m.mig_feet * qty if m else 0
+            grind = m.grinding_feet * qty if m else 0
+            
+            if size in existing_map:
+                line = existing_map[size]
+                line.quantity = qty
+                line.tig_feet = tig
+                line.mig_feet = mig
+                line.grinding_feet = grind
             else:
-                lines.append(ProjectProductionLine(
+                line = ProjectProductionLine(
                     project_id=project_id,
                     size=size,
                     quantity=qty,
-                    tig_feet=0,
-                    mig_feet=0,
-                    grinding_feet=0
-                ))
-        
-        if lines:
-            session.add_all(lines)
+                    tig_feet=tig,
+                    mig_feet=mig,
+                    grinding_feet=grind
+                )
+                session.add(line)
+                session.flush() # get line.id
+                
+                # Auto-generate MES Parts
+                MESService.create_parts_for_production_line(session, line.id, "EJ")
+                
         session.commit()
         return True
     except Exception as e:
@@ -325,6 +338,7 @@ def generate_master_production_register_excel(target_days=15):
                 data.append({
                     "Project No": p.quotation_no,
                     "Project Status": "Active",
+                    "Starting Date": p.created_at.strftime("%d/%m/%Y") if p.created_at else "",
                     "Total TIG Feet": tot_tig,
                     "Total MIG Feet": tot_mig,
                     "Total Grinding Feet": tot_grind,

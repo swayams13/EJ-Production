@@ -51,6 +51,7 @@ export default function ProjectsList() {
           <thead className="bg-slate-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Project Code</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Progress</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Target Date</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned Resources</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Est. Days</th>
@@ -68,6 +69,14 @@ export default function ProjectsList() {
                     <div className="flex items-center gap-2">
                       <svg className={`w-4 h-4 transition-transform ${expandedId === p.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
                       {p.quotation_no}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 bg-slate-200 rounded-full h-2.5">
+                        <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${p.progress_percentage || 0}%` }}></div>
+                      </div>
+                      <span className="text-xs font-medium text-slate-600">{p.progress_percentage || 0}%</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">

@@ -1,6 +1,6 @@
 import os
-from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
+from datetime import datetime, date
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, ForeignKey, Text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 
@@ -13,6 +13,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # --- Models ---
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    full_name = Column(String)
+    role = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Project(Base):
     __tablename__ = "projects"
@@ -56,6 +66,49 @@ class ProjectProductionLine(Base):
     grinding_feet = Column(Float, default=0.0)
     
     project = relationship("Project", back_populates="production_lines")
+    parts = relationship("Part", back_populates="production_line", cascade="all, delete-orphan")
+
+class Part(Base):
+    __tablename__ = "parts"
+    id = Column(Integer, primary_key=True, index=True)
+    production_line_id = Column(Integer, ForeignKey("project_production_lines.id"), nullable=False)
+    name = Column(String, nullable=False) # e.g. "Bellows (B)", "Collar (C)"
+    weight_percentage = Column(Float, nullable=False, default=0.0)
+    
+    production_line = relationship("ProjectProductionLine", back_populates="parts")
+    processes = relationship("PartProcess", back_populates="part", cascade="all, delete-orphan")
+
+class PartProcess(Base):
+    __tablename__ = "part_processes"
+    id = Column(Integer, primary_key=True, index=True)
+    part_id = Column(Integer, ForeignKey("parts.id"), nullable=False)
+    process_name = Column(String, nullable=False) # e.g. "Cutting", "Welding"
+    completed_qty = Column(Integer, nullable=False, default=0)
+    
+    part = relationship("Part", back_populates="processes")
+    production_logs = relationship("ProductionLog", back_populates="part_process", cascade="all, delete-orphan")
+
+class ProductionLog(Base):
+    __tablename__ = "production_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    part_process_id = Column(Integer, ForeignKey("part_processes.id"), nullable=False)
+    operator_id = Column(Integer, ForeignKey("users.id"))
+    qty_done = Column(Integer, nullable=False)
+    date = Column(Date, default=date.today)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    part_process = relationship("PartProcess", back_populates="production_logs")
+    operator = relationship("User")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    action = Column(String, nullable=False)
+    table_name = Column(String, nullable=False)
+    record_id = Column(Integer, nullable=False)
+    details = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
 class WorkforceMaster(Base):
     __tablename__ = "workforce_master"

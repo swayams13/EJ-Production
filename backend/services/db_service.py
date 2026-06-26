@@ -109,6 +109,19 @@ class ProductionLog(Base):
     part_process = relationship("PartProcess", back_populates="production_logs")
     operator = relationship("User")
 
+class WeldingLog(Base):
+    __tablename__ = "welding_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    production_line_id = Column(Integer, ForeignKey("project_production_lines.id"), nullable=False)
+    operator_id = Column(Integer, ForeignKey("users.id"))
+    process_type = Column(String, nullable=False) # "TIG", "MIG", "Grinding"
+    feet_done = Column(Float, nullable=False)
+    date = Column(Date, default=date.today)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    production_line = relationship("ProjectProductionLine")
+    operator = relationship("User")
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True, index=True)

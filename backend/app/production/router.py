@@ -71,3 +71,58 @@ def add_transaction(process_id: int, tx: TransactionCreate, db: Session = Depend
     
     db.commit()
     return {"success": True, "message": f"Added {tx.quantity_completed} to {proc.process_name}"}
+
+from backend.app.production.schemas import WeldingLogCreate
+from backend.services.db_service import WeldingLog
+
+@router.get("/requirements/{req_id}/welding_summary")
+def get_welding_summary(req_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+    line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+        
+    logs = db.query(WeldingLog).filter_by(production_line_id=req_id).all()
+    
+    completed = {"TIG": 0.0, "MIG": 0.0, "Grinding": 0.0}
+    for log in logs:
+        if log.process_type in completed:
+            completed[log.process_type] += log.feet_done
+            
+    return {"success": True, "data": {
+        "targets": {
+            "TIG": line.tig_feet,
+            "MIG": line.mig_feet,
+            "Grinding": line.grinding_feet
+        },
+        "completed": completed
+    }}
+
+@router.post("/requirements/{req_id}/welding_logs")
+def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+    line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+        
+    user = db.query(User).filter_by(id=tx.operator_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid operator")
+        
+    log = WeldingLog(
+        production_line_id=req_id,
+        operator_id=tx.operator_id,
+        process_type=tx.process_type,
+        feet_done=tx.feet_done
+    )
+    db.add(log)
+    
+    audit = AuditLog(
+        user_id=tx.operator_id,
+        action="Update",
+        table_name="welding_logs",
+        record_id=req_id,
+        details=f"Added {tx.feet_done} feet of {tx.process_type} for requirement {req_id}"
+    )
+    db.add(audit)
+    
+    db.commit()
+    return {"success": True, "message": f"Added {tx.feet_done} feet to {tx.process_type}"}

@@ -153,6 +153,14 @@ class CompanyResourcePool(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE production_logs ADD COLUMN feet_done FLOAT;"))
+    except Exception:
+        pass # Column might already exist
+        
     session = SessionLocal()
     try:
         # Initialize Default Workforce

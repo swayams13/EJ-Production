@@ -7,10 +7,10 @@ export default function AuditTrail() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/audit`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/audit`)
       .then(res => res.json())
-      .then(data => {
-        setLogs(data);
+      .then(resData => {
+        setLogs(resData.data || []);
         setLoading(false);
       })
       .catch(err => {

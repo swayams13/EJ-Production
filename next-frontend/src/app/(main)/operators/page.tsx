@@ -15,9 +15,9 @@ export default function OperatorsPage() {
   const [success, setSuccess] = useState("");
 
   const fetchOperators = () => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/users`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`)
       .then(res => res.json())
-      .then(data => setOperators(data.filter((u: any) => u.role === "Operator")))
+      .then(resData => setOperators(resData.data.filter((u: any) => u.role === "Operator")))
       .catch(err => console.error("Failed to fetch operators:", err));
   };
 
@@ -32,7 +32,7 @@ export default function OperatorsPage() {
     setSuccess("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/users`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

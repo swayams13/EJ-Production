@@ -185,3 +185,10 @@ def init_db():
 if __name__ == "__main__":
     init_db()
     print("Database initialized successfully.")
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

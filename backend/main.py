@@ -10,7 +10,7 @@ load_dotenv()
 
 from sqlalchemy.orm import Session
 from backend.services.db_service import (
-    SessionLocal, Project, ProjectProductionLine, ProjectResourceAssignment, init_db
+    SessionLocal, Project, ProjectProductionLine, ProjectResourceAssignment, init_db, get_db
 )
 from backend.services.production_service import (
     get_company_capacity_status,
@@ -20,7 +20,13 @@ from backend.services.production_service import (
     generate_master_production_register_excel
 )
 
-app = FastAPI(title="EJ Production API")
+from backend.app.audit.router import router as audit_router
+from backend.app.users.router import router as users_router
+
+app = FastAPI(title="EJ Production Tracker API", version="1.0.0")
+
+app.include_router(audit_router)
+app.include_router(users_router)
 
 # Configure CORS
 app.add_middleware(
@@ -35,12 +41,6 @@ app.add_middleware(
 init_db()
 
 # Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # Models
 class LoginRequest(BaseModel):
@@ -512,10 +512,6 @@ def get_wip_dashboard(db = Depends(get_db)):
         
     return wip_data
 
-@app.get("/api/users")
-def get_users(db = Depends(get_db)):
-    users = db.query(User).all()
-    return [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username} for u in users]
 
 @app.get("/api/dashboard/executive")
 def get_executive_dashboard(db = Depends(get_db)):
@@ -584,48 +580,8 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
     }
 
 
-@app.get("/api/audit")
-def get_audit_logs(db: Session = Depends(get_db)):
-    logs = db.query(AuditLog, User).join(User, AuditLog.user_id == User.id).order_by(AuditLog.timestamp.desc()).limit(50).all()
-    result = []
-    for log, user in logs:
-        result.append({
-            "id": log.id,
-            "user": user.full_name,
-            "role": user.role,
-            "action": log.action,
-            "entity": log.table_name,
-            "details": log.details,
-            "time": log.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        })
-    return result
 
 
-class UserCreate(BaseModel):
-    username: str
-    full_name: str
-    password: str
-    role: str = "Operator"
-
-from passlib.context import CryptContext
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-@app.post("/api/users")
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(User).filter_by(username=user.username).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Username already exists")
-        
-    hashed_pw = pwd_context.hash(user.password)
-    new_user = User(
-        username=user.username,
-        full_name=user.full_name,
-        hashed_password=hashed_pw,
-        role=user.role
-    )
-    db.add(new_user)
-    db.commit()
-    return {"message": "User created successfully", "id": new_user.id}
 
 if __name__ == "__main__":
     import uvicorn

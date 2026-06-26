@@ -150,9 +150,17 @@ def calculate_project_duration(project_id, tig_welders, mig_welders, grinders):
     session = SessionLocal()
     try:
         lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-        tot_tig = sum(l.tig_feet for l in lines)
-        tot_mig = sum(l.mig_feet for l in lines)
-        tot_grind = sum(l.grinding_feet for l in lines)
+        tot_tig = sum((l.tig_feet or 0) for l in lines)
+        tot_mig = sum((l.mig_feet or 0) for l in lines)
+        tot_grind = sum((l.grinding_feet or 0) for l in lines)
+        
+        from backend.services.db_service import WeldingLog
+        line_ids = [l.id for l in lines]
+        if line_ids:
+            logs = session.query(WeldingLog).filter(WeldingLog.production_line_id.in_(line_ids)).all()
+            tot_tig = max(0, tot_tig - sum(l.feet_done for l in logs if l.process_type == "TIG"))
+            tot_mig = max(0, tot_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
+            tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
         workforce = session.query(WorkforceMaster).all()
         prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
@@ -187,9 +195,17 @@ def calculate_required_resources_for_deadline(project_id, target_days):
     session = SessionLocal()
     try:
         lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-        tot_tig = sum(l.tig_feet for l in lines)
-        tot_mig = sum(l.mig_feet for l in lines)
-        tot_grind = sum(l.grinding_feet for l in lines)
+        tot_tig = sum((l.tig_feet or 0) for l in lines)
+        tot_mig = sum((l.mig_feet or 0) for l in lines)
+        tot_grind = sum((l.grinding_feet or 0) for l in lines)
+        
+        from backend.services.db_service import WeldingLog
+        line_ids = [l.id for l in lines]
+        if line_ids:
+            logs = session.query(WeldingLog).filter(WeldingLog.production_line_id.in_(line_ids)).all()
+            tot_tig = max(0, tot_tig - sum(l.feet_done for l in logs if l.process_type == "TIG"))
+            tot_mig = max(0, tot_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
+            tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
         workforce = session.query(WorkforceMaster).all()
         prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
@@ -236,9 +252,17 @@ def get_company_capacity_status(target_days=15):
             active_projects_count += 1
             lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
             if lines:
-                proj_tig = sum(l.tig_feet for l in lines)
-                proj_mig = sum(l.mig_feet for l in lines)
-                proj_grind = sum(l.grinding_feet for l in lines)
+                proj_tig = sum((l.tig_feet or 0) for l in lines)
+                proj_mig = sum((l.mig_feet or 0) for l in lines)
+                proj_grind = sum((l.grinding_feet or 0) for l in lines)
+                
+                from backend.services.db_service import WeldingLog
+                line_ids = [l.id for l in lines]
+                if line_ids:
+                    logs = session.query(WeldingLog).filter(WeldingLog.production_line_id.in_(line_ids)).all()
+                    proj_tig = max(0, proj_tig - sum(l.feet_done for l in logs if l.process_type == "TIG"))
+                    proj_mig = max(0, proj_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
+                    proj_grind = max(0, proj_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
                 
                 tot_tig += proj_tig
                 tot_mig += proj_mig

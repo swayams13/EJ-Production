@@ -39,16 +39,24 @@ export default function VisualTracking() {
       return;
     }
     setLoading(true);
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
-      .then(res => res.json())
-      .then(resData => {
-        if(resData.success && resData.data) {
-           setProgressData(resData.data);
-        } else {
-           setProgressData(null);
-        }
-        setLoading(false);
-      });
+    
+    const fetchProgress = () => {
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
+        .then(res => res.json())
+        .then(resData => {
+          if(resData.success && resData.data) {
+             setProgressData(resData.data);
+          } else {
+             setProgressData(null);
+          }
+          setLoading(false);
+        });
+    };
+    
+    fetchProgress();
+    const interval = setInterval(fetchProgress, 15000); // 15 seconds live refresh
+    
+    return () => clearInterval(interval);
   }, [requirementId]);
 
   return (

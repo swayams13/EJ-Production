@@ -8,12 +8,19 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/status`)
-      .then((res) => res.json())
-      .then((resData) => {
-        setData(resData.data);
-        setLoading(false);
-      });
+    const fetchDashboard = () => {
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/status`)
+        .then((res) => res.json())
+        .then((resData) => {
+          setData(resData.data);
+          setLoading(false);
+        });
+    };
+    
+    fetchDashboard();
+    const interval = setInterval(fetchDashboard, 15000); // Live refresh every 15s
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleDownloadExcel = () => {

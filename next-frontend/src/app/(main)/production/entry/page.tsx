@@ -59,7 +59,7 @@ export default function OperatorEntry() {
       setTotalQty(0);
       return;
     }
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}?t=${Date.now()}`)
       .then(res => res.json())
       .then(resData => {
         if(resData.success && resData.data) {
@@ -68,7 +68,7 @@ export default function OperatorEntry() {
         }
       });
       
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/welding_summary`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/welding_summary?t=${Date.now()}`)
       .then(res => res.json())
       .then(resData => {
         if(resData.success) {
@@ -170,7 +170,7 @@ export default function OperatorEntry() {
       setFeetInputs({ ...feetInputs, [processType]: "" });
       
       // Refresh welding summary
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/welding_summary`)
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/welding_summary?t=${Date.now()}`)
         .then(res => res.json())
         .then(resData => {
           if(resData.success) setWeldingSummary(resData.data);

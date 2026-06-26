@@ -54,7 +54,7 @@ export default function VisualTracking() {
     };
     
     fetchProgress();
-    const interval = setInterval(fetchProgress, 15000); // 15 seconds live refresh
+    const interval = setInterval(fetchProgress, 3000); // 3 seconds live refresh
     
     return () => clearInterval(interval);
   }, [requirementId]);

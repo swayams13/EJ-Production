@@ -18,7 +18,7 @@ export default function Dashboard() {
     };
     
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 15000); // Live refresh every 15s
+    const interval = setInterval(fetchDashboard, 3000); // Live refresh every 3s
     
     return () => clearInterval(interval);
   }, []);

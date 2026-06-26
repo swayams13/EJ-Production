@@ -551,12 +551,13 @@ def get_executive_dashboard(db = Depends(get_db)):
 
 @app.get("/api/dashboard/planning")
 def get_planning_dashboard(db: Session = Depends(get_db)):
+    from backend.services.mes_service import MESService
     active_projects = db.query(Project).filter(Project.status != "Completed").all()
     total_target = 0
     
     for p in active_projects:
-        for r in p.requirements:
-            total_target += r.total_qty
+        for line in p.production_lines:
+            total_target += line.quantity
             
     total_progress = 0
     if active_projects:
@@ -565,9 +566,11 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
     current_load = round(100 - total_progress, 1) if active_projects else 0
 
     late_projects = 0
+    today = datetime.utcnow()
     for p in active_projects:
-        if p.deadline_date and p.deadline_date < date.today():
-            late_projects += 1
+        if p.resource_assignment and p.resource_assignment.target_date:
+            if p.resource_assignment.target_date < today:
+                late_projects += 1
             
     total_projects = db.query(Project).count()
     on_time = 100

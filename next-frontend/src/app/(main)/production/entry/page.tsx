@@ -22,6 +22,10 @@ export default function OperatorEntry() {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  
+  const [activeTab, setActiveTab] = useState("Fabrication");
+
+  const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
 
   // Initial load
   useEffect(() => {
@@ -196,10 +200,29 @@ export default function OperatorEntry() {
         {/* Process Tracking Grid */}
         {requirementId && parts.length > 0 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-slate-800 border-b border-slate-300 pb-2">Track Production</h2>
+            <div className="border-b border-slate-300 pb-4">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">Track Production</h2>
+              <div className="flex bg-slate-100 p-1 rounded-xl w-full max-w-md">
+                <button
+                  onClick={() => setActiveTab("Fabrication")}
+                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${activeTab === "Fabrication" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Fabrication & Assembly
+                </button>
+                <button
+                  onClick={() => setActiveTab("Welding")}
+                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${activeTab === "Welding" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Welding & Grinding
+                </button>
+              </div>
+            </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {parts.filter(p => !partId || p.id.toString() === partId).map((part) => (
+              {parts
+                .filter(p => !partId || p.id.toString() === partId)
+                .filter(part => part.processes.some((proc: any) => activeTab === "Welding" ? isWeldingProcess(proc.process_name) : !isWeldingProcess(proc.process_name)))
+                .map((part) => (
                 <div key={part.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
                   <div className="bg-slate-800 px-4 py-3 text-white flex justify-between items-center">
                     <h3 className="font-bold text-lg truncate pr-2" title={part.name}>{part.name}</h3>
@@ -207,7 +230,9 @@ export default function OperatorEntry() {
                   </div>
                   
                   <div className="divide-y divide-slate-100">
-                    {part.processes.map((proc: any) => {
+                    {part.processes
+                      .filter((proc: any) => activeTab === "Welding" ? isWeldingProcess(proc.process_name) : !isWeldingProcess(proc.process_name))
+                      .map((proc: any) => {
                       const pending = totalQty - proc.completed_qty;
                       const isComplete = pending <= 0;
                       const requiresFeet = isFeetRequired(proc.process_name);
@@ -266,9 +291,21 @@ export default function OperatorEntry() {
                         </div>
                       );
                     })}
+                    {part.processes.filter((proc: any) => activeTab === "Welding" ? isWeldingProcess(proc.process_name) : !isWeldingProcess(proc.process_name)).length === 0 && (
+                      <div className="p-4 text-center text-sm text-slate-500 italic">
+                        No {activeTab.toLowerCase()} processes for this part.
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
+              
+              {parts.filter(p => !partId || p.id.toString() === partId).filter(part => part.processes.some((proc: any) => activeTab === "Welding" ? isWeldingProcess(proc.process_name) : !isWeldingProcess(proc.process_name))).length === 0 && (
+                <div className="col-span-full py-12 text-center bg-slate-50 rounded-2xl border border-slate-200 border-dashed">
+                  <h3 className="text-lg font-bold text-slate-700 mb-2">No Parts Found</h3>
+                  <p className="text-slate-500">There are no parts with {activeTab.toLowerCase()} processes for this requirement.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

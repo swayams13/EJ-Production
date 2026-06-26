@@ -10,19 +10,25 @@ export default function PlanningDashboard() {
   const [metrics, setMetrics] = useState({ weekly_target: 0, current_load: 0, on_time_delivery: 100 });
 
   useEffect(() => {
-    Promise.all([
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`).then(res => res.json()),
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/planning`).then(res => res.json())
-    ])
-    .then(([projectsRes, metricsData]) => {
-      setProjects(projectsRes.data || []);
-      setMetrics(metricsData.data);
-      setLoading(false);
-    })
-    .catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
+    const fetchPlanning = () => {
+      Promise.all([
+        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`).then(res => res.json()),
+        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/planning`).then(res => res.json())
+      ])
+      .then(([projectsRes, metricsData]) => {
+        setProjects(projectsRes.data || []);
+        setMetrics(metricsData.data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+    };
+
+    fetchPlanning();
+    const interval = setInterval(fetchPlanning, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   return (

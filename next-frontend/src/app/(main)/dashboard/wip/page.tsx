@@ -8,16 +8,22 @@ export default function WipDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/wip`)
-      .then(res => res.json())
-      .then(resData => {
-        setWipData(resData.data || {});
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+    const fetchWip = () => {
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/wip`)
+        .then(res => res.json())
+        .then(resData => {
+          setWipData(resData.data || {});
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoading(false);
+        });
+    };
+    
+    fetchWip();
+    const interval = setInterval(fetchWip, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const departments = [

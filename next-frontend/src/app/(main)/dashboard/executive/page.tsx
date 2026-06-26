@@ -9,15 +9,21 @@ export default function MDDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/executive`)
-      .then(res => res.json())
-      .then(resData => {
-        const data = resData.data;
-        setKpis(data.kpis);
-        setDepartments(data.departments || []);
-        setLoading(false);
-      })
-      .catch(err => console.error(err));
+    const fetchExecutive = () => {
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/executive`)
+        .then(res => res.json())
+        .then(resData => {
+          const data = resData.data;
+          setKpis(data.kpis);
+          setDepartments(data.departments || []);
+          setLoading(false);
+        })
+        .catch(err => console.error(err));
+    };
+    
+    fetchExecutive();
+    const interval = setInterval(fetchExecutive, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   return (

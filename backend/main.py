@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from sqlalchemy.orm import Session
 from backend.services.db_service import (
     SessionLocal, Project, ProjectProductionLine, ProjectResourceAssignment, init_db
 )
@@ -602,11 +603,6 @@ class UserCreate(BaseModel):
     full_name: str
     password: str
     role: str = "Operator"
-
-@router.get("/users")
-def get_users(db: Session = Depends(get_db)):
-    users = db.query(User).all()
-    return [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username} for u in users]
 
 from passlib.context import CryptContext
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

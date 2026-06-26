@@ -40,14 +40,11 @@ class MESService:
     
     @staticmethod
     def calculate_project_progress(db: Session, project_id: int):
-        """
-        Calculates the mathematical completion percentage of a project based on its production lines.
-        """
-        from sqlalchemy.orm import joinedload
+        from sqlalchemy.orm import selectinload
         from backend.services.db_service import MESPart, WeldingLog
         
         lines = db.query(ProjectProductionLine).options(
-            joinedload(ProjectProductionLine.parts).joinedload(MESPart.processes)
+            selectinload(ProjectProductionLine.parts).selectinload(MESPart.processes)
         ).filter(ProjectProductionLine.project_id == project_id).all()
         
         if not lines:

@@ -6,12 +6,17 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     headers.set("Authorization", `Bearer ${token}`);
   }
   
-  const config = {
+  const config: RequestInit = {
+    cache: "no-store",
     ...options,
     headers
   };
   
-  const response = await fetch(url, config);
+  // Cache busting query parameter
+  const separator = url.includes("?") ? "&" : "?";
+  const liveUrl = `${url}${separator}t=${new Date().getTime()}`;
+  
+  const response = await fetch(liveUrl, config);
   
   if (response.status === 401) {
     // Optional: handle token expiration by redirecting to login

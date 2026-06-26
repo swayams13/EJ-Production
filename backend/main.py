@@ -23,12 +23,16 @@ from backend.services.production_service import (
 from backend.app.audit.router import router as audit_router
 from backend.app.users.router import router as users_router
 from backend.app.dashboard.router import router as dashboard_router
+from backend.app.master.router import router as master_router
+from backend.app.projects.router import router as projects_router
 
 app = FastAPI(title="EJ Production Tracker API", version="1.0.0")
 
 app.include_router(audit_router)
 app.include_router(users_router)
 app.include_router(dashboard_router)
+app.include_router(master_router)
+app.include_router(projects_router)
 
 # Configure CORS
 app.add_middleware(

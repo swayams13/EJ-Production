@@ -10,7 +10,7 @@ from backend.app.projects.schemas import ProjectCreate, ProjectUpdate, Simulatio
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Projects"])
 
-@router.get("/")
+@router.get("")
 def get_projects(db: Session = Depends(get_db)):
     projects = db.query(Project).all()
     results = []
@@ -44,7 +44,7 @@ def get_projects(db: Session = Depends(get_db)):
         })
     return {"success": True, "message": "Projects retrieved", "data": results}
 
-@router.post("/")
+@router.post("")
 def create_project(req: ProjectCreate, db: Session = Depends(get_db)):
     existing = db.query(Project).filter(Project.quotation_no == req.quotation_no).first()
     if existing:

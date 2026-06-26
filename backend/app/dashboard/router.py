@@ -109,7 +109,7 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
     today = datetime.utcnow()
     for p in active_projects:
         if p.resource_assignment and p.resource_assignment.target_date:
-            if p.resource_assignment.target_date < today.date():
+            if p.resource_assignment.target_date < today:
                 late_projects += 1
             
     total_projects = db.query(Project).count()

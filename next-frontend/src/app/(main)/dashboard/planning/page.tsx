@@ -10,11 +10,11 @@ export default function PlanningDashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/projects`).then(res => res.json()),
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`).then(res => res.json()),
       fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/planning`).then(res => res.json())
     ])
-    .then(([projectsData, metricsData]) => {
-      setProjects(projectsData);
+    .then(([projectsRes, metricsData]) => {
+      setProjects(projectsRes.data || []);
       setMetrics(metricsData.data);
       setLoading(false);
     })

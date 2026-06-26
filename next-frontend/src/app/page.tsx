@@ -17,7 +17,7 @@ export default function Login() {
 
     try {
       // Pointing to FastAPI backend
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/auth/login`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -30,6 +30,9 @@ export default function Login() {
       const data = await res.json();
       // Simple auth state using localStorage for now
       localStorage.setItem("user_role", data.role);
+      if (data.access_token) {
+        localStorage.setItem("jwt_token", data.access_token);
+      }
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "An error occurred");

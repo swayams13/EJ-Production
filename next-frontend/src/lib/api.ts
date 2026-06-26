@@ -1,22 +1,23 @@
-export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem("mes_token");
+export const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem("jwt_token");
   
-  const headers = {
-    ...options.headers,
-    "Authorization": token ? `Bearer ${token}` : "",
-  };
-
-  const response = await fetch(url, {
+  const headers = new Headers(options.headers || {});
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  
+  const config = {
     ...options,
-    headers,
-  });
-
+    headers
+  };
+  
+  const response = await fetch(url, config);
+  
   if (response.status === 401) {
-    // If token is invalid or expired, log them out
-    localStorage.removeItem("mes_token");
-    localStorage.removeItem("mes_user");
+    // Optional: handle token expiration by redirecting to login
+    localStorage.removeItem("jwt_token");
     window.location.href = "/login";
   }
-
+  
   return response;
 };

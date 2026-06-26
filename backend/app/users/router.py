@@ -7,8 +7,10 @@ from passlib.context import CryptContext
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
+from backend.app.auth.rbac import require_roles
+
 @router.get("")
-def get_users(db: Session = Depends(get_db)):
+def get_users(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"]))):
     users = db.query(User).all()
     result = [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username} for u in users]
     return {"success": True, "message": "Users retrieved", "data": result}

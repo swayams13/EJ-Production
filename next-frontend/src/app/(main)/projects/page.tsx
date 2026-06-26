@@ -8,10 +8,10 @@ export default function ProjectsList() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/projects`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`)
       .then((res) => res.json())
-      .then((json) => {
-        setProjects(json);
+      .then((resData) => {
+        setProjects(resData.data || []);
         setLoading(false);
       });
   }, []);

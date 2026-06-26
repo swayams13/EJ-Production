@@ -23,10 +23,11 @@ export default function AddProjects() {
   const [duration, setDuration] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/master/welding`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`)
       .then((res) => res.json())
-      .then((json) => {
-        setSizes(json.map((item: any) => item.size));
+      .then((resData) => {
+        const data = resData.data || [];
+        setSizes(data.map((item: any) => item.size));
         setLoading(false);
       });
   }, []);
@@ -43,7 +44,7 @@ export default function AddProjects() {
       const days = Math.ceil((target.getTime() - start.getTime()) / (1000 * 3600 * 24));
       
       if (days > 0) {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/projects/simulate`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/simulate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -52,7 +53,7 @@ export default function AddProjects() {
           })
         })
         .then(res => res.json())
-        .then(data => setSimulation({...data, days}))
+        .then(resData => setSimulation({...resData.data, days}))
         .catch(err => console.error(err));
       } else {
         setSimulation({ invalidDate: true });
@@ -63,7 +64,7 @@ export default function AddProjects() {
     
     // Duration simulation
     if (validBellows.length > 0 && (assignedTig > 0 || assignedMig > 0 || assignedGrinders > 0)) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/projects/simulate_duration`, {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/simulate_duration`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -74,7 +75,7 @@ export default function AddProjects() {
         })
       })
       .then(res => res.json())
-      .then(data => setDuration(data.estimated_duration_days))
+      .then(resData => setDuration(resData.data ? resData.data.estimated_duration_days : 0))
       .catch(err => console.error(err));
     } else {
       setDuration(null);
@@ -107,7 +108,7 @@ export default function AddProjects() {
     }));
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/projects`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

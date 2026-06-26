@@ -23,9 +23,9 @@ export default function OperatorEntry() {
 
   // Initial load
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
       .then(res => res.json())
-      .then(data => setProjects(data.filter((p: any) => p.status !== "Completed")));
+      .then(resData => setProjects((resData.data || []).filter((p: any) => p.status !== "Completed")));
       
     fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/users`)
       .then(res => res.json())
@@ -39,9 +39,9 @@ export default function OperatorEntry() {
       setRequirementId("");
       return;
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects/${projectId}/requirements`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/${projectId}/requirements`)
       .then(res => res.json())
-      .then(data => setRequirements(data));
+      .then(resData => setRequirements(resData.data || []));
   }, [projectId]);
 
   // When requirement changes, fetch parts & processes

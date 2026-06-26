@@ -14,9 +14,9 @@ export default function VisualTracking() {
 
   // Initial load
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
       .then(res => res.json())
-      .then(data => setProjects(data));
+      .then(resData => setProjects(resData.data || []));
   }, []);
 
   // When project changes, fetch requirements
@@ -26,9 +26,9 @@ export default function VisualTracking() {
       setRequirementId("");
       return;
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/projects/${projectId}/requirements`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/${projectId}/requirements`)
       .then(res => res.json())
-      .then(data => setRequirements(data));
+      .then(resData => setRequirements(resData.data || []));
   }, [projectId]);
 
   // When requirement changes, fetch progress

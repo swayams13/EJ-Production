@@ -14,13 +14,13 @@ export default function MasterData() {
   const fetchData = () => {
     setLoading(true);
     Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/master/welding`).then(r => r.json()),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/master/workforce`).then(r => r.json()),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/master/pool`).then(r => r.json())
-    ]).then(([weldingData, wfData, poolData]) => {
-      setData(weldingData);
-      setWorkforce(wfData);
-      setPool(poolData);
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`).then(r => r.json()),
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce`).then(r => r.json()),
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`).then(r => r.json())
+    ]).then(([weldingRes, workforceRes, poolRes]) => {
+      setData(weldingRes.data || []);
+      setWorkforce(workforceRes.data || []);
+      setPool(poolRes.data || { total_tig_welders: 0, total_mig_welders: 0, total_grinders: 0 });
       setLoading(false);
     });
   };
@@ -34,7 +34,7 @@ export default function MasterData() {
     setSyncing(true);
     setMessage("");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/master/sync`, { method: "POST" });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
       setMessage(json.message);
@@ -47,7 +47,7 @@ export default function MasterData() {
   };
 
   const updateWorkforce = async (id: number, productivity: number) => {
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/master/workforce/${id}`, {
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productivity })
@@ -58,7 +58,7 @@ export default function MasterData() {
 
   const updatePool = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/master/pool`, {
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(pool)

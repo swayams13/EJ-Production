@@ -1,0 +1,73 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from datetime import datetime
+
+from backend.services.db_service import get_db, ProjectProductionLine, PartProcess, ProductionLog, User, AuditLog
+from backend.app.production.schemas import TransactionCreate
+from backend.app.auth.rbac import require_roles
+
+router = APIRouter(prefix="/api/v1/production", tags=["Production"])
+
+@router.get("/requirements/{project_id}")
+def get_requirements(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+    lines = db.query(ProjectProductionLine).filter_by(project_id=project_id).all()
+    return {"success": True, "data": [{"id": l.id, "type": "EJ", "size": str(l.size), "total_qty": l.quantity} for l in lines]}
+
+@router.get("/parts/{req_id}")
+def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+    line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    parts_data = []
+    for part in line.parts:
+        proc_data = []
+        for proc in part.processes:
+            proc_data.append({
+                "id": proc.id,
+                "process_name": proc.process_name,
+                "completed_qty": proc.completed_qty
+            })
+        parts_data.append({
+            "id": part.id,
+            "name": part.name,
+            "weight_percentage": part.weight_percentage,
+            "processes": proc_data
+        })
+    return {"success": True, "data": {"requirement_id": line.id, "total_qty": line.quantity, "parts": parts_data}}
+
+@router.post("/processes/{process_id}/transactions")
+def add_transaction(process_id: int, tx: TransactionCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+    proc = db.query(PartProcess).filter_by(id=process_id).first()
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+        
+    user = db.query(User).filter_by(id=tx.operator_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid operator")
+        
+    line = proc.part.production_line
+    
+    if proc.completed_qty + tx.quantity_completed > line.quantity:
+        raise HTTPException(status_code=400, detail=f"Cannot exceed total line quantity ({line.quantity})")
+        
+    proc.completed_qty += tx.quantity_completed
+    
+    log = ProductionLog(
+        part_process_id=process_id,
+        operator_id=tx.operator_id,
+        qty_done=tx.quantity_completed,
+        feet_done=tx.feet_completed
+    )
+    db.add(log)
+    
+    audit = AuditLog(
+        user_id=tx.operator_id,
+        action="Update",
+        table_name="part_processes",
+        record_id=proc.id,
+        details=f"Produced {tx.quantity_completed}x of size {line.size} for {proc.process_name}. Feet: {tx.feet_completed}"
+    )
+    db.add(audit)
+    
+    db.commit()
+    return {"success": True, "message": f"Added {tx.quantity_completed} to {proc.process_name}"}

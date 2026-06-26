@@ -23,16 +23,12 @@ from backend.services.production_service import (
 from backend.app.audit.router import router as audit_router
 from backend.app.users.router import router as users_router
 from backend.app.dashboard.router import router as dashboard_router
-from backend.app.master.router import router as master_router
-from backend.app.projects.router import router as projects_router
 
 app = FastAPI(title="EJ Production Tracker API", version="1.0.0")
 
 app.include_router(audit_router)
 app.include_router(users_router)
 app.include_router(dashboard_router)
-app.include_router(master_router)
-app.include_router(projects_router)
 
 # Configure CORS
 app.add_middleware(
@@ -98,82 +94,10 @@ class SimulateDurationRequest(BaseModel):
 
 # Endpoints
 from backend.app.auth.router import router as auth_router
+from backend.app.production.router import router as production_router
 
 app.include_router(auth_router)
-
-# --- MES Endpoints ---
-
-from backend.services.db_service import Part, PartProcess, ProductionLog, User, AuditLog
-
-class TransactionCreate(BaseModel):
-    operator_id: int
-    quantity_completed: int
-
-class UserCreate(BaseModel):
-    username: str
-    full_name: str
-    password: str
-    role: str = "Operator"
-
-
-
-@app.get("/api/requirements/{req_id}/parts")
-def get_requirement_parts(req_id: int, db = Depends(get_db)):
-    line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
-    if not line:
-        raise HTTPException(status_code=404)
-    parts_data = []
-    for part in line.parts:
-        proc_data = []
-        for proc in part.processes:
-            proc_data.append({
-                "id": proc.id,
-                "process_name": proc.process_name,
-                "completed_qty": proc.completed_qty
-            })
-        parts_data.append({
-            "id": part.id,
-            "name": part.name,
-            "weight_percentage": part.weight_percentage,
-            "processes": proc_data
-        })
-    return {"requirement_id": line.id, "total_qty": line.quantity, "parts": parts_data}
-
-@app.post("/api/processes/{process_id}/transactions")
-def add_transaction(process_id: int, tx: TransactionCreate, db = Depends(get_db)):
-    proc = db.query(PartProcess).filter_by(id=process_id).first()
-    if not proc:
-        raise HTTPException(status_code=404, detail="Process not found")
-        
-    user = db.query(User).filter_by(id=tx.operator_id).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid operator")
-        
-    line = proc.part.production_line
-    
-    if proc.completed_qty + tx.quantity_completed > line.quantity:
-        raise HTTPException(status_code=400, detail=f"Cannot exceed total line quantity ({line.quantity})")
-        
-    proc.completed_qty += tx.quantity_completed
-    
-    log = ProductionLog(
-        part_process_id=process_id,
-        operator_id=tx.operator_id,
-        qty_done=tx.quantity_completed
-    )
-    db.add(log)
-    
-    audit = AuditLog(
-        user_id=tx.operator_id,
-        action="Update",
-        table_name="part_processes",
-        record_id=proc.id,
-        details=f"Produced {tx.quantity_completed}x of size {line.size} for {proc.process_name}"
-    )
-    db.add(audit)
-    
-    db.commit()
-    return {"message": f"Added {tx.quantity_completed} to {proc.process_name}"}
+app.include_router(production_router)
 
 if __name__ == "__main__":
     import uvicorn

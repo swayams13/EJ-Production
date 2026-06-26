@@ -17,6 +17,7 @@ export default function OperatorEntry() {
   const [operatorId, setOperatorId] = useState("");
 
   const [qtyInputs, setQtyInputs] = useState<{[key: string]: string}>({});
+  const [feetInputs, setFeetInputs] = useState<{[key: string]: string}>({});
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -27,9 +28,9 @@ export default function OperatorEntry() {
       .then(res => res.json())
       .then(resData => setProjects((resData.data || []).filter((p: any) => p.status !== "Completed")));
       
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/users`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`)
       .then(res => res.json())
-      .then(data => setOperators(data.filter((u: any) => u.role === "Operator")));
+      .then(resData => setOperators(resData.data?.filter((u: any) => u.role === "Worker" || u.role === "Operator") || []));
   }, []);
 
   // When project changes, fetch requirements
@@ -39,7 +40,7 @@ export default function OperatorEntry() {
       setRequirementId("");
       return;
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/${projectId}/requirements`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${projectId}`)
       .then(res => res.json())
       .then(resData => setRequirements(resData.data || []));
   }, [projectId]);
@@ -52,16 +53,22 @@ export default function OperatorEntry() {
       setTotalQty(0);
       return;
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/requirements/${requirementId}/parts`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
       .then(res => res.json())
-      .then(data => {
-        setTotalQty(data.total_qty);
-        setParts(data.parts);
+      .then(resData => {
+        if(resData.success && resData.data) {
+           setTotalQty(resData.data.total_qty);
+           setParts(resData.data.parts);
+        }
       });
   }, [requirementId]);
 
   const handleQtyChange = (processId: string, val: string) => {
     setQtyInputs({ ...qtyInputs, [processId]: val });
+  };
+  
+  const handleFeetChange = (processId: string, val: string) => {
+    setFeetInputs({ ...feetInputs, [processId]: val });
   };
 
   const handleSubmitProcess = async (processId: string, processName: string) => {
@@ -74,18 +81,21 @@ export default function OperatorEntry() {
       setErrorMsg("Quantity must be greater than 0");
       return;
     }
+    
+    const feet = parseFloat(feetInputs[processId] || "0");
 
     setSubmitting(true);
     setSuccessMsg("");
     setErrorMsg("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/processes/${processId}/transactions`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/processes/${processId}/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           operator_id: parseInt(operatorId),
-          quantity_completed: qty
+          quantity_completed: qty,
+          feet_completed: feet > 0 ? feet : null
         })
       });
 
@@ -96,6 +106,7 @@ export default function OperatorEntry() {
 
       setSuccessMsg(`Successfully recorded ${qty} for ${processName}!`);
       setQtyInputs({ ...qtyInputs, [processId]: "" });
+      setFeetInputs({ ...feetInputs, [processId]: "" });
       
       // Refresh parts to show new totals
       const reqId = requirementId;
@@ -110,11 +121,16 @@ export default function OperatorEntry() {
     }
   };
 
+  const isFeetRequired = (processName: string) => {
+     const name = processName.toLowerCase();
+     return name.includes("weld") || name.includes("grind") || name.includes("tig") || name.includes("mig");
+  };
+
   return (
     <div className="max-w-7xl mx-auto mb-20">
       <div className="bg-slate-900 p-8 text-white rounded-b-3xl shadow-lg mb-8 mx-[-2rem] mt-[-2rem]">
         <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">Daily Progress Tracker</h1>
-        <p className="text-slate-300 text-lg font-medium">Record quantities completed for each process today.</p>
+        <p className="text-slate-300 text-lg font-medium">Record quantities and feet completed for each process today.</p>
       </div>
 
       <div className="space-y-6">
@@ -138,7 +154,7 @@ export default function OperatorEntry() {
               value={operatorId} onChange={(e) => setOperatorId(e.target.value)}
             >
               <option value="">-- Select Profile --</option>
-              {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              {operators.map(o => <option key={o.id} value={o.id}>{o.full_name || o.username}</option>)}
             </select>
           </div>
 
@@ -149,7 +165,7 @@ export default function OperatorEntry() {
               value={projectId} onChange={(e) => setProjectId(e.target.value)}
             >
               <option value="">-- Choose Project --</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} ({p.customer_name})</option>)}
+              {projects.map(p => <option key={p.id} value={p.id}>{p.project_name || p.quotation_no}</option>)}
             </select>
           </div>
 
@@ -193,6 +209,7 @@ export default function OperatorEntry() {
                     {part.processes.map((proc: any) => {
                       const pending = totalQty - proc.completed_qty;
                       const isComplete = pending <= 0;
+                      const requiresFeet = isFeetRequired(proc.process_name);
                       
                       return (
                         <div key={proc.id} className={`p-4 flex flex-col gap-3 ${isComplete ? 'bg-emerald-50/50' : ''}`}>
@@ -205,20 +222,33 @@ export default function OperatorEntry() {
                           </div>
                           
                           {!isComplete && (
-                            <div className="flex gap-2 mt-2">
-                              <input
-                                type="number"
-                                min="1"
-                                max={pending}
-                                placeholder="Today's Qty"
-                                className="flex-1 border-2 border-slate-200 rounded-lg px-3 py-2 font-bold text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                value={qtyInputs[proc.id] || ""}
-                                onChange={(e) => handleQtyChange(proc.id, e.target.value)}
-                              />
+                            <div className="flex flex-col gap-2 mt-2">
+                              <div className="flex gap-2">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={pending}
+                                  placeholder="Today's Qty"
+                                  className="flex-1 border-2 border-slate-200 rounded-lg px-3 py-2 font-bold text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  value={qtyInputs[proc.id] || ""}
+                                  onChange={(e) => handleQtyChange(proc.id, e.target.value)}
+                                />
+                                {requiresFeet && (
+                                  <input
+                                    type="number"
+                                    min="0.1"
+                                    step="0.1"
+                                    placeholder="Feet Done"
+                                    className="flex-1 border-2 border-slate-200 rounded-lg px-3 py-2 font-bold text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    value={feetInputs[proc.id] || ""}
+                                    onChange={(e) => handleFeetChange(proc.id, e.target.value)}
+                                  />
+                                )}
+                              </div>
                               <button
                                 onClick={() => handleSubmitProcess(proc.id, proc.process_name)}
                                 disabled={submitting || !qtyInputs[proc.id]}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm disabled:opacity-50 transition-colors whitespace-nowrap"
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm disabled:opacity-50 transition-colors whitespace-nowrap"
                               >
                                 Save
                               </button>

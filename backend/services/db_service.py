@@ -102,6 +102,7 @@ class ProductionLog(Base):
     part_process_id = Column(Integer, ForeignKey("part_processes.id"), nullable=False)
     operator_id = Column(Integer, ForeignKey("users.id"))
     qty_done = Column(Integer, nullable=False)
+    feet_done = Column(Float, nullable=True)
     date = Column(Date, default=date.today)
     created_at = Column(DateTime, default=datetime.utcnow)
     

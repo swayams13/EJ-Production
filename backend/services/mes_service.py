@@ -41,10 +41,10 @@ class MESService:
     @staticmethod
     def calculate_project_progress(db: Session, project_id: int):
         from sqlalchemy.orm import selectinload
-        from backend.services.db_service import MESPart, WeldingLog
+        from backend.services.db_service import Part, WeldingLog
         
         lines = db.query(ProjectProductionLine).options(
-            selectinload(ProjectProductionLine.parts).selectinload(MESPart.processes)
+            selectinload(ProjectProductionLine.parts).selectinload(Part.processes)
         ).filter(ProjectProductionLine.project_id == project_id).all()
         
         if not lines:

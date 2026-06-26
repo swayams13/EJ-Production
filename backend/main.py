@@ -22,11 +22,13 @@ from backend.services.production_service import (
 
 from backend.app.audit.router import router as audit_router
 from backend.app.users.router import router as users_router
+from backend.app.dashboard.router import router as dashboard_router
 
 app = FastAPI(title="EJ Production Tracker API", version="1.0.0")
 
 app.include_router(audit_router)
 app.include_router(users_router)
+app.include_router(dashboard_router)
 
 # Configure CORS
 app.add_middleware(
@@ -112,10 +114,6 @@ def login(req: LoginRequest):
                 
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
-@app.get("/api/dashboard/status")
-def dashboard_status(target_days: int = 15):
-    status = get_company_capacity_status(target_days)
-    return status
 
 @app.get("/api/projects")
 def get_projects(db = Depends(get_db)):
@@ -295,17 +293,6 @@ def simulate_project(req: SimulationRequest, db = Depends(get_db)):
 from fastapi.responses import StreamingResponse
 import io
 
-@app.get("/api/dashboard/export")
-def export_dashboard():
-    excel_bytes = generate_master_production_register_excel()
-    if not excel_bytes:
-        raise HTTPException(status_code=500, detail="Failed to generate excel")
-        
-    return StreamingResponse(
-        io.BytesIO(excel_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=Master_Production_Register.xlsx"}
-    )
 
 from backend.services.db_service import CompanyResourcePool
 
@@ -471,117 +458,6 @@ def add_transaction(process_id: int, tx: TransactionCreate, db = Depends(get_db)
     
     db.commit()
     return {"message": f"Added {tx.quantity_completed} to {proc.process_name}"}
-
-@app.get("/api/dashboard/wip")
-def get_wip_dashboard(db = Depends(get_db)):
-    active_projects = db.query(Project).filter(Project.status != "Completed").all()
-    
-    wip_data = {
-        "Bellows Shop": {"required": 0, "completed": 0, "pending": 0},
-        "Fabrication Shop": {"required": 0, "completed": 0, "pending": 0},
-        "Machining Shop": {"required": 0, "completed": 0, "pending": 0},
-        "Assembly Shop": {"required": 0, "completed": 0, "pending": 0},
-        "QC": {"required": 0, "completed": 0, "pending": 0},
-        "Stores": {"required": 0, "completed": 0, "pending": 0},
-        "Dispatch": {"required": 0, "completed": 0, "pending": 0}
-    }
-    
-    for p in active_projects:
-        for line in db.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all():
-            for part in line.parts:
-                for proc in part.processes:
-                    shop = "Fabrication Shop"
-                    name_lower = part.name.lower()
-                    proc_lower = proc.process_name.lower()
-                    
-                    if "assembly" in name_lower:
-                        shop = "Assembly Shop"
-                    elif "bellow" in name_lower:
-                        shop = "Bellows Shop"
-                    
-                    if proc_lower in ["m/c", "drilling", "machining"]:
-                        shop = "Machining Shop"
-                    elif "test" in proc_lower or "insp" in proc_lower or "qc" in proc_lower:
-                        shop = "QC"
-                        
-                    wip_data[shop]["required"] += line.quantity
-                    wip_data[shop]["completed"] += proc.completed_qty
-                    
-    for shop in wip_data:
-        wip_data[shop]["pending"] = max(0, wip_data[shop]["required"] - wip_data[shop]["completed"])
-        
-    return wip_data
-
-
-@app.get("/api/dashboard/executive")
-def get_executive_dashboard(db = Depends(get_db)):
-    total_active = db.query(Project).filter(Project.status != "Completed").count()
-    critical = 0 # Priority not yet tracked in unified schema
-    
-    active_projects = db.query(Project).filter(Project.status != "Completed").all()
-    avg_progress = 0
-    if active_projects:
-        from backend.services.mes_service import MESService
-        total_p = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects])
-        avg_progress = round(total_p / len(active_projects), 1)
-        
-    wip = get_wip_dashboard(db)
-    dept_loads = []
-    colors = ["orange", "emerald", "blue", "purple"]
-    for i, shop in enumerate(["Fabrication Shop", "Assembly Shop", "Bellows Shop", "Machining Shop"]):
-        data = wip.get(shop, {"required": 0, "completed": 0})
-        load = 0
-        if data["required"] > 0:
-            load = round(((data["required"] - data["completed"]) / data["required"]) * 100)
-        dept_loads.append({"name": shop, "load": load, "color": colors[i]})
-    
-    return {
-        "kpis": [
-            {"label": "Active Projects", "value": str(total_active), "trend": "Ongoing jobs", "color": "blue"},
-            {"label": "Avg Progress", "value": f"{avg_progress}%", "trend": "Overall completion", "color": "emerald"},
-            {"label": "Critical Projects", "value": str(critical), "trend": "High priority", "color": "rose"},
-            {"label": "Completed", "value": str(db.query(Project).filter(Project.status == "Completed").count()), "trend": "All time", "color": "amber"}
-        ],
-        "departments": dept_loads
-    }
-
-@app.get("/api/dashboard/planning")
-def get_planning_dashboard(db: Session = Depends(get_db)):
-    from backend.services.mes_service import MESService
-    active_projects = db.query(Project).filter(Project.status != "Completed").all()
-    total_target = 0
-    
-    for p in active_projects:
-        for line in p.production_lines:
-            total_target += line.quantity
-            
-    total_progress = 0
-    if active_projects:
-        total_progress = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects]) / len(active_projects)
-        
-    current_load = round(100 - total_progress, 1) if active_projects else 0
-
-    late_projects = 0
-    today = datetime.utcnow()
-    for p in active_projects:
-        if p.resource_assignment and p.resource_assignment.target_date:
-            if p.resource_assignment.target_date < today:
-                late_projects += 1
-            
-    total_projects = db.query(Project).count()
-    on_time = 100
-    if total_projects > 0:
-        on_time = round(((total_projects - late_projects) / total_projects) * 100, 1)
-
-    return {
-        "weekly_target": total_target,
-        "current_load": current_load,
-        "on_time_delivery": on_time
-    }
-
-
-
-
 
 if __name__ == "__main__":
     import uvicorn

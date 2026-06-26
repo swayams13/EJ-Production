@@ -7,10 +7,10 @@ export default function WipDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/dashboard/wip`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/wip`)
       .then(res => res.json())
-      .then(data => {
-        setWipData(data);
+      .then(resData => {
+        setWipData(resData.data || {});
         setLoading(false);
       })
       .catch(err => {

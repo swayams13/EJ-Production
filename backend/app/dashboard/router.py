@@ -1,0 +1,125 @@
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from datetime import datetime
+import io
+
+from backend.services.db_service import get_db, Project, ProjectProductionLine
+from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel
+
+router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
+
+@router.get("/status")
+def dashboard_status(target_days: int = 15):
+    status = get_company_capacity_status(target_days)
+    return {"success": True, "message": "Status retrieved", "data": status}
+
+@router.get("/export")
+def export_dashboard():
+    excel_bytes = generate_master_production_register_excel()
+    if not excel_bytes:
+        raise HTTPException(status_code=500, detail="Failed to generate excel")
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=Master_Production_Register.xlsx"}
+    )
+
+def get_wip_dashboard(db: Session):
+    from backend.services.mes_service import MESService
+    active_projects = db.query(Project).filter(Project.status != "Completed").all()
+    
+    wip_data = {
+        "Fabrication Shop": {"required": 0, "completed": 0},
+        "Assembly Shop": {"required": 0, "completed": 0},
+        "Bellows Shop": {"required": 0, "completed": 0},
+        "Machining Shop": {"required": 0, "completed": 0}
+    }
+    
+    for p in active_projects:
+        lines = db.query(ProjectProductionLine).filter_by(project_id=p.id).all()
+        for line in lines:
+            wip_data["Bellows Shop"]["required"] += line.quantity
+            
+        progress = MESService.calculate_project_progress(db, p.id)
+        if progress > 0:
+            for line in lines:
+                wip_data["Bellows Shop"]["completed"] += (line.quantity * (progress / 100))
+                
+    for shop in wip_data:
+        wip_data[shop]["required"] = round(wip_data[shop]["required"], 1)
+        wip_data[shop]["completed"] = round(wip_data[shop]["completed"], 1)
+        
+    return wip_data
+
+@router.get("/wip")
+def get_wip_dashboard_api(db: Session = Depends(get_db)):
+    data = get_wip_dashboard(db)
+    return {"success": True, "message": "WIP dashboard retrieved", "data": data}
+
+@router.get("/executive")
+def get_executive_dashboard(db: Session = Depends(get_db)):
+    total_active = db.query(Project).filter(Project.status != "Completed").count()
+    critical = 0
+    active_projects = db.query(Project).filter(Project.status != "Completed").all()
+    avg_progress = 0
+    if active_projects:
+        from backend.services.mes_service import MESService
+        total_p = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects])
+        avg_progress = round(total_p / len(active_projects), 1)
+        
+    wip = get_wip_dashboard(db)
+    dept_loads = []
+    colors = ["orange", "emerald", "blue", "purple"]
+    for i, shop in enumerate(["Fabrication Shop", "Assembly Shop", "Bellows Shop", "Machining Shop"]):
+        data = wip.get(shop, {"required": 0, "completed": 0})
+        load = 0
+        if data["required"] > 0:
+            load = round(((data["required"] - data["completed"]) / data["required"]) * 100)
+        dept_loads.append({"name": shop, "load": load, "color": colors[i]})
+    
+    result = {
+        "kpis": [
+            {"label": "Active Projects", "value": str(total_active), "trend": "Ongoing jobs", "color": "blue"},
+            {"label": "Avg Progress", "value": f"{avg_progress}%", "trend": "Overall completion", "color": "emerald"},
+            {"label": "Critical Projects", "value": str(critical), "trend": "High priority", "color": "rose"},
+            {"label": "Completed", "value": str(db.query(Project).filter(Project.status == "Completed").count()), "trend": "All time", "color": "amber"}
+        ],
+        "departments": dept_loads
+    }
+    return {"success": True, "message": "Executive dashboard retrieved", "data": result}
+
+@router.get("/planning")
+def get_planning_dashboard(db: Session = Depends(get_db)):
+    from backend.services.mes_service import MESService
+    active_projects = db.query(Project).filter(Project.status != "Completed").all()
+    total_target = 0
+    
+    for p in active_projects:
+        for line in p.production_lines:
+            total_target += line.quantity
+            
+    total_progress = 0
+    if active_projects:
+        total_progress = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects]) / len(active_projects)
+        
+    current_load = round(100 - total_progress, 1) if active_projects else 0
+
+    late_projects = 0
+    today = datetime.utcnow()
+    for p in active_projects:
+        if p.resource_assignment and p.resource_assignment.target_date:
+            if p.resource_assignment.target_date < today.date():
+                late_projects += 1
+            
+    total_projects = db.query(Project).count()
+    on_time = 100
+    if total_projects > 0:
+        on_time = round(((total_projects - late_projects) / total_projects) * 100, 1)
+
+    result = {
+        "weekly_target": total_target,
+        "current_load": current_load,
+        "on_time_delivery": on_time
+    }
+    return {"success": True, "message": "Planning dashboard retrieved", "data": result}

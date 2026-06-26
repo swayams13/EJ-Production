@@ -43,9 +43,21 @@ class MESService:
         """
         Calculates the mathematical completion percentage of a project based on its production lines.
         """
-        lines = db.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
+        from sqlalchemy.orm import joinedload
+        from backend.services.db_service import MESPart, WeldingLog
+        
+        lines = db.query(ProjectProductionLine).options(
+            joinedload(ProjectProductionLine.parts).joinedload(MESPart.processes)
+        ).filter(ProjectProductionLine.project_id == project_id).all()
+        
         if not lines:
             return 0.0
+            
+        line_ids = [l.id for l in lines]
+        logs = db.query(WeldingLog).filter(WeldingLog.production_line_id.in_(line_ids)).all()
+        logs_by_line = {}
+        for log in logs:
+            logs_by_line.setdefault(log.production_line_id, []).append(log)
             
         total_line_completion = 0.0
         
@@ -79,9 +91,8 @@ class MESService:
                 part_contribution = avg_part_completion * part.weight_percentage
                 line_fabrication_completion += part_contribution
                 
-            from backend.services.db_service import WeldingLog
-            logs = db.query(WeldingLog).filter_by(production_line_id=line.id).all()
-            completed_weld = sum(l.feet_done for l in logs)
+            line_logs = logs_by_line.get(line.id, [])
+            completed_weld = sum(l.feet_done for l in line_logs)
             target_weld = (line.tig_feet or 0) + (line.mig_feet or 0) + (line.grinding_feet or 0)
             
             welding_pct = min(1.0, completed_weld / target_weld) if target_weld > 0 else 1.0

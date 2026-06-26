@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 export default function MasterData() {
@@ -14,9 +15,9 @@ export default function MasterData() {
   const fetchData = () => {
     setLoading(true);
     Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`).then(r => r.json()),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce`).then(r => r.json()),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`).then(r => r.json())
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`).then(r => r.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce`).then(r => r.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`).then(r => r.json())
     ]).then(([weldingRes, workforceRes, poolRes]) => {
       setData(weldingRes.data || []);
       setWorkforce(workforceRes.data || []);
@@ -34,7 +35,7 @@ export default function MasterData() {
     setSyncing(true);
     setMessage("");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync`, { method: "POST" });
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
       setMessage(json.message);
@@ -47,7 +48,7 @@ export default function MasterData() {
   };
 
   const updateWorkforce = async (id: number, productivity: number) => {
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce/${id}`, {
+    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productivity })
@@ -58,7 +59,7 @@ export default function MasterData() {
 
   const updatePool = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`, {
+    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(pool)

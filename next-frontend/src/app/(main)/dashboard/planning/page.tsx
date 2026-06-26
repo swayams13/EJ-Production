@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,8 +11,8 @@ export default function PlanningDashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`).then(res => res.json()),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/planning`).then(res => res.json())
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`).then(res => res.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/planning`).then(res => res.json())
     ])
     .then(([projectsRes, metricsData]) => {
       setProjects(projectsRes.data || []);

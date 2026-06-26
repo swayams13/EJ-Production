@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -23,7 +24,7 @@ export default function EditProjects() {
 
   useEffect(() => {
     fetchProjects();
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`)
       .then((res) => res.json())
       .then((json) => {
         setSizes(json.data ? json.data.map((item: any) => item.size) : []);
@@ -32,7 +33,7 @@ export default function EditProjects() {
 
   const fetchProjects = () => {
     setLoading(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`)
       .then((res) => res.json())
       .then((resData) => {
         setProjects(resData.data || []);
@@ -60,7 +61,7 @@ export default function EditProjects() {
   };
 
   const fetchDuration = (id: string, tig: number, mig: number, grind: number) => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/duration`, {
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/duration`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -103,7 +104,7 @@ export default function EditProjects() {
     setMessage({ type: "", text: "" });
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${selectedProjectId}`, {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${selectedProjectId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -119,7 +120,7 @@ export default function EditProjects() {
         qty: Number(b.qty)
       }));
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${selectedProjectId}/bellows`, {
+      await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${selectedProjectId}/bellows`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validBellows)
@@ -152,7 +153,7 @@ export default function EditProjects() {
     
     setSubmitting(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${selectedProjectId}`, {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${selectedProjectId}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete project");

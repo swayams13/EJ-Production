@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api";
 
 import { useState, useEffect } from "react";
 
@@ -14,7 +15,7 @@ export default function VisualTracking() {
 
   // Initial load
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
       .then(res => res.json())
       .then(resData => setProjects(resData.data || []));
   }, []);
@@ -26,7 +27,7 @@ export default function VisualTracking() {
       setRequirementId("");
       return;
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${projectId}`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${projectId}`)
       .then(res => res.json())
       .then(resData => setRequirements(resData.data || []));
   }, [projectId]);
@@ -38,7 +39,7 @@ export default function VisualTracking() {
       return;
     }
     setLoading(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
       .then(res => res.json())
       .then(resData => {
         if(resData.success && resData.data) {

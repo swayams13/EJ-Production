@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api";
 
 import { useState, useEffect } from "react";
 
@@ -15,7 +16,7 @@ export default function OperatorsPage() {
   const [success, setSuccess] = useState("");
 
   const fetchOperators = () => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`)
       .then(res => res.json())
       .then(resData => setOperators(resData.data.filter((u: any) => u.role === "Operator")))
       .catch(err => console.error("Failed to fetch operators:", err));
@@ -32,7 +33,7 @@ export default function OperatorsPage() {
     setSuccess("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`, {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

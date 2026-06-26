@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api";
 
 import { useState, useEffect } from "react";
 
@@ -24,11 +25,11 @@ export default function OperatorEntry() {
 
   // Initial load
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
       .then(res => res.json())
       .then(resData => setProjects((resData.data || []).filter((p: any) => p.status !== "Completed")));
       
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`)
       .then(res => res.json())
       .then(resData => setOperators(resData.data?.filter((u: any) => u.role === "Worker" || u.role === "Operator") || []));
   }, []);
@@ -40,7 +41,7 @@ export default function OperatorEntry() {
       setRequirementId("");
       return;
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${projectId}`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${projectId}`)
       .then(res => res.json())
       .then(resData => setRequirements(resData.data || []));
   }, [projectId]);
@@ -53,7 +54,7 @@ export default function OperatorEntry() {
       setTotalQty(0);
       return;
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
       .then(res => res.json())
       .then(resData => {
         if(resData.success && resData.data) {
@@ -89,7 +90,7 @@ export default function OperatorEntry() {
     setErrorMsg("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/processes/${processId}/transactions`, {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/processes/${processId}/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

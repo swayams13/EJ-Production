@@ -168,6 +168,22 @@ class ProjectResourceAssignment(Base):
     
     project = relationship("Project", back_populates="resource_assignment")
 
+class DailyTaskAssignment(Base):
+    __tablename__ = "daily_task_assignments"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    process_type = Column(String, nullable=False) # TIG, MIG, Grinding
+    date = Column(Date, default=date.today, nullable=False)
+    target_feet = Column(Float, nullable=False)
+    status = Column(String, default="Pending") # Pending, Completed, Blocked
+    is_overtime = Column(Boolean, default=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    project = relationship("Project")
+    user = relationship("User")
+
 class CompanyResourcePool(Base):
     __tablename__ = "company_resource_pool"
     id = Column(Integer, primary_key=True, index=True)

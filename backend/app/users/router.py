@@ -17,13 +17,22 @@ def get_users(db: Session = Depends(get_db), current_user: dict = Depends(requir
 
 @router.post("")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(User).filter_by(username=user.username).first()
+    import uuid
+    
+    gen_username = user.username
+    if not gen_username:
+        slug = user.full_name.lower().replace(" ", "")[:10]
+        gen_username = f"{slug}_{uuid.uuid4().hex[:6]}"
+        
+    gen_password = user.password or "shopfloor_no_login"
+
+    existing = db.query(User).filter_by(username=gen_username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
         
-    hashed_pw = pwd_context.hash(user.password)
+    hashed_pw = pwd_context.hash(gen_password)
     new_user = User(
-        username=user.username,
+        username=gen_username,
         full_name=user.full_name,
         hashed_password=hashed_pw,
         role=user.role,

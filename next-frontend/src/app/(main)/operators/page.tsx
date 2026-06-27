@@ -7,9 +7,7 @@ export default function OperatorsPage() {
   const [operators, setOperators] = useState<any[]>([]);
   
   // New Operator Form
-  const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
-  const [password, setPassword] = useState("");
   const [department, setDepartment] = useState("Welding");
   const [skill, setSkill] = useState("TIG Welder");
   const [experience, setExperience] = useState("");
@@ -41,9 +39,7 @@ export default function OperatorsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username,
           full_name: fullName,
-          password,
           role: "Operator",
           department,
           skill,
@@ -58,9 +54,7 @@ export default function OperatorsPage() {
       }
 
       setSuccess("Operator profile created successfully!");
-      setUsername("");
       setFullName("");
-      setPassword("");
       setExperience("");
       setBaseProductivity("");
       
@@ -104,16 +98,6 @@ export default function OperatorsPage() {
                   <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wide">Full Name *</label>
                   <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. John Doe" />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wide">Username *</label>
-                  <input type="text" required value={username} onChange={e => setUsername(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. jdoe_weld" />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wide">Password *</label>
-                  <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Set a password" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

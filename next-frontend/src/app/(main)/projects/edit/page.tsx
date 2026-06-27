@@ -16,6 +16,7 @@ export default function EditProjects() {
   const [assignedGrinders, setAssignedGrinders] = useState<number>(0);
   
   const [statusNote, setStatusNote] = useState<string>("");
+  const [holdType, setHoldType] = useState<string>("");
   const [holdUntilDate, setHoldUntilDate] = useState<string>("");
   
   const [bellows, setBellows] = useState<any[]>([]);
@@ -52,6 +53,7 @@ export default function EditProjects() {
       if (p) {
         setStatus(p.status || "Active");
         setStatusNote(p.status_note || "");
+        setHoldType(p.hold_type || "");
         setHoldUntilDate(p.hold_until_date || "");
         setAssignedTig(p.assigned_tig || 0);
         setAssignedMig(p.assigned_mig || 0);
@@ -118,6 +120,7 @@ export default function EditProjects() {
           status,
           status_note: (status === "Hold" || status === "Cancelled") ? statusNote : null,
           hold_until_date: status === "Hold" && holdUntilDate ? holdUntilDate : null,
+          hold_type: status === "Hold" ? holdType : null,
           assigned_tig: assignedTig,
           assigned_mig: assignedMig,
           assigned_grinders: assignedGrinders
@@ -219,7 +222,27 @@ export default function EditProjects() {
                   <p className="text-xs text-slate-500 mt-1">Status changes affect capacity metrics on dashboards.</p>
                 </div>
                 
-                {(status === "Hold" || status === "Cancelled") && (
+                              {status === 'Hold' && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Hold Type</label>
+                  <select 
+                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    value={holdType}
+                    onChange={(e) => setHoldType(e.target.value)}
+                  >
+                    <option value="">Select Hold Reason</option>
+                    <option value="Client Hold">Client Hold</option>
+                    <option value="Material Hold">Material Hold</option>
+                    <option value="Engineering Hold">Engineering Hold</option>
+                    <option value="Inspection Hold">Inspection Hold</option>
+                    <option value="Financial Hold">Financial Hold</option>
+                    <option value="Vendor Hold">Vendor Hold</option>
+                    <option value="General Hold">General Hold</option>
+                  </select>
+                </div>
+              )}
+
+              {(status === "Hold" || status === "Cancelled") && (
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Reason for {status}

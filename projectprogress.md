@@ -16,6 +16,15 @@
   - Built the `/workforce` Next.js dashboard to track daily attendance and display efficiency rankings.
   - Removed `username` and `password` requirements for shop-floor workers, enabling fast supervisor entry.
 - **Database Architecture Hardening:** Enforced PostgreSQL strictly across the backend and wrote a fully automated SQLite-to-PostgreSQL migration script (`migrate_sqlite_to_postgres.py`).
+- **Phase 5 Execution (Weekly & Monthly Planning Engine):**
+  - Added a `target_date` (Delivery Deadline) column to the core `Project` database model with automated SQLite and PostgreSQL startup migrations.
+  - Rewrote the `/api/v1/dashboard/planning` backend endpoint to act as a forecasting engine. It dynamically computes total factory capacity (summing all operator base productivities for a 6-day work week).
+  - Designed the engine to scan all active projects, compute remaining workload (subtracting MES logs), and bucket the workload into 4-week forecasts based on `target_date`.
+  - Built a brand new 4-Week Capacity Forecast UI section in `/dashboard/planning` with dynamic progress bars that turn red and calculate required overtime when demand exceeds factory capacity.
+  - Implemented tracking for "Unscheduled Backlog" to catch projects without deadlines.
+- **Phase 5.5 (Project Deadline UI):**
+  - Updated the API schemas to accept `target_date` dynamically during project creation and editing.
+  - Added a "Delivery Deadline" date-picker directly to the "Create Project" and "Edit Project" pages so planners can instantly set dates to sync with the forecasting engine. navigation sidebar.
 - **Phase 4 Execution (Smart Task Allocation Engine):**
   - Added the `DailyTaskAssignment` database model to `db_service.py` to store daily worker targets and overtime assignments.
   - Built the `scheduler` backend module to support fetching assignments and running the "Auto-Assign" algorithm based on worker `base_productivity`.
@@ -48,10 +57,11 @@
 - Updated the auto-assign engine to check if *any* attendance was logged for a date; if not, it automatically assumes all Active Operators are available for future planning.
 
 ### What is pending:
-- We need to test the Workforce Intelligence and Smart Task Allocation modules thoroughly with real workers on the shop floor.
+- We need to test the Workforce Intelligence, Smart Task Allocation, and Planning modules thoroughly with real data on the shop floor.
 - The metrics calculation currently uses placeholders for quality and efficiency scores; we need the precise formulas from management to calculate them based on actual feet welded / defects.
 - Refine the auto-assignment algorithm to pull the exact remaining feet required per project from `ProjectProductionLine` instead of simulating distribution.
 
 ### What needs to be done next session:
-- Execute Phase 5 (Weekly & Monthly Planning Engine).
+- Execute Phase 6 (Hold Management System) - *Note: We have already completed a large chunk of this in earlier sessions, just need to finalize tracking material holds.*
+- Execute Phase 7 (Material Intelligence Engine).
 - Finalize the Quality & Efficiency score calculation logic with exact formulas.

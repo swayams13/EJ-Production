@@ -24,7 +24,8 @@
   - Implemented tracking for "Unscheduled Backlog" to catch projects without deadlines.
 - **Phase 5.5 (Project Deadline UI):**
   - Updated the API schemas to accept `target_date` dynamically during project creation and editing.
-  - Added a "Delivery Deadline" date-picker directly to the "Create Project" and "Edit Project" pages so planners can instantly set dates to sync with the forecasting engine. navigation sidebar.
+  - Added a "Delivery Deadline" date-picker directly to the "Create Project" and "Edit Project" pages so planners can instantly set dates to sync with the forecasting engine.
+  - **Dynamic Priority Engine:** Integrated dynamic calculation of project priorities based on deadline proximity. Automatically flags projects as **P1** (<= 21 days, Red), **P2** (<= 60 days, Orange), or **P3** (> 60 days / Unscheduled, Green) across the Planning Dashboard.
 - **Phase 4 Execution (Smart Task Allocation Engine):**
   - Added the `DailyTaskAssignment` database model to `db_service.py` to store daily worker targets and overtime assignments.
   - Built the `scheduler` backend module to support fetching assignments and running the "Auto-Assign" algorithm based on worker `base_productivity`.

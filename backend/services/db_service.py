@@ -57,6 +57,7 @@ class Project(Base):
     client_address = Column(Text)
     status = Column(String, default="Active")
     status_note = Column(Text, nullable=True)
+    hold_type = Column(String, nullable=True)
     hold_until_date = Column(Date, nullable=True)
     target_date = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -155,6 +156,16 @@ class WorkforceMaster(Base):
     avg_productivity_per_day = Column(Float)
     active = Column(Boolean, default=True)
 
+
+class ProjectHoldHistory(Base):
+    __tablename__ = "project_hold_history"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    hold_type = Column(String, nullable=False)
+    comments = Column(Text, nullable=True)
+    hold_date = Column(DateTime, default=datetime.utcnow)
+    resume_date = Column(DateTime, nullable=True)
+
 class ProjectResourceAssignment(Base):
     __tablename__ = "project_resource_assignments"
     id = Column(Integer, primary_key=True, index=True)
@@ -206,6 +217,12 @@ def init_db():
     except Exception:
         pass # Column might already exist
         
+    
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE projects ADD COLUMN hold_type VARCHAR;"))
+    except Exception:
+        pass
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE production_logs ADD COLUMN feet_done FLOAT;"))

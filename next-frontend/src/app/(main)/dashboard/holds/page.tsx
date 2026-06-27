@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import apiFetch from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 export default function HoldsDashboard() {
   const [holds, setHolds] = useState<any[]>([]);

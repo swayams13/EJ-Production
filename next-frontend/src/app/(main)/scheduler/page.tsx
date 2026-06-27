@@ -1,7 +1,8 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { apiFetch } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
 
 export default function SchedulerPage() {
     const [assignments, setAssignments] = useState<any[]>([]);
@@ -13,29 +14,20 @@ export default function SchedulerPage() {
         fetchAssignments();
     }, [date]);
 
-    const getHeaders = () => {
-        return {
-            'Content-Type': 'application/json',
-            'X-User-Role': localStorage.getItem('user_role') || 'Supervisor'
-        };
-    };
-
     const fetchAssignments = async () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/scheduler/assignments?target_date=${date}`, {
-                headers: getHeaders()
-            });
+            const response = await apiFetch(`${API_URL}/api/v1/scheduler/assignments?target_date=${date}`);
             if (response.ok) {
                 const data = await response.json();
                 setAssignments(data);
             } else {
-                setError("Failed to fetch assignments");
+                setError("Failed to fetch assignments. You may not be authorized or the server returned an error.");
             }
         } catch (error) {
             console.error("Error fetching assignments:", error);
-            setError("Error fetching assignments");
+            setError("Error fetching assignments. Please check your connection.");
         }
         setLoading(false);
     };
@@ -46,9 +38,11 @@ export default function SchedulerPage() {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_URL}/scheduler/auto-assign?target_date=${date}`, {
+            const response = await apiFetch(`${API_URL}/api/v1/scheduler/auto-assign?target_date=${date}`, {
                 method: 'POST',
-                headers: getHeaders()
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
             const data = await response.json();
             if (data.success) {

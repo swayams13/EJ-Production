@@ -9,13 +9,11 @@ DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = f"sqlite:///{os.path.join(DATA_DIR, 'production_tracker.db')}"
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL:
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    engine = create_engine(DATABASE_URL)
-else:
-    engine = create_engine(DB_PATH, connect_args={"check_same_thread": False})
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/ej_tracker")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -191,14 +189,19 @@ def init_db():
     except Exception:
         pass # Column might already exist
         
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN experience VARCHAR;"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN skill VARCHAR;"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR;"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN base_productivity FLOAT;"))
-    except Exception:
-        pass # Columns might already exist
+    columns = [
+        "ALTER TABLE users ADD COLUMN experience VARCHAR;",
+        "ALTER TABLE users ADD COLUMN skill VARCHAR;",
+        "ALTER TABLE users ADD COLUMN department VARCHAR;",
+        "ALTER TABLE users ADD COLUMN base_productivity FLOAT;"
+    ]
+    
+    for query in columns:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(query))
+        except Exception:
+            pass
         
     session = SessionLocal()
     try:

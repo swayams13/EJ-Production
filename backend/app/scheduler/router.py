@@ -58,11 +58,20 @@ def auto_assign_tasks(
         AttendanceLog.status.in_(["Present", "Overtime"])
     ).all()
     
-    present_user_ids = [log.user_id for log in present_logs]
-    if not present_user_ids:
-        return {"success": False, "message": "No workers present today."}
-        
-    workers = db.query(User).filter(User.id.in_(present_user_ids), User.role == "Operator").all()
+    # Check if ANY attendance is marked for this date
+    any_logs = db.query(AttendanceLog).filter(AttendanceLog.date == target_date).first()
+    
+    if any_logs:
+        # Attendance was taken, so only use present workers
+        present_user_ids = [log.user_id for log in present_logs]
+        if not present_user_ids:
+            return {"success": False, "message": "Attendance is marked, but no workers are present today."}
+        workers = db.query(User).filter(User.id.in_(present_user_ids), User.role == "Operator").all()
+    else:
+        # No attendance taken yet (e.g. future date planning), assume ALL operators are available
+        workers = db.query(User).filter(User.role == "Operator").all()
+        if not workers:
+            return {"success": False, "message": "No operators found in the system to assign work to."}
     
     # Sort workers by base_productivity (simulating efficiency/track record)
     workers.sort(key=lambda w: w.base_productivity or 0, reverse=True)

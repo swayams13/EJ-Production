@@ -50,7 +50,11 @@ export default function OperatorsPage() {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || "Failed to create operator");
+        let errMsg = errData.detail;
+        if (Array.isArray(errMsg)) {
+          errMsg = errMsg.map((e: any) => `${e.loc.join('.')}: ${e.msg}`).join(' | ');
+        }
+        throw new Error(errMsg || "Failed to create operator");
       }
 
       setSuccess("Operator profile created successfully!");

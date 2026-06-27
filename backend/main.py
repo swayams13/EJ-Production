@@ -46,6 +46,16 @@ app.add_middleware(
 # Init DB
 init_db()
 
+# Auto-migrate new columns
+try:
+    from backend.services.db_service import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE projects ADD COLUMN status_note TEXT"))
+        conn.execute(text("ALTER TABLE projects ADD COLUMN hold_until_date DATE"))
+        conn.commit()
+except Exception:
+    pass # Columns already exist
 # Dependency
 
 # Models

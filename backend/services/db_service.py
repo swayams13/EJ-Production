@@ -43,6 +43,8 @@ class Project(Base):
     email = Column(String, index=True)
     client_address = Column(Text)
     status = Column(String, default="Active")
+    status_note = Column(Text, nullable=True)
+    hold_until_date = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     production_lines = relationship("ProjectProductionLine", back_populates="project", cascade="all, delete-orphan")

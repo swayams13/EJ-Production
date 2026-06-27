@@ -231,6 +231,11 @@ def get_company_capacity_status(target_days=15):
         tot_tig = 0.0
         tot_mig = 0.0
         tot_grind = 0.0
+        
+        hold_tig = 0.0
+        hold_mig = 0.0
+        hold_grind = 0.0
+        
         total_estimated_days = 0
         
         active_projects_count = 0
@@ -264,9 +269,14 @@ def get_company_capacity_status(target_days=15):
                     proj_mig = max(0, proj_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
                     proj_grind = max(0, proj_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
                 
-                tot_tig += proj_tig
-                tot_mig += proj_mig
-                tot_grind += proj_grind
+                if p.status == "Hold":
+                    hold_tig += proj_tig
+                    hold_mig += proj_mig
+                    hold_grind += proj_grind
+                else:
+                    tot_tig += proj_tig
+                    tot_mig += proj_mig
+                    tot_grind += proj_grind
                 
                 assignment = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
                 proj_target_days = assignment.target_days if assignment and assignment.target_days else target_days
@@ -319,6 +329,9 @@ def get_company_capacity_status(target_days=15):
             "pending_tig": tot_tig,
             "pending_mig": tot_mig,
             "pending_grind": tot_grind,
+            "hold_tig": hold_tig,
+            "hold_mig": hold_mig,
+            "hold_grind": hold_grind,
             "total_estimated_days": total_estimated_days,
             "pool": {
                 "tig": pool.total_tig_welders,

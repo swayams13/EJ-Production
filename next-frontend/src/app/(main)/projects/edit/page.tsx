@@ -15,6 +15,9 @@ export default function EditProjects() {
   const [assignedMig, setAssignedMig] = useState<number>(0);
   const [assignedGrinders, setAssignedGrinders] = useState<number>(0);
   
+  const [statusNote, setStatusNote] = useState<string>("");
+  const [holdUntilDate, setHoldUntilDate] = useState<string>("");
+  
   const [bellows, setBellows] = useState<any[]>([]);
   const [sizes, setSizes] = useState<number[]>([]);
   const [duration, setDuration] = useState<number | null>(null);
@@ -48,6 +51,8 @@ export default function EditProjects() {
       const p = projects.find((proj) => proj.id.toString() === id);
       if (p) {
         setStatus(p.status || "Active");
+        setStatusNote(p.status_note || "");
+        setHoldUntilDate(p.hold_until_date || "");
         setAssignedTig(p.assigned_tig || 0);
         setAssignedMig(p.assigned_mig || 0);
         setAssignedGrinders(p.assigned_grinders || 0);
@@ -57,6 +62,8 @@ export default function EditProjects() {
     } else {
       setBellows([]);
       setDuration(null);
+      setStatusNote("");
+      setHoldUntilDate("");
     }
   };
 
@@ -109,6 +116,8 @@ export default function EditProjects() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status,
+          status_note: (status === "Hold" || status === "Cancelled") ? statusNote : null,
+          hold_until_date: status === "Hold" && holdUntilDate ? holdUntilDate : null,
           assigned_tig: assignedTig,
           assigned_mig: assignedMig,
           assigned_grinders: assignedGrinders
@@ -203,10 +212,40 @@ export default function EditProjects() {
                     onChange={(e) => setStatus(e.target.value)}
                   >
                     <option value="Active">Active</option>
+                    <option value="Hold">Hold</option>
+                    <option value="Cancelled">Cancelled</option>
                     <option value="Completed">Completed</option>
                   </select>
-                  <p className="text-xs text-slate-500 mt-1">Marking as 'Completed' removes it from the capacity pipeline.</p>
+                  <p className="text-xs text-slate-500 mt-1">Status changes affect capacity metrics on dashboards.</p>
                 </div>
+                
+                {(status === "Hold" || status === "Cancelled") && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Reason for {status}
+                    </label>
+                    <textarea
+                      className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-black"
+                      rows={2}
+                      value={statusNote}
+                      onChange={(e) => setStatusNote(e.target.value)}
+                      placeholder={`Explain why project is ${status.toLowerCase()}...`}
+                      required
+                    />
+                  </div>
+                )}
+                
+                {status === "Hold" && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Hold Until Date (Optional)</label>
+                    <input
+                      type="date"
+                      className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-black"
+                      value={holdUntilDate}
+                      onChange={(e) => setHoldUntilDate(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-100">

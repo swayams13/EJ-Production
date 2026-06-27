@@ -54,6 +54,17 @@ export default function Dashboard() {
         <MetricCard title="Pending MIG (ft)" value={Math.round(data.pending_mig * 10) / 10} />
         <MetricCard title="Pending Grinding (sq ft)" value={Math.round(data.pending_grind * 10) / 10} />
       </div>
+      
+      {(data.hold_tig > 0 || data.hold_mig > 0 || data.hold_grind > 0) && (
+        <div className="mb-8">
+          <h3 className="text-sm font-semibold text-rose-600 mb-3 uppercase tracking-wide">On Hold Work (Excluded from Pending)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <MetricCard title="Hold TIG (ft)" value={Math.round(data.hold_tig * 10) / 10} />
+            <MetricCard title="Hold MIG (ft)" value={Math.round(data.hold_mig * 10) / 10} />
+            <MetricCard title="Hold Grinding (sq ft)" value={Math.round(data.hold_grind * 10) / 10} />
+          </div>
+        </div>
+      )}
 
       <h2 className="text-xl font-semibold text-slate-800 mb-4">Company Manpower Requirements</h2>
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

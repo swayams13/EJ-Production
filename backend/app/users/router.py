@@ -12,7 +12,7 @@ from backend.app.auth.rbac import require_roles
 @router.get("")
 def get_users(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"]))):
     users = db.query(User).all()
-    result = [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username} for u in users]
+    result = [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username, "experience": u.experience, "skill": u.skill, "department": u.department} for u in users]
     return {"success": True, "message": "Users retrieved", "data": result}
 
 @router.post("")
@@ -26,7 +26,10 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         username=user.username,
         full_name=user.full_name,
         hashed_password=hashed_pw,
-        role=user.role
+        role=user.role,
+        experience=user.experience,
+        skill=user.skill,
+        department=user.department
     )
     db.add(new_user)
     db.commit()

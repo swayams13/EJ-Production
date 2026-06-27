@@ -29,8 +29,22 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
     role = Column(String, nullable=False)
+    experience = Column(String, nullable=True)
+    skill = Column(String, nullable=True)
+    department = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class AttendanceLog(Base):
+    __tablename__ = "attendance_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    date = Column(Date, default=date.today, nullable=False)
+    status = Column(String, nullable=False) # Present, Absent, Leave, Overtime
+    hours = Column(Float, nullable=True) # Used for overtime tracking
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User")
 
 class Project(Base):
     __tablename__ = "projects"
@@ -175,6 +189,14 @@ def init_db():
             conn.execute(text("ALTER TABLE production_logs ADD COLUMN feet_done FLOAT;"))
     except Exception:
         pass # Column might already exist
+        
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN experience VARCHAR;"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN skill VARCHAR;"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR;"))
+    except Exception:
+        pass # Columns might already exist
         
     session = SessionLocal()
     try:

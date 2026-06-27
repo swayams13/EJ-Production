@@ -19,6 +19,7 @@ class ProjectUpdate(BaseModel):
     status: Optional[str] = None
     status_note: Optional[str] = None
     hold_until_date: Optional[date] = None
+    target_date: Optional[date] = None
     assigned_tig: Optional[int] = None
     assigned_mig: Optional[int] = None
     assigned_grinders: Optional[int] = None

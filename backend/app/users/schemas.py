@@ -9,3 +9,4 @@ class UserCreate(BaseModel):
     experience: Optional[str] = None
     skill: Optional[str] = None
     department: Optional[str] = None
+    base_productivity: Optional[float] = None

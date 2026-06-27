@@ -10,6 +10,10 @@ export default function OperatorsPage() {
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [department, setDepartment] = useState("Welding");
+  const [skill, setSkill] = useState("TIG Welder");
+  const [experience, setExperience] = useState("");
+  const [baseProductivity, setBaseProductivity] = useState("");
   
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +44,11 @@ export default function OperatorsPage() {
           username,
           full_name: fullName,
           password,
-          role: "Operator"
+          role: "Operator",
+          department,
+          skill,
+          experience,
+          base_productivity: baseProductivity ? parseFloat(baseProductivity) : null
         })
       });
 
@@ -53,6 +61,8 @@ export default function OperatorsPage() {
       setUsername("");
       setFullName("");
       setPassword("");
+      setExperience("");
+      setBaseProductivity("");
       
       // Refresh the list
       fetchOperators();
@@ -105,6 +115,38 @@ export default function OperatorsPage() {
                   <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Set a password" />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wide">Dept *</label>
+                    <select value={department} onChange={e => setDepartment(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black shadow-sm">
+                      <option value="Welding">Welding</option>
+                      <option value="Grinding">Grinding</option>
+                      <option value="Assembly">Assembly</option>
+                      <option value="Painting">Painting</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wide">Skill *</label>
+                    <select value={skill} onChange={e => setSkill(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black shadow-sm">
+                      <option value="TIG Welder">TIG Welder</option>
+                      <option value="MIG Welder">MIG Welder</option>
+                      <option value="Grinder">Grinder</option>
+                      <option value="Fitter">Fitter</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wide">Experience</label>
+                    <input type="text" value={experience} onChange={e => setExperience(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black shadow-sm" placeholder="e.g. 5 Yrs" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wide">Target/Day</label>
+                    <input type="number" step="0.1" value={baseProductivity} onChange={e => setBaseProductivity(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-black shadow-sm" placeholder="e.g. 150 ft" />
+                  </div>
+                </div>
                 
                 <div className="pt-2">
                   <button type="submit" disabled={submitting} 
@@ -134,12 +176,19 @@ export default function OperatorsPage() {
                     </div>
                     <div>
                       <h3 className="font-bold text-slate-900 text-lg">{op.name}</h3>
-                      <p className="text-slate-500 text-sm font-medium">Username: @{op.username}</p>
+                      <p className="text-slate-500 text-sm font-medium">@{op.username} • {op.department || 'No Dept'} • {op.skill || 'No Skill'}</p>
                     </div>
                   </div>
-                  <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider">
-                    {op.role}
-                  </span>
+                  <div className="text-right">
+                    <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider block mb-1 text-center">
+                      {op.role}
+                    </span>
+                    {op.base_productivity && (
+                      <span className="text-xs font-bold text-emerald-600">
+                        Target: {op.base_productivity}/day
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
               

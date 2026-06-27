@@ -32,6 +32,7 @@ class User(Base):
     experience = Column(String, nullable=True)
     skill = Column(String, nullable=True)
     department = Column(String, nullable=True)
+    base_productivity = Column(Float, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -195,6 +196,7 @@ def init_db():
             conn.execute(text("ALTER TABLE users ADD COLUMN experience VARCHAR;"))
             conn.execute(text("ALTER TABLE users ADD COLUMN skill VARCHAR;"))
             conn.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR;"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN base_productivity FLOAT;"))
     except Exception:
         pass # Columns might already exist
         

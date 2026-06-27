@@ -79,11 +79,11 @@ def auto_assign_tasks(
             "can_do_overtime": True # Top workers can do overtime
         })
 
-    # Get Active Projects ordered by priority (target_date)
+    # Get Active Projects ordered by priority (created_at)
     projects = db.query(Project).filter(
         Project.status == "Active",
         Project.hold_until_date == None
-    ).order_by(asc(Project.target_date)).all()
+    ).order_by(asc(Project.created_at)).all()
     
     if not projects:
         return {"success": True, "message": "No active projects to assign."}

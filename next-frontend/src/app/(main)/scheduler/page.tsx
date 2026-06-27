@@ -98,8 +98,8 @@ export default function SchedulerPage() {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600">
-                                        <th className="p-4 font-medium">User ID</th>
-                                        <th className="p-4 font-medium">Project ID</th>
+                                        <th className="p-4 font-medium">Worker Name</th>
+                                        <th className="p-4 font-medium">Project (Quote No)</th>
                                         <th className="p-4 font-medium">Process Type</th>
                                         <th className="p-4 font-medium">Target Feet</th>
                                         <th className="p-4 font-medium">Overtime</th>
@@ -110,8 +110,12 @@ export default function SchedulerPage() {
                                 <tbody>
                                     {assignments.map((task: any) => (
                                         <tr key={task.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                            <td className="p-4 text-slate-800 font-medium">{task.user_id}</td>
-                                            <td className="p-4 text-slate-800">{task.project_id}</td>
+                                            <td className="p-4 text-slate-800 font-medium">
+                                                {task.user?.full_name || `User #${task.user_id}`}
+                                            </td>
+                                            <td className="p-4 text-slate-800">
+                                                {task.project?.quotation_no || `Proj #${task.project_id}`}
+                                            </td>
                                             <td className="p-4">
                                                 <span className="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-md text-xs font-medium">
                                                     {task.process_type}

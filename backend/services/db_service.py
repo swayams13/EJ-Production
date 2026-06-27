@@ -58,6 +58,7 @@ class Project(Base):
     status = Column(String, default="Active")
     status_note = Column(Text, nullable=True)
     hold_until_date = Column(Date, nullable=True)
+    target_date = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     production_lines = relationship("ProjectProductionLine", back_populates="project", cascade="all, delete-orphan")
@@ -199,6 +200,12 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     
     from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE projects ADD COLUMN target_date DATE;"))
+    except Exception:
+        pass # Column might already exist
+        
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE production_logs ADD COLUMN feet_done FLOAT;"))

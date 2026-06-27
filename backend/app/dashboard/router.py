@@ -92,12 +92,61 @@ def get_executive_dashboard(db: Session = Depends(get_db)):
 @router.get("/planning")
 def get_planning_dashboard(db: Session = Depends(get_db)):
     from backend.services.mes_service import MESService
+    from backend.services.db_service import User
+    from datetime import date
+    
+    # 1. Capacity Calculation
+    operators = db.query(User).filter(User.role == "Operator").all()
+    daily_capacity = sum(op.base_productivity or 50.0 for op in operators)
+    weekly_capacity = daily_capacity * 6 # Assume 6 day work week
+    monthly_capacity = daily_capacity * 26 # Assume 26 working days in a month
+    
+    weekly_buckets = [{"id": i, "name": f"Week {i+1}", "capacity": weekly_capacity, "demand": 0} for i in range(4)]
+    monthly_buckets = [{"id": i, "name": f"Month {i+1}", "capacity": monthly_capacity, "demand": 0} for i in range(3)]
+    unscheduled_demand = 0
+    
+    # 2. Demand Calculation
     active_projects = db.query(Project).filter(Project.status != "Completed").all()
     total_target = 0
+    today = date.today()
+    late_projects = 0
     
     for p in active_projects:
+        # Top level metrics
         for line in p.production_lines:
             total_target += line.quantity
+            
+        if p.target_date and p.target_date < today:
+            late_projects += 1
+            
+        # Forecasting metrics
+        total_feet = sum((line.tig_feet or 0) + (line.mig_feet or 0) + (line.grinding_feet or 0) for line in p.production_lines)
+        progress_pct = MESService.calculate_project_progress(db, p.id)
+        remaining_feet = total_feet * (1 - (progress_pct / 100))
+        
+        if p.target_date:
+            days_away = (p.target_date - today).days
+            if days_away < 0:
+                weekly_buckets[0]["demand"] += remaining_feet
+                monthly_buckets[0]["demand"] += remaining_feet
+            else:
+                week_idx = days_away // 7
+                if week_idx < 4:
+                    weekly_buckets[week_idx]["demand"] += remaining_feet
+                
+                month_idx = days_away // 30
+                if month_idx < 3:
+                    monthly_buckets[month_idx]["demand"] += remaining_feet
+        else:
+            unscheduled_demand += remaining_feet
+            
+    # Clean up floats
+    for b in weekly_buckets:
+        b["demand"] = round(b["demand"], 1)
+    for b in monthly_buckets:
+        b["demand"] = round(b["demand"], 1)
+        
+    unscheduled_demand = round(unscheduled_demand, 1)
             
     total_progress = 0
     if active_projects:
@@ -105,14 +154,7 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
         
     current_load = round(100 - total_progress, 1) if active_projects else 0
 
-    late_projects = 0
-    today = datetime.utcnow()
-    for p in active_projects:
-        if p.resource_assignment and p.resource_assignment.target_date:
-            if p.resource_assignment.target_date < today:
-                late_projects += 1
-            
-    total_projects = db.query(Project).count()
+    total_projects = len(active_projects)
     on_time = 100
     if total_projects > 0:
         on_time = round(((total_projects - late_projects) / total_projects) * 100, 1)
@@ -120,6 +162,10 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
     result = {
         "weekly_target": total_target,
         "current_load": current_load,
-        "on_time_delivery": on_time
+        "on_time_delivery": on_time,
+        "weekly_forecast": weekly_buckets,
+        "monthly_forecast": monthly_buckets,
+        "unscheduled_demand": unscheduled_demand,
+        "factory_weekly_capacity": weekly_capacity
     }
     return {"success": True, "message": "Planning dashboard retrieved", "data": result}

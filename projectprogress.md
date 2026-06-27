@@ -22,6 +22,12 @@
   - Implemented overtime allocation for high-efficiency workers when the project queue exceeds regular capacity.
   - Developed the `/scheduler` Next.js frontend page for supervisors to view and trigger auto-assignments.
   - Added the "Daily Scheduler" link to the main navigation sidebar.
+- **Scheduler Enhancements & Bug Fixes:**
+  - Standardized the frontend API calls in the scheduler to use `apiFetch` (including JWT authorization headers).
+  - Fixed a critical `AttributeError` by sorting the task assignments using `created_at` instead of an invalid `target_date`.
+  - Upgraded the Auto-Assign logic to support future planning dates (assumes all operators are available if no attendance logs exist for that date).
+  - Enhanced the UI table to display real Worker Names and Project Quotation Numbers instead of raw database IDs.
+- **Git Deployment Workflow Setup:** Established a strict rule in `.agents/AGENTS.md` to push all code to a `demo` branch first before merging to `main` for Railway deployments.
 
 ### Problems faced:
 - The dashboard was very slow to load (15s+) due to hundreds of redundant database queries firing simultaneously.
@@ -29,6 +35,8 @@
 - Railway deployments failed to add new database columns because the auto-migration transaction was rolling back if any single column already existed.
 - Need to securely migrate existing SQLite data into the new strictly-enforced PostgreSQL database.
 - We needed a way to assign tasks only to workers who were marked as "Present" for the day without manually filtering them.
+- The `auto-assign` API crashed on Railway because it tried to sort projects by a non-existent `target_date` column, and it returned a 401 error because the frontend used a raw `fetch()` without passing the user's JWT token.
+- Future date scheduling failed because the system aborted if zero attendance logs existed for that day.
 
 ### How we solved them:
 - Rewrote `calculate_project_progress` to use explicit `selectinload` mapping, drastically reducing load times.
@@ -36,6 +44,8 @@
 - Refactored the `ALTER TABLE` startup script to run each column addition in isolated `try/except` blocks, fixing the Railway deploy.
 - Built a secure, automated `migrate_sqlite_to_postgres.py` script that reads credentials directly from `.env` and transfers all data table-by-table.
 - Integrated the new `AttendanceLog` table directly into the auto-assignment query to fetch only available workers dynamically.
+- Replaced raw `fetch()` with the project's standard `apiFetch` utility to guarantee authentication headers, and changed the sort logic to `created_at`.
+- Updated the auto-assign engine to check if *any* attendance was logged for a date; if not, it automatically assumes all Active Operators are available for future planning.
 
 ### What is pending:
 - We need to test the Workforce Intelligence and Smart Task Allocation modules thoroughly with real workers on the shop floor.

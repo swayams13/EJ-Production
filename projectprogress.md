@@ -11,13 +11,22 @@
   - Successfully combined the backend capacity requirements for both Expansion Joints (EJ) and Dismantling Joints (DJ) into a single "TIG" metric as requested.
 - **Edit Project UI Polish:** Added a dynamic "Target Date" modifier directly to the Edit Projects panel, allowing instant rescheduling.
 
+- **Dashboard Evolution:** Upgraded the Progress Dashboard to clearly segment and display "Active Projects", "Projects on Hold", and "Completed Projects" as distinct KPIs.
+- **Workflow Streamlining:** Simplified the Shop Floor Input form by removing the "Operator" dropdown, allowing the Production Manager to enter data significantly faster without redundant selections.
+- **System Audit & Security:** Built a comprehensive Audit Log system that records logins and sensitive data modifications. Protected this dashboard exclusively for Developers, complete with an instant CSV/Excel export feature.
+
 ### Problems faced:
 - Live resource calculations suddenly returned zeroes for DJ type bellows and gave incorrect total metrics.
 - The user wanted a completely automated scheduler that wouldn't require daily manual button clicks.
+- "Hold" projects failed to appear on the new Progress Dashboard due to a backend status string typo.
+- The Live Overtime Predictions were displaying 0 hours, which initially appeared to be a bug but was actually mathematically correct based on massive available capacity.
 
 ### How we solved them:
 - Discovered and fixed a python dictionary key-matching bug where database records containing `None` for joint_type were failing to match against `"EJ"` lookup strings. Adjusted the backend `simulate_resources` logic to safely default null records to `"EJ"`, perfectly restoring parity with the original calculator.
 - Implemented lazy-loading auto-initialization inside `scheduler/page.tsx`, which silently handles assignment execution when the supervisor first visits the page for the day.
+- Fixed the database query logic from `Project.status == "On Hold"` to `"Hold"` to ensure the backend accurately counted and returned the correct hold metrics.
+- Educated the user on the difference between standard capacity vs required hours, confirming that 0 overtime means their current workforce is sufficiently staffed for the pending workload.
+- Refactored `production_logs` and `welding_logs` database models and Pydantic schemas to allow nullable `operator_id` fields, safely empowering the PM to log production without being forced to choose an operator profile.
 
 ### What is pending:
 - We still need to test the Smart Task Allocation modules thoroughly with live production data.

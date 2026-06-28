@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, date
 import math
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 
 from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, WorkforceMaster, ProjectHoldHistory
 from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline
@@ -293,7 +294,7 @@ def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db
     return {"success": True, "message": "Duration simulated", "data": {"estimated_duration_days": dur}}
 
 class SimulateResourcesRequest(BaseModel):
-    bellows: List[BellowInput]
+    bellows: List[BellowItem]
     target_date: Optional[date] = None
 
 @router.post("/simulate_resources")

@@ -9,7 +9,8 @@ export default function MasterData() {
   const [workforce, setWorkforce] = useState<any[]>([]);
   const [pool, setPool] = useState<any>({ total_tig_welders: 0, total_mig_welders: 0, total_grinders: 0 });
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const [syncingEJ, setSyncingEJ] = useState(false);
+  const [syncingDJ, setSyncingDJ] = useState(false);
   const [message, setMessage] = useState("");
 
   const fetchData = () => {
@@ -31,19 +32,35 @@ export default function MasterData() {
     fetchData();
   }, []);
 
-  const handleSync = async () => {
-    setSyncing(true);
+  const handleSyncEJ = async () => {
+    setSyncingEJ(true);
     setMessage("");
     try {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync`, { method: "POST" });
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync/ej`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
-      setMessage(json.message);
+      setMessage("EJ " + json.message);
       fetchData();
     } catch (err: any) {
-      setMessage("Error: " + err.message);
+      setMessage("Error syncing EJ: " + err.message);
     } finally {
-      setSyncing(false);
+      setSyncingEJ(false);
+    }
+  };
+
+  const handleSyncDJ = async () => {
+    setSyncingDJ(true);
+    setMessage("");
+    try {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync/dj`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail);
+      setMessage("DJ " + json.message);
+      fetchData();
+    } catch (err: any) {
+      setMessage("Error syncing DJ: " + err.message);
+    } finally {
+      setSyncingDJ(false);
     }
   };
 
@@ -89,13 +106,22 @@ export default function MasterData() {
               <p className="text-sm text-slate-500">Base configuration for expansion joint sizes.</p>
             </div>
             {(userRole === "Developer" || userRole === "GM") && (
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
-              >
-                {syncing ? "Syncing..." : "Sync Latest from Server"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSyncEJ}
+                  disabled={syncingEJ || syncingDJ}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {syncingEJ ? "Syncing EJ..." : "Sync EJ Data"}
+                </button>
+                <button
+                  onClick={handleSyncDJ}
+                  disabled={syncingEJ || syncingDJ}
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {syncingDJ ? "Syncing DJ..." : "Sync DJ Data"}
+                </button>
+              </div>
             )}
           </div>
           
@@ -110,6 +136,7 @@ export default function MasterData() {
               <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
                 <thead className="bg-slate-50">
                   <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Type</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">TIG (ft)</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">MIG (ft)</th>
@@ -119,6 +146,7 @@ export default function MasterData() {
                 <tbody className="bg-white divide-y divide-slate-200">
                   {data.map((row) => (
                     <tr key={row.size} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.type}</td>
                       <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet}</td>

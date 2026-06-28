@@ -77,7 +77,7 @@ def import_welding_master_from_disk():
 
 def import_dismantling_joint_master():
     try:
-        file_path = "/Users/sonusingh/AI DEVELOPMENT DESPL/Precise Engineers/EJ Production Tracker/ANALYSIS DISMANTLING JOINT WELDING FEETS PER SIZE_27.06.2026.xlsx"
+        file_path = "ANALYSIS DISMANTLING JOINT WELDING FEETS PER SIZE_27.06.2026.xlsx"
         df = pd.read_excel(file_path)
         
         session = SessionLocal()

@@ -123,10 +123,15 @@ export default function SchedulerPage() {
                                             </td>
                                             <td className="p-4 text-slate-700">{task.target_feet}</td>
                                             <td className="p-4">
-                                                {task.is_overtime ? 
-                                                    <span className="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-md text-xs font-medium">Yes</span> : 
-                                                    <span className="text-slate-400 text-sm">No</span>
-                                                }
+                                                {task.is_overtime ? (
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                                        {task.user?.base_productivity ? `${Math.round((task.target_feet / task.user.base_productivity) * 10) / 10} hrs` : 'Yes'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                                                        No
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="p-4">
                                                 <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${

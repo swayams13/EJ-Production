@@ -15,6 +15,7 @@ class TaskAssignmentCreate(BaseModel):
 class SimpleUser(BaseModel):
     id: int
     full_name: Optional[str]
+    base_productivity: Optional[float] = None
     
     class Config:
         orm_mode = True

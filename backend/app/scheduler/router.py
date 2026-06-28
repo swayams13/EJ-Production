@@ -102,7 +102,7 @@ def auto_assign_tasks(
         process_type = skill
         project_index = 0
         
-        # 1. Assign up to base capacity
+        # 1. Assign up to base capacity (8 hour standard shift)
         for w in available_workers:
             if project_index >= len(projects):
                 break
@@ -113,12 +113,12 @@ def auto_assign_tasks(
                 user_id=w["user_id"],
                 process_type=process_type,
                 date=target_date,
-                target_feet=w["base_productivity"],
+                target_feet=w["base_productivity"] * 8,
                 is_overtime=False,
                 status="Pending"
             )
             db.add(assignment)
-            w["assigned_feet"] += w["base_productivity"]
+            w["assigned_feet"] += w["base_productivity"] * 8
             
             # Move to next project just to distribute work (simplified)
             project_index += 1 
@@ -130,8 +130,9 @@ def auto_assign_tasks(
                 if project_index >= len(projects):
                     break
                 
-                # Give an extra 20% of base_productivity as overtime
-                overtime_target = w["base_productivity"] * 0.2
+                # Give an extra 2 hours of base_productivity as overtime
+                overtime_hours = 2.0
+                overtime_target = w["base_productivity"] * overtime_hours
                 project = projects[project_index]
                 
                 assignment = DailyTaskAssignment(
@@ -142,7 +143,7 @@ def auto_assign_tasks(
                     target_feet=overtime_target,
                     is_overtime=True,
                     status="Pending",
-                    notes="Auto-assigned overtime due to high workload."
+                    notes=f"Auto-assigned overtime ({overtime_hours} hrs) due to high workload."
                 )
                 db.add(assignment)
                 

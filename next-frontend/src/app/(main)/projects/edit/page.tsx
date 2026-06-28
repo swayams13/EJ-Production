@@ -11,6 +11,7 @@ export default function EditProjects() {
   
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [status, setStatus] = useState("Active");
+  const [targetDate, setTargetDate] = useState<string>("");
   const [assignedTig, setAssignedTig] = useState<number>(0);
   const [assignedMig, setAssignedMig] = useState<number>(0);
   const [assignedGrinders, setAssignedGrinders] = useState<number>(0);
@@ -55,6 +56,7 @@ export default function EditProjects() {
         setStatusNote(p.status_note || "");
         setHoldType(p.hold_type || "");
         setHoldUntilDate(p.hold_until_date || "");
+        setTargetDate(p.target_date ? p.target_date.split('T')[0] : "");
         setAssignedTig(p.assigned_tig || 0);
         setAssignedMig(p.assigned_mig || 0);
         setAssignedGrinders(p.assigned_grinders || 0);
@@ -64,6 +66,7 @@ export default function EditProjects() {
     } else {
       setBellows([]);
       setDuration(null);
+      setTargetDate("");
       setStatusNote("");
       setHoldUntilDate("");
     }
@@ -100,8 +103,8 @@ export default function EditProjects() {
     }));
 
     // Find the project's target date if available to pass to the resource simulator
-    let tDate = null;
-    if (selectedProjectId) {
+    let tDate = targetDate;
+    if (!tDate && selectedProjectId) {
       const p = projects.find(proj => proj.id.toString() === selectedProjectId);
       if (p && p.target_date) tDate = p.target_date;
     }
@@ -125,7 +128,7 @@ export default function EditProjects() {
       })
       .catch(err => console.error(err));
     }
-  }, [bellows, selectedProjectId, projects]);
+  }, [bellows, selectedProjectId, projects, targetDate]);
 
   const handleAddBellow = () => {
     setBellows([...bellows, { size: "", qty: 1, type: "EJ" }]);
@@ -157,6 +160,7 @@ export default function EditProjects() {
           status_note: (status === "Hold" || status === "Cancelled") ? statusNote : null,
           hold_until_date: status === "Hold" && holdUntilDate ? holdUntilDate : null,
           hold_type: status === "Hold" ? holdType : null,
+          target_date: targetDate || null,
           assigned_tig: assignedTig,
           assigned_mig: assignedMig,
           assigned_grinders: assignedGrinders
@@ -257,6 +261,17 @@ export default function EditProjects() {
                     <option value="Completed">Completed</option>
                   </select>
                   <p className="text-xs text-slate-500 mt-1">Status changes affect capacity metrics on dashboards.</p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Target Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-black"
+                    value={targetDate}
+                    onChange={(e) => setTargetDate(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Overrides the deadline in the Master Schedule.</p>
                 </div>
                 
                               {status === 'Hold' && (

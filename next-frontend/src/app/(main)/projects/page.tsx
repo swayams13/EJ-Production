@@ -2,6 +2,7 @@
 import { apiFetch } from "@/lib/api";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 
 export default function ProjectsList() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -25,6 +26,11 @@ export default function ProjectsList() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Projects</h1>
           <p className="text-slate-500">Manage all active and completed projects.</p>
+        </div>
+        <div>
+          <Link href="/projects/add" className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-sm transition-colors">
+            + Schedule New Project
+          </Link>
         </div>
       </div>
 

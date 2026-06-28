@@ -157,9 +157,6 @@ export default function PlanningDashboard() {
 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h2 className="text-lg font-bold text-slate-800">Master Schedule</h2>
-          <Link href="/projects/add" className="text-sm font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider">
-            + Schedule New Project
-          </Link>
         </div>
         
         {loading ? (

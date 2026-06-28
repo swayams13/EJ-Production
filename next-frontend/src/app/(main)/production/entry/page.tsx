@@ -14,9 +14,6 @@ export default function OperatorEntry() {
   const [totalQty, setTotalQty] = useState(0);
   const [partId, setPartId] = useState("");
   const [weldingSummary, setWeldingSummary] = useState<any>(null);
-  
-  const [operators, setOperators] = useState<any[]>([]);
-  const [operatorId, setOperatorId] = useState("");
 
   const [qtyInputs, setQtyInputs] = useState<{[key: string]: string}>({});
   const [feetInputs, setFeetInputs] = useState<{[key: string]: string}>({});
@@ -33,10 +30,6 @@ export default function OperatorEntry() {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
       .then(res => res.json())
       .then(resData => setProjects((resData.data || []).filter((p: any) => p.status !== "Completed")));
-      
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`)
-      .then(res => res.json())
-      .then(resData => setOperators(resData.data?.filter((u: any) => u.role === "Worker" || u.role === "Operator") || []));
   }, []);
 
   // When project changes, fetch requirements
@@ -86,10 +79,6 @@ export default function OperatorEntry() {
   };
 
   const handleSubmitProcess = async (processId: string, processName: string) => {
-    if (!operatorId) {
-      setErrorMsg("Please select your operator profile first.");
-      return;
-    }
     const qty = parseInt(qtyInputs[processId] || "0");
     if (qty <= 0) {
       setErrorMsg("Quantity must be greater than 0");
@@ -107,7 +96,6 @@ export default function OperatorEntry() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          operator_id: parseInt(operatorId),
           quantity_completed: qty,
           feet_completed: feet > 0 ? feet : null
         })
@@ -136,10 +124,6 @@ export default function OperatorEntry() {
   };
 
   const handleGlobalWeldingSubmit = async (processType: string) => {
-    if (!operatorId) {
-      setErrorMsg("Please select your operator profile first.");
-      return;
-    }
     const feet = parseFloat(feetInputs[processType] || "0");
     if (feet <= 0) {
       setErrorMsg("Feet done must be greater than 0");
@@ -155,7 +139,6 @@ export default function OperatorEntry() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          operator_id: parseInt(operatorId),
           process_type: processType,
           feet_done: feet
         })
@@ -209,17 +192,7 @@ export default function OperatorEntry() {
         )}
 
         {/* Selection Header */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-1">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Operator</label>
-            <select 
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-semibold text-black focus:ring-2 focus:ring-blue-500"
-              value={operatorId} onChange={(e) => setOperatorId(e.target.value)}
-            >
-              <option value="">-- Select Profile --</option>
-              {operators.map(o => <option key={o.id} value={o.id}>{o.full_name || o.username}</option>)}
-            </select>
-          </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-4">
 
           <div className="space-y-1">
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Project</label>

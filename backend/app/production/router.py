@@ -41,9 +41,10 @@ def add_transaction(process_id: int, tx: TransactionCreate, db: Session = Depend
     if not proc:
         raise HTTPException(status_code=404, detail="Process not found")
         
-    user = db.query(User).filter_by(id=tx.operator_id).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid operator")
+    if tx.operator_id is not None:
+        user = db.query(User).filter_by(id=tx.operator_id).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid operator")
         
     line = proc.part.production_line
     
@@ -104,9 +105,10 @@ def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get
     if not line:
         raise HTTPException(status_code=404, detail="Requirement not found")
         
-    user = db.query(User).filter_by(id=tx.operator_id).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid operator")
+    if tx.operator_id is not None:
+        user = db.query(User).filter_by(id=tx.operator_id).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid operator")
         
     log = WeldingLog(
         production_line_id=req_id,

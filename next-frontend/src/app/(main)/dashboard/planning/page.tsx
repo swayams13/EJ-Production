@@ -170,8 +170,8 @@ export default function PlanningDashboard() {
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-white">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Customer</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project Code</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project Name</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Deadline</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Priority</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
@@ -185,8 +185,8 @@ export default function PlanningDashboard() {
               ) : (
                 projects.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-900">{p.project_number}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-600">{p.customer_name || "Internal"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-blue-700">{p.quotation_no}</td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-700">{p.project_name || "-"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-slate-800 font-medium">{p.target_date ? new Date(p.target_date).toLocaleDateString() : <span className="text-orange-500 text-xs">Unscheduled</span>}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${

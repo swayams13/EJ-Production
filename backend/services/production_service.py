@@ -292,10 +292,12 @@ def get_company_capacity_status(target_days=15):
         # Aggregation of all projects (Exclude completed projects)
         projects = session.query(Project).filter((Project.status != "Completed") | (Project.status == None)).all()
         tot_tig = 0.0
+        tot_dj = 0.0
         tot_mig = 0.0
         tot_grind = 0.0
         
         hold_tig = 0.0
+        hold_dj = 0.0
         hold_mig = 0.0
         hold_grind = 0.0
         
@@ -320,7 +322,8 @@ def get_company_capacity_status(target_days=15):
             active_projects_count += 1
             lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
             if lines:
-                proj_tig = sum((l.tig_feet or 0) for l in lines)
+                proj_tig = sum((l.tig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'EJ')
+                proj_dj = sum((l.tig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'DJ')
                 proj_mig = sum((l.mig_feet or 0) for l in lines)
                 proj_grind = sum((l.grinding_feet or 0) for l in lines)
                 
@@ -328,23 +331,29 @@ def get_company_capacity_status(target_days=15):
                 line_ids = [l.id for l in lines]
                 if line_ids:
                     logs = session.query(WeldingLog).filter(WeldingLog.production_line_id.in_(line_ids)).all()
-                    proj_tig = max(0, proj_tig - sum(l.feet_done for l in logs if l.process_type == "TIG"))
+                    line_map = {l.id: getattr(l, 'joint_type', 'EJ') for l in lines}
+                    
+                    proj_tig = max(0, proj_tig - sum(l.feet_done for l in logs if l.process_type == "TIG" and line_map.get(l.production_line_id) == "EJ"))
+                    proj_dj = max(0, proj_dj - sum(l.feet_done for l in logs if l.process_type == "TIG" and line_map.get(l.production_line_id) == "DJ"))
+                    
                     proj_mig = max(0, proj_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
                     proj_grind = max(0, proj_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
                 
                 if p.status == "Hold":
                     hold_tig += proj_tig
+                    hold_dj += proj_dj
                     hold_mig += proj_mig
                     hold_grind += proj_grind
                 else:
                     tot_tig += proj_tig
+                    tot_dj += proj_dj
                     tot_mig += proj_mig
                     tot_grind += proj_grind
                 
                 assignment = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
                 proj_target_days = assignment.target_days if assignment and assignment.target_days else target_days
                 
-                p_req_tig = math.ceil(proj_tig / (proj_target_days * tig_prod)) if proj_target_days > 0 and tig_prod > 0 else 0
+                p_req_tig = math.ceil((proj_tig + proj_dj) / (proj_target_days * tig_prod)) if proj_target_days > 0 and tig_prod > 0 else 0
                 p_req_mig = math.ceil(proj_mig / (proj_target_days * mig_prod)) if proj_target_days > 0 and mig_prod > 0 else 0
                 p_req_grind = math.ceil(proj_grind / (proj_target_days * grind_prod)) if proj_target_days > 0 and grind_prod > 0 else 0
                 
@@ -360,6 +369,7 @@ def get_company_capacity_status(target_days=15):
                 if month_key not in months_breakdown:
                     months_breakdown[month_key] = {
                         "tig_feet": 0.0,
+                        "dj_feet": 0.0,
                         "mig_feet": 0.0,
                         "grind_feet": 0.0,
                         "req_tig": 0,
@@ -368,6 +378,7 @@ def get_company_capacity_status(target_days=15):
                     }
                     
                 months_breakdown[month_key]["tig_feet"] += proj_tig
+                months_breakdown[month_key]["dj_feet"] += proj_dj
                 months_breakdown[month_key]["mig_feet"] += proj_mig
                 months_breakdown[month_key]["grind_feet"] += proj_grind
                 months_breakdown[month_key]["req_tig"] += p_req_tig
@@ -390,9 +401,11 @@ def get_company_capacity_status(target_days=15):
         return {
             "active_projects": active_projects_count,
             "pending_tig": tot_tig,
+            "pending_dj": tot_dj,
             "pending_mig": tot_mig,
             "pending_grind": tot_grind,
             "hold_tig": hold_tig,
+            "hold_dj": hold_dj,
             "hold_mig": hold_mig,
             "hold_grind": hold_grind,
             "total_estimated_days": total_estimated_days,

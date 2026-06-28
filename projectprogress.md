@@ -43,6 +43,10 @@
   - Added dynamic Joint Type selector (Expansion Joint vs Dismantling Joint) in `projects/add/page.tsx` and `projects/edit/page.tsx`.
   - Added an importer for the newly provided Dismantling Joint welding feet data.
   - Separated UI rendering in `projects/page.tsx` to handle custom column formatting for Dismantling Joints (showing just "Welding Feet").
+- **Dismantling Joint Tracking & Analytics:**
+  - Upgraded the MES backend engine to automatically generate accurate Dismantling Joint fabrication processes (like PIPE-1, STOPPER) by syncing templates from the Job Tracker.
+  - Updated the Shop Floor Entry UI to dynamically detect Joint Type, hiding MIG and Grinding options and cleanly presenting a focused "Welding" module for DJ requirements.
+  - Corrected API requirement payloads and visual Kanban boards to properly distinguish DJ vs EJ load, feeding accurate numbers up to the Executive and Planning Dashboards.
 
 ### Problems faced:
 - The dashboard was very slow to load (15s+) due to hundreds of redundant database queries firing simultaneously.

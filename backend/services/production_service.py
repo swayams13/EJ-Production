@@ -426,8 +426,14 @@ def get_company_capacity_status(target_days=15):
         ot_per_mig = total_ot_mig / pool.total_mig_welders if pool.total_mig_welders > 0 else total_ot_mig
         ot_per_grind = total_ot_grind / pool.total_grinders if pool.total_grinders > 0 else total_ot_grind
         
+        active_count = session.query(Project).filter(Project.status == "Active").count()
+        hold_count = session.query(Project).filter(Project.status == "On Hold").count()
+        completed_count = session.query(Project).filter(Project.status == "Completed").count()
+        
         return {
-            "active_projects": active_projects_count,
+            "active_projects": active_count,
+            "hold_projects": hold_count,
+            "completed_projects": completed_count,
             "pending_tig": tot_tig,
             "pending_dj": tot_dj,
             "pending_mig": tot_mig,

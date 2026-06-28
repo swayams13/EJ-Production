@@ -59,8 +59,10 @@ def get_wip_dashboard_api(db: Session = Depends(get_db)):
 
 @router.get("/executive")
 def get_executive_dashboard(db: Session = Depends(get_db)):
-    total_active = db.query(Project).filter(Project.status != "Completed").count()
-    critical = 0
+    total_active = db.query(Project).filter(Project.status == "Active").count()
+    total_hold = db.query(Project).filter(Project.status == "On Hold").count()
+    total_completed = db.query(Project).filter(Project.status == "Completed").count()
+    
     active_projects = db.query(Project).filter(Project.status != "Completed").all()
     avg_progress = 0
     if active_projects:
@@ -81,9 +83,9 @@ def get_executive_dashboard(db: Session = Depends(get_db)):
     result = {
         "kpis": [
             {"label": "Active Projects", "value": str(total_active), "trend": "Ongoing jobs", "color": "blue"},
+            {"label": "Projects at Hold", "value": str(total_hold), "trend": "Pending clarification", "color": "rose"},
             {"label": "Avg Progress", "value": f"{avg_progress}%", "trend": "Overall completion", "color": "emerald"},
-            {"label": "Critical Projects", "value": str(critical), "trend": "High priority", "color": "rose"},
-            {"label": "Completed", "value": str(db.query(Project).filter(Project.status == "Completed").count()), "trend": "All time", "color": "amber"}
+            {"label": "Completed", "value": str(total_completed), "trend": "All time", "color": "amber"}
         ],
         "departments": dept_loads
     }

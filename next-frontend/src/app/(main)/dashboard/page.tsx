@@ -47,8 +47,10 @@ export default function Dashboard() {
         </button>
       </div>
       
-      <div className="mb-6">
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         <MetricCard title="Active Projects" value={data.active_projects} />
+        <MetricCard title="Projects on Hold" value={data.hold_projects || 0} />
+        <MetricCard title="Completed Projects" value={data.completed_projects || 0} />
       </div>
 
       <div className="mb-8">

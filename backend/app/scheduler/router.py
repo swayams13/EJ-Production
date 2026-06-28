@@ -18,7 +18,15 @@ def get_assignments(
 ):
     query = db.query(DailyTaskAssignment)
     if target_date:
-        query = query.filter(DailyTaskAssignment.date == target_date)
+        assignments = query.filter(DailyTaskAssignment.date == target_date).all()
+        
+        # Enterprise Lazy-Initialization: Auto-assign on first view of the day
+        if not assignments and target_date == date.today():
+            auto_assign_tasks(target_date, db, current_user)
+            assignments = db.query(DailyTaskAssignment).filter(DailyTaskAssignment.date == target_date).all()
+            
+        return assignments
+        
     return query.all()
 
 @router.post("/assignments", response_model=TaskAssignmentResponse)

@@ -72,22 +72,26 @@ export default function SchedulerPage() {
                         onChange={(e) => setDate(e.target.value)} 
                         className="px-4 py-2 border border-slate-300 rounded-lg shadow-sm focus:ring focus:ring-indigo-200 focus:outline-none"
                     />
-                    <button 
-                        onClick={handleAutoAssign}
-                        disabled={loading}
-                        className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg shadow hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                    >
-                        {loading ? 'Processing...' : 'Run Auto-Assign'}
-                    </button>
                 </div>
             </div>
 
             {error && <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-lg">{error}</div>}
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-6 border-b border-slate-200">
-                    <h2 className="text-xl font-semibold text-slate-800">Task Assignments for {date}</h2>
+                <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">Task Assignments for {date}</h2>
+                        <p className="text-slate-500 text-sm mt-1">Assignments are generated seamlessly every day based on worker attendance and Takt Time pacing.</p>
+                    </div>
+                    <button 
+                        onClick={handleAutoAssign}
+                        disabled={loading}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                        {loading ? 'Processing...' : 'Re-Run Auto-Assign'}
+                    </button>
                 </div>
+
                 <div className="p-0">
                     {loading && assignments.length === 0 ? (
                         <div className="p-8 text-center text-slate-500">Loading assignments...</div>

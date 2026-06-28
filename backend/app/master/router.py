@@ -25,6 +25,14 @@ def sync_dj_master_api():
         raise HTTPException(status_code=500, detail=msg)
     return {"success": True, "message": msg, "data": {}}
 
+@router.post("/sync/all")
+def sync_all_master_api():
+    s1, m1 = import_welding_master_from_disk()
+    s2, m2 = import_dismantling_joint_master()
+    if not s1 or not s2:
+        raise HTTPException(status_code=500, detail=f"EJ: {m1}, DJ: {m2}")
+    return {"success": True, "message": f"EJ: {m1} | DJ: {m2}", "data": {}}
+
 @router.get("/workforce")
 def get_workforce_api(db = Depends(get_db)):
     from backend.services.db_service import WorkforceMaster

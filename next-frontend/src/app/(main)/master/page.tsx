@@ -11,7 +11,7 @@ export default function MasterData() {
   const [loading, setLoading] = useState(true);
   const [syncingEJ, setSyncingEJ] = useState(false);
   const [syncingDJ, setSyncingDJ] = useState(false);
-  const [masterType, setMasterType] = useState('EJ');
+  const [syncingAll, setSyncingAll] = useState(false);
   const [message, setMessage] = useState("");
 
   const fetchData = () => {
@@ -65,6 +65,22 @@ export default function MasterData() {
     }
   };
 
+  const handleSyncAll = async () => {
+    setSyncingAll(true);
+    setMessage("");
+    try {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync/all`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail);
+      setMessage(json.message);
+      fetchData();
+    } catch (err: any) {
+      setMessage("Error syncing all data: " + err.message);
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
   const updateWorkforce = async (id: number, productivity: number) => {
     await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce/${id}`, {
       method: "PUT",
@@ -109,15 +125,22 @@ export default function MasterData() {
             {(userRole === "Developer" || userRole === "GM") && (
               <div className="flex gap-2">
                 <button
+                  onClick={handleSyncAll}
+                  disabled={syncingEJ || syncingDJ || syncingAll}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {syncingAll ? "Syncing Both..." : "Sync All Data"}
+                </button>
+                <button
                   onClick={handleSyncEJ}
-                  disabled={syncingEJ || syncingDJ}
+                  disabled={syncingEJ || syncingDJ || syncingAll}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
                 >
                   {syncingEJ ? "Syncing EJ..." : "Sync EJ Data"}
                 </button>
                 <button
                   onClick={handleSyncDJ}
-                  disabled={syncingEJ || syncingDJ}
+                  disabled={syncingEJ || syncingDJ || syncingAll}
                   className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
                 >
                   {syncingDJ ? "Syncing DJ..." : "Sync DJ Data"}
@@ -133,62 +156,72 @@ export default function MasterData() {
           )}
 
           {(userRole === "Developer" || userRole === "GM") ? (
-            <div className="space-y-4">
-              <div className="flex space-x-2 border-b border-slate-200">
-                <button 
-                  onClick={() => setMasterType('EJ')} 
-                  className={`pb-2 px-3 font-medium text-sm ${masterType === 'EJ' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Expansion Joints
-                </button>
-                <button 
-                  onClick={() => setMasterType('DJ')} 
-                  className={`pb-2 px-3 font-medium text-sm ${masterType === 'DJ' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Dismantling Joints
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
-                      {masterType === 'EJ' ? (
-                        <>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">TIG (ft)</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">MIG (ft)</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
-                        </>
-                      ) : (
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Welding Feet</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-200">
-                    {data.filter(r => r.type === masterType).map((row) => (
-                      <tr key={`${row.type}-${row.size}`} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
-                        {masterType === 'EJ' ? (
-                          <>
-                            <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
-                            <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet}</td>
-                            <td className="px-4 py-3 text-sm text-slate-600">{row.grinding_feet}</td>
-                          </>
-                        ) : (
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
-                        )}
-                      </tr>
-                    ))}
-                    {data.filter(r => r.type === masterType).length === 0 && (
+            <div className="space-y-8">
+              
+              {/* Expansion Joints Table */}
+              <div>
+                <h3 className="text-md font-bold text-slate-800 mb-3 border-l-4 border-indigo-600 pl-2">Expansion Joints</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
+                    <thead className="bg-slate-50">
                       <tr>
-                        <td colSpan={masterType === 'EJ' ? 4 : 2} className="px-4 py-8 text-center text-slate-500 text-sm">
-                          No {masterType === 'EJ' ? 'Expansion Joint' : 'Dismantling Joint'} records found. Please sync data.
-                        </td>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">TIG (ft)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">MIG (ft)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-200">
+                      {data.filter(r => r.type === 'EJ').map((row) => (
+                        <tr key={`EJ-${row.size}`} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.grinding_feet}</td>
+                        </tr>
+                      ))}
+                      {data.filter(r => r.type === 'EJ').length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-slate-500 text-sm">
+                            No Expansion Joint records found. Please sync data.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
+              {/* Dismantling Joints Table */}
+              <div>
+                <h3 className="text-md font-bold text-slate-800 mb-3 border-l-4 border-teal-600 pl-2">Dismantling Joints</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Welding Feet</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-200">
+                      {data.filter(r => r.type === 'DJ').map((row) => (
+                        <tr key={`DJ-${row.size}`} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
+                        </tr>
+                      ))}
+                      {data.filter(r => r.type === 'DJ').length === 0 && (
+                        <tr>
+                          <td colSpan={2} className="px-4 py-8 text-center text-slate-500 text-sm">
+                            No Dismantling Joint records found. Please sync data.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
             </div>
           ) : (
             <div className="p-8 text-center bg-slate-50 rounded-lg border border-slate-200">

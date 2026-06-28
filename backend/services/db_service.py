@@ -145,10 +145,11 @@ class WeldingLog(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    username = Column(String, nullable=True) # For dev/PM users without an ID
     action = Column(String, nullable=False)
     table_name = Column(String, nullable=False)
-    record_id = Column(Integer, nullable=False)
+    record_id = Column(Integer, nullable=True)
     details = Column(Text)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
@@ -238,7 +239,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN department VARCHAR;",
         "ALTER TABLE users ADD COLUMN base_productivity FLOAT;",
         "ALTER TABLE welding_master ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
-        "ALTER TABLE project_production_lines ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';"
+        "ALTER TABLE project_production_lines ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
+        "ALTER TABLE audit_logs ADD COLUMN username VARCHAR;"
     ]
     
     for query in columns:

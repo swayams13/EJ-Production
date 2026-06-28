@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
-from backend.services.db_service import get_db, User
+from backend.services.db_service import get_db, User, AuditLog
 from backend.app.auth.schemas import LoginRequest
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
@@ -60,6 +60,22 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+        
+    # Log the successful login
+    try:
+        user_id = user.id if 'user' in locals() and user else None
+        login_log = AuditLog(
+            user_id=user_id,
+            username=req.username,
+            action="Login",
+            table_name="auth",
+            details=f"User {req.username} logged in with role {role}"
+        )
+        db.add(login_log)
+        db.commit()
+    except Exception as e:
+        print(f"Failed to write audit log: {e}")
+        db.rollback()
         
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

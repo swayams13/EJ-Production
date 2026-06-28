@@ -1,89 +1,97 @@
 "use client";
 import { apiFetch } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-import { useEffect, useState } from "react";
-
-export default function AuditTrail() {
+export default function AuditLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/audit`)
-      .then(res => res.json())
+    // Basic frontend check for role, though backend enforces it.
+    const role = localStorage.getItem("user_role") || localStorage.getItem("role");
+    
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/audit`)
+      .then(async res => {
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.detail || "Failed to fetch logs. You might not have the correct permissions.");
+        }
+        return res.json();
+      })
       .then(resData => {
         setLogs(resData.data || []);
-        setLoading(false);
       })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+      .catch(err => setErrorMsg(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
+  const handleDownloadExcel = () => {
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/audit/excel`;
+  };
+
+  if (loading) return <div className="p-8 text-slate-500">Loading Audit Logs...</div>;
+  if (errorMsg) return <div className="p-8 text-rose-500 font-bold text-xl">{errorMsg}</div>;
+
   return (
-    <div>
-      <div className="bg-slate-900 p-8 text-white rounded-b-3xl shadow-lg mb-8 mx-[-2rem] mt-[-2rem]">
-        <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Audit Trail</h1>
-        <p className="text-slate-300 text-lg font-medium">Enterprise compliance log of all system actions.</p>
+    <div className="max-w-7xl mx-auto mb-20">
+      <div className="bg-slate-900 p-8 text-white rounded-b-3xl shadow-lg mb-8 mx-[-2rem] mt-[-2rem] flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">System Audit Logs</h1>
+          <p className="text-slate-300 text-lg font-medium">Tracking logins, data entry, and sensitive system changes.</p>
+        </div>
+        <button
+          onClick={handleDownloadExcel}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          Download Logs (CSV/Excel)
+        </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-          <input 
-            type="text" 
-            placeholder="Search logs..." 
-            className="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 text-sm"
-          />
-          <button className="text-sm font-medium text-slate-600 bg-white border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50">
-            Export to CSV
-          </button>
-        </div>
-        
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Timestamp</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Entity</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Details</th>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Timestamp</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Account / User</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Details</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-slate-200">
+            {logs.map((log: any) => (
+              <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                  {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-bold">{log.user}</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-bold uppercase tracking-wide">
+                  {log.action}
+                </td>
+                <td className="px-6 py-4 text-sm text-slate-700">
+                  {log.details}
+                  {log.table_name && <span className="block text-xs text-slate-400 mt-1">Table: {log.table_name} (ID: {log.record_id || 'N/A'})</span>}
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">No logs found.</td>
-                </tr>
-              ) : (
-                logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 transition-colors text-sm">
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-500 font-medium">{log.time}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-semibold text-slate-900">{log.user}</div>
-                      <div className="text-xs text-slate-500">{log.role}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        log.action === 'Create' ? 'bg-emerald-100 text-emerald-700' :
-                        log.action === 'Update' ? 'bg-blue-100 text-blue-700' :
-                        'bg-rose-100 text-rose-700'
-                      }`}>
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-700">{log.entity}</td>
-                    <td className="px-6 py-4 text-slate-600 max-w-md truncate">{log.details}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
+            ))}
+            {logs.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                  No audit logs found in the system.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

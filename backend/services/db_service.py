@@ -5,11 +5,12 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = f"sqlite:///{os.path.join(DATA_DIR, 'production_tracker.db')}"
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/ej_tracker")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    # Use a generic default if none provided, but strictly postgres
+    DATABASE_URL = "postgresql://user:password@localhost:5432/ej_tracker"
+
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 

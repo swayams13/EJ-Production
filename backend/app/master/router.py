@@ -36,7 +36,7 @@ def sync_all_master_api():
 @router.get("/workforce")
 def get_workforce_api(db = Depends(get_db)):
     from backend.services.db_service import WorkforceMaster
-    wf = db.query(WorkforceMaster).all()
+    wf = db.query(WorkforceMaster).order_by(WorkforceMaster.id).all()
     return {"success": True, "message": "Workforce retrieved", "data": [{"id": w.id, "resource_type": w.resource_type, "productivity": w.avg_productivity_per_day} for w in wf]}
 
 @router.put("/workforce/{wf_id}")

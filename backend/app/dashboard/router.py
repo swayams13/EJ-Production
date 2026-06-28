@@ -170,7 +170,7 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
         
         pacing_metrics.append({
             "project_id": p.id,
-            "project_number": p.project_number,
+            "project_number": p.quotation_no,
             "total_feet": round(total_feet, 1),
             "base_daily_target": round(base_daily_target, 1),
             "days_elapsed": days_elapsed,

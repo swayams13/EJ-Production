@@ -101,7 +101,16 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
     weekly_capacity = daily_capacity * 6 # Assume 6 day work week
     monthly_capacity = daily_capacity * 26 # Assume 26 working days in a month
     
-    weekly_buckets = [{"id": i, "name": f"Week {i+1}", "capacity": weekly_capacity, "demand": 0} for i in range(4)]
+    from datetime import date, timedelta
+    today = date.today()
+    
+    weekly_buckets = []
+    for i in range(4):
+        start_date = today + timedelta(days=i*7)
+        end_date = start_date + timedelta(days=6)
+        name = f"{start_date.strftime('%d %b')} to {end_date.strftime('%d %b')}"
+        weekly_buckets.append({"id": i, "name": name, "capacity": weekly_capacity, "demand": 0})
+        
     monthly_buckets = [{"id": i, "name": f"Month {i+1}", "capacity": monthly_capacity, "demand": 0} for i in range(3)]
     unscheduled_demand = 0
     
@@ -133,12 +142,24 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
                 monthly_buckets[0]["demand"] += remaining_feet
             else:
                 week_idx = days_away // 7
-                if week_idx < 4:
-                    weekly_buckets[week_idx]["demand"] += remaining_feet
+                if week_idx > 3:
+                    week_idx = 3
+                
+                available_weeks = week_idx + 1
+                weekly_portion = remaining_feet / available_weeks
+                for i in range(available_weeks):
+                    if i < 4:
+                        weekly_buckets[i]["demand"] += weekly_portion
                 
                 month_idx = days_away // 30
-                if month_idx < 3:
-                    monthly_buckets[month_idx]["demand"] += remaining_feet
+                if month_idx > 2:
+                    month_idx = 2
+                    
+                available_months = month_idx + 1
+                monthly_portion = remaining_feet / available_months
+                for i in range(available_months):
+                    if i < 3:
+                        monthly_buckets[i]["demand"] += monthly_portion
         else:
             unscheduled_demand += remaining_feet
             

@@ -50,7 +50,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
         <MetricCard title="Active Projects" value={data.active_projects} />
         <MetricCard title="Total Est. Days" value={`${data.total_estimated_days || 0} days`} />
-        <MetricCard title="Pending TIG (ft)" value={Math.round(data.pending_tig * 10) / 10} />
+        <MetricCard title="Pending TIG & DJ Weld (ft)" value={Math.round(data.pending_tig * 10) / 10} />
         <MetricCard title="Pending MIG (ft)" value={Math.round(data.pending_mig * 10) / 10} />
         <MetricCard title="Pending Grinding (sq ft)" value={Math.round(data.pending_grind * 10) / 10} />
       </div>
@@ -59,7 +59,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <h3 className="text-sm font-semibold text-rose-600 mb-3 uppercase tracking-wide">On Hold Work (Excluded from Pending)</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <MetricCard title="Hold TIG (ft)" value={Math.round(data.hold_tig * 10) / 10} />
+            <MetricCard title="Hold TIG & DJ Weld (ft)" value={Math.round(data.hold_tig * 10) / 10} />
             <MetricCard title="Hold MIG (ft)" value={Math.round(data.hold_mig * 10) / 10} />
             <MetricCard title="Hold Grinding (sq ft)" value={Math.round(data.hold_grind * 10) / 10} />
           </div>
@@ -72,7 +72,7 @@ export default function Dashboard() {
           <thead className="bg-slate-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Metric</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">TIG Welders</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">TIG & DJ Welders</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">MIG Welders</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Grinders</th>
             </tr>
@@ -112,10 +112,10 @@ export default function Dashboard() {
           <thead className="bg-slate-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Month</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">TIG (ft)</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">TIG/DJ Weld (ft)</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">MIG (ft)</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Grind (ft)</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Req. TIG</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Req. TIG/DJ</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Req. MIG</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Req. Grind</th>
             </tr>

@@ -113,7 +113,7 @@ export default function VisualTracking() {
             <div>
               <span className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-3 inline-block">Requirement Breakdown</span>
               <h2 className="text-3xl font-black text-slate-800">
-                {progressData.parts.length > 0 && progressData.parts[0].name.includes("PIPE") ? "Dismantling Joint" : "Expansion Joint"}
+                {requirements.find(r => r.id.toString() === requirementId)?.type === "DJ" ? "Dismantling Joint" : "Expansion Joint"}
               </h2>
             </div>
             <div className="text-right bg-slate-50 p-4 rounded-xl border border-slate-100">

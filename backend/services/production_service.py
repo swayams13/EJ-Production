@@ -188,7 +188,7 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
                 session.flush() # get line.id
                 
                 # Auto-generate MES Parts
-                MESService.create_parts_for_production_line(session, line.id, "EJ")
+                MESService.create_parts_for_production_line(session, line.id, j_type)
                 
         session.commit()
         return True

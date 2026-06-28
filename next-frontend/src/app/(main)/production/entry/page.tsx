@@ -271,7 +271,7 @@ export default function OperatorEntry() {
                   onClick={() => setActiveTab("Welding")}
                   className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${activeTab === "Welding" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                 >
-                  Welding & Grinding
+                  {requirements.find(r => r.id.toString() === requirementId)?.type === "DJ" ? "Welding" : "Welding & Grinding"}
                 </button>
               </div>
             </div>
@@ -355,7 +355,9 @@ export default function OperatorEntry() {
             </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {["TIG", "MIG", "Grinding"].map(type => {
+                {(requirements.find(r => r.id.toString() === requirementId)?.type === "DJ" ? ["TIG"] : ["TIG", "MIG", "Grinding"]).map(type => {
+                  const isDJ = requirements.find(r => r.id.toString() === requirementId)?.type === "DJ";
+                  const displayType = (isDJ && type === "TIG") ? "Welding" : type;
                   const target = weldingSummary?.targets?.[type] || 0;
                   const completed = weldingSummary?.completed?.[type] || 0;
                   const pending = Math.max(0, target - completed);
@@ -364,7 +366,7 @@ export default function OperatorEntry() {
                   return (
                     <div key={type} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
                       <div className={`px-4 py-3 text-white flex justify-between items-center ${isComplete ? 'bg-emerald-600' : 'bg-indigo-600'}`}>
-                        <h3 className="font-bold text-lg">{type}</h3>
+                        <h3 className="font-bold text-lg">{displayType}</h3>
                         <span className="bg-white/20 text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap">Target: {target.toFixed(1)} ft</span>
                       </div>
                       
@@ -397,11 +399,11 @@ export default function OperatorEntry() {
                               disabled={submitting || !feetInputs[type]}
                               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-bold shadow-sm disabled:opacity-50 transition-colors"
                             >
-                              Log {type} Progress
+                              Log {displayType} Progress
                             </button>
                           </div>
                         ) : target === 0 ? (
-                          <div className="text-center text-slate-500 italic py-4">No {type} required for this size.</div>
+                          <div className="text-center text-slate-500 italic py-4">No {displayType} required for this size.</div>
                         ) : (
                           <div className="text-center text-emerald-600 font-bold py-4">Target Reached! 🎉</div>
                         )}

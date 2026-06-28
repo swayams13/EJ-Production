@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/v1/production", tags=["Production"])
 @router.get("/requirements/{project_id}")
 def get_requirements(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
     lines = db.query(ProjectProductionLine).filter_by(project_id=project_id).all()
-    return {"success": True, "data": [{"id": l.id, "type": "EJ", "size": str(l.size), "total_qty": l.quantity} for l in lines]}
+    return {"success": True, "data": [{"id": l.id, "type": getattr(l, 'joint_type', 'EJ'), "size": str(l.size), "total_qty": l.quantity} for l in lines]}
 
 @router.get("/parts/{req_id}")
 def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
@@ -89,6 +89,7 @@ def get_welding_summary(req_id: int, db: Session = Depends(get_db), current_user
             completed[log.process_type] += log.feet_done
             
     return {"success": True, "data": {
+        "joint_type": getattr(line, 'joint_type', 'EJ'),
         "targets": {
             "TIG": line.tig_feet,
             "MIG": line.mig_feet,

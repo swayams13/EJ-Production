@@ -91,6 +91,42 @@ export default function EditProjects() {
     }
   }, [assignedTig, assignedMig, assignedGrinders, selectedProjectId]);
 
+  // Dynamic Resource Calculation
+  useEffect(() => {
+    const validBellows = bellows.filter(b => b.size && b.qty > 0).map(b => ({
+      size: Number(b.size),
+      qty: Number(b.qty),
+      type: b.type
+    }));
+
+    // Find the project's target date if available to pass to the resource simulator
+    let tDate = null;
+    if (selectedProjectId) {
+      const p = projects.find(proj => proj.id.toString() === selectedProjectId);
+      if (p && p.target_date) tDate = p.target_date;
+    }
+
+    if (validBellows.length > 0) {
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/simulate_resources`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bellows: validBellows,
+          target_date: tDate
+        })
+      })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.data) {
+          setAssignedTig(resData.data.assigned_tig);
+          setAssignedMig(resData.data.assigned_mig);
+          setAssignedGrinders(resData.data.assigned_grinders);
+        }
+      })
+      .catch(err => console.error(err));
+    }
+  }, [bellows, selectedProjectId, projects]);
+
   const handleAddBellow = () => {
     setBellows([...bellows, { size: "", qty: 1, type: "EJ" }]);
   };

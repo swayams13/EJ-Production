@@ -292,6 +292,44 @@ def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db
     if dur == 999: dur = 0
     return {"success": True, "message": "Duration simulated", "data": {"estimated_duration_days": dur}}
 
+class SimulateResourcesRequest(BaseModel):
+    bellows: List[BellowInput]
+    target_date: Optional[date] = None
+
+@router.post("/simulate_resources")
+def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_db)):
+    tot_tig, tot_mig, tot_grind = 0, 0, 0
+    master_data = {(m.size, getattr(m, 'joint_type', 'EJ')): m for m in get_welding_master_latest()}
+    for b in req.bellows:
+        m = master_data.get((b.size, getattr(b, 'type', 'EJ')))
+        if m:
+            tot_tig += (m.tig_feet or 0) * b.qty
+            tot_mig += (m.mig_feet or 0) * b.qty
+            tot_grind += (m.grinding_feet or 0) * b.qty
+            
+    workforce = db.query(WorkforceMaster).all()
+    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+    tig_prod = prod.get("TIG Welder", 180)
+    mig_prod = prod.get("MIG Welder", 120)
+    grind_prod = prod.get("Grinder", 80)
+    
+    target_days = 15
+    if req.target_date:
+        days_away = (req.target_date - date.today()).days
+        if days_away > 0:
+            target_days = days_away
+            
+    req_tig = math.ceil(tot_tig / (tig_prod * target_days)) if tig_prod > 0 else 0
+    req_mig = math.ceil(tot_mig / (mig_prod * target_days)) if mig_prod > 0 else 0
+    req_grind = math.ceil(tot_grind / (grind_prod * target_days)) if grind_prod > 0 else 0
+    
+    return {"success": True, "message": "Resources simulated", "data": {
+        "assigned_tig": req_tig,
+        "assigned_mig": req_mig,
+        "assigned_grinders": req_grind
+    }}
+
+
 @router.get("/{project_id}/requirements")
 def get_requirements(project_id: int, db: Session = Depends(get_db)):
     lines = db.query(ProjectProductionLine).filter_by(project_id=project_id).all()

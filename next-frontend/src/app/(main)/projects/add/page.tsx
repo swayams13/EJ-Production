@@ -84,6 +84,35 @@ export default function AddProjects() {
     }
   }, [bellows, targetDate, startDate, assignedTig, assignedMig, assignedGrinders]);
 
+  // Dynamic Resource Calculation
+  useEffect(() => {
+    const validBellows = bellows.filter(b => b.size && b.qty > 0).map(b => ({
+      size: Number(b.size),
+      qty: Number(b.qty),
+      type: b.type
+    }));
+
+    if (validBellows.length > 0) {
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/simulate_resources`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bellows: validBellows,
+          target_date: targetDate || null
+        })
+      })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.data) {
+          setAssignedTig(resData.data.assigned_tig);
+          setAssignedMig(resData.data.assigned_mig);
+          setAssignedGrinders(resData.data.assigned_grinders);
+        }
+      })
+      .catch(err => console.error(err));
+    }
+  }, [bellows, targetDate]);
+
   const handleAddBellow = () => {
     setBellows([...bellows, { size: "", qty: 1, type: "EJ" }]);
   };

@@ -24,6 +24,7 @@ def get_projects(db: Session = Depends(get_db)):
         bellows = [{
             "size": l.size,
             "quantity": l.quantity,
+            "type": getattr(l, "joint_type", "EJ"),
             "tig_feet": round(l.tig_feet, 2) if l.tig_feet else 0,
             "mig_feet": round(l.mig_feet, 2) if l.mig_feet else 0,
             "grinding_feet": round(l.grinding_feet, 2) if l.grinding_feet else 0
@@ -113,7 +114,7 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db)):
     db.commit()
     
     if req.bellows:
-        bellows_data = [{"size": b.size, "qty": b.qty} for b in req.bellows]
+        bellows_data = [{"size": b.size, "qty": b.qty, "type": getattr(b, "type", "EJ")} for b in req.bellows]
         sync_project_production_lines(new_proj.id, bellows_data)
         
         target_days = (dt_deadline.date() - datetime.utcnow().date()).days if req.target_date else 15
@@ -212,10 +213,10 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 @router.post("/simulate")
 def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
     tot_tig, tot_mig, tot_grind = 0, 0, 0
-    master_data = {m.size: m for m in get_welding_master_latest()}
+    master_data = {(m.size, getattr(m, 'joint_type', 'EJ')): m for m in get_welding_master_latest()}
     
     for b in req.bellows:
-        m = master_data.get(b.size)
+        m = master_data.get((b.size, getattr(b, 'type', 'EJ')))
         if m:
             tot_tig += (m.tig_feet or 0) * b.qty
             tot_mig += (m.mig_feet or 0) * b.qty
@@ -245,11 +246,11 @@ def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
 @router.get("/{project_id}/bellows")
 def get_project_bellows(project_id: int, db: Session = Depends(get_db)):
     lines = db.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-    return {"success": True, "message": "Bellows retrieved", "data": [{"size": l.size, "qty": l.quantity} for l in lines]}
+    return {"success": True, "message": "Bellows retrieved", "data": [{"size": l.size, "qty": l.quantity, "type": getattr(l, "joint_type", "EJ")} for l in lines]}
 
 @router.put("/{project_id}/bellows")
 def update_project_bellows(project_id: int, req: List[BellowItem], db: Session = Depends(get_db)):
-    bellows_data = [{"size": b.size, "qty": b.qty} for b in req]
+    bellows_data = [{"size": b.size, "qty": b.qty, "type": getattr(b, "type", "EJ")} for b in req]
     sync_project_production_lines(project_id, bellows_data)
     
     assign = db.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == project_id).first()
@@ -265,9 +266,9 @@ def get_duration(req: DurationRequest, db: Session = Depends(get_db)):
 @router.post("/simulate_duration")
 def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db)):
     tot_tig, tot_mig, tot_grind = 0, 0, 0
-    master_data = {m.size: m for m in get_welding_master_latest()}
+    master_data = {(m.size, getattr(m, 'joint_type', 'EJ')): m for m in get_welding_master_latest()}
     for b in req.bellows:
-        m = master_data.get(b.size)
+        m = master_data.get((b.size, getattr(b, 'type', 'EJ')))
         if m:
             tot_tig += (m.tig_feet or 0) * b.qty
             tot_mig += (m.mig_feet or 0) * b.qty

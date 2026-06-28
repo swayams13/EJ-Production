@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/v1/master", tags=["Master"])
 @router.get("/welding")
 def get_welding_master_api():
     data = get_welding_master_latest()
-    formatted_data = [{"size": d.size, "tig_feet": round(d.tig_feet, 2) if d.tig_feet else 0, "mig_feet": round(d.mig_feet, 2) if d.mig_feet else 0, "grinding_feet": round(d.grinding_feet, 2) if d.grinding_feet else 0} for d in data]
+    formatted_data = [{"size": d.size, "type": getattr(d, 'joint_type', 'EJ'), "tig_feet": round(d.tig_feet, 2) if d.tig_feet else 0, "mig_feet": round(d.mig_feet, 2) if d.mig_feet else 0, "grinding_feet": round(d.grinding_feet, 2) if d.grinding_feet else 0} for d in data]
     return {"success": True, "message": "Welding master retrieved", "data": formatted_data}
 
 @router.post("/sync")

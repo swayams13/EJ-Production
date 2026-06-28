@@ -75,6 +75,55 @@ def import_welding_master_from_disk():
     except Exception as e:
         return False, f"Error parsing Excel file: {e}"
 
+def import_dismantling_joint_master():
+    try:
+        file_path = "/Users/sonusingh/AI DEVELOPMENT DESPL/Precise Engineers/EJ Production Tracker/ANALYSIS DISMANTLING JOINT WELDING FEETS PER SIZE_27.06.2026.xlsx"
+        df = pd.read_excel(file_path)
+        
+        session = SessionLocal()
+        try:
+            latest = session.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
+            new_version = (latest.version + 1) if latest else 1
+            
+            inserted_count = 0
+            seen_sizes = set()
+            
+            for _, row in df.iterrows():
+                try:
+                    size = int(float(row.iloc[2])) # 50, 80, 100 etc are in 3rd column
+                    feet = float(row.iloc[3]) if pd.notna(row.iloc[3]) else 0.0
+                except (ValueError, TypeError, IndexError):
+                    continue
+                    
+                if size in seen_sizes:
+                    continue
+                seen_sizes.add(size)
+                
+                wm = WeldingMaster(
+                    size=size,
+                    tig_inches=0.0,
+                    tig_feet=feet, # Assigning to tig_feet for capacity calculation
+                    mig_inches=0.0,
+                    mig_feet=0.0,
+                    total_welding_inches=0.0,
+                    total_welding_feet=feet,
+                    grinding_feet=0.0,
+                    joint_type="DJ",
+                    version=new_version
+                )
+                session.add(wm)
+                inserted_count += 1
+                
+            session.commit()
+            return True, f"Successfully imported {inserted_count} DJ records. Version: {new_version}"
+        except Exception as e:
+            session.rollback()
+            return False, f"Database error: {e}"
+        finally:
+            session.close()
+    except Exception as e:
+        return False, f"Error parsing Excel file: {e}"
+
 def get_welding_master_latest():
     session = SessionLocal()
     try:
@@ -88,21 +137,21 @@ def get_welding_master_latest():
 
 def sync_project_production_lines(project_id, sizes_and_qtys):
     """
-    sizes_and_qtys: list of dicts {"size": int, "qty": int}
+    sizes_and_qtys: list of dicts {"size": int, "qty": int, "type": str}
     Syncs the production lines for a project based on the latest welding master.
     Preserves existing lines to keep MES Part/Process tracking data intact.
     """
     session = SessionLocal()
     try:
-        master_data = {m.size: m for m in get_welding_master_latest()}
+        master_data = {(m.size, m.joint_type): m for m in get_welding_master_latest()}
         existing_lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-        existing_map = {l.size: l for l in existing_lines}
+        existing_map = {(l.size, getattr(l, 'joint_type', 'EJ')): l for l in existing_lines}
         
-        new_sizes = {item['size'] for item in sizes_and_qtys}
+        new_items_set = {(item['size'], item.get('type', 'EJ')) for item in sizes_and_qtys}
         
         # Delete lines that are no longer needed
-        for size, line in existing_map.items():
-            if size not in new_sizes:
+        for key, line in existing_map.items():
+            if key not in new_items_set:
                 session.delete(line)
                 
         # Update or Create lines
@@ -111,14 +160,16 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
         for item in sizes_and_qtys:
             size = item['size']
             qty = item['qty']
-            m = master_data.get(size)
+            j_type = item.get('type', 'EJ')
+            m = master_data.get((size, j_type))
             
             tig = m.tig_feet * qty if m else 0
             mig = m.mig_feet * qty if m else 0
             grind = m.grinding_feet * qty if m else 0
             
-            if size in existing_map:
-                line = existing_map[size]
+            key = (size, j_type)
+            if key in existing_map:
+                line = existing_map[key]
                 line.quantity = qty
                 line.tig_feet = tig
                 line.mig_feet = mig
@@ -130,7 +181,8 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
                     quantity=qty,
                     tig_feet=tig,
                     mig_feet=mig,
-                    grinding_feet=grind
+                    grinding_feet=grind,
+                    joint_type=j_type
                 )
                 session.add(line)
                 session.flush() # get line.id

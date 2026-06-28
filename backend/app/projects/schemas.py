@@ -5,6 +5,7 @@ from datetime import date
 class BellowItem(BaseModel):
     size: int
     qty: int
+    type: Optional[str] = "EJ"
 
 class ProjectCreate(BaseModel):
     quotation_no: str

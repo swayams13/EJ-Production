@@ -38,6 +38,11 @@
   - Upgraded the Auto-Assign logic to support future planning dates (assumes all operators are available if no attendance logs exist for that date).
   - Enhanced the UI table to display real Worker Names and Project Quotation Numbers instead of raw database IDs.
 - **Git Deployment Workflow Setup:** Established a strict rule in `.agents/AGENTS.md` to push all code to a `demo` branch first before merging to `main` for Railway deployments.
+- **Dismantling Joint Implementation:** 
+  - Updated DB schema to include `joint_type` in `WeldingMaster` and `ProjectProductionLine`.
+  - Added dynamic Joint Type selector (Expansion Joint vs Dismantling Joint) in `projects/add/page.tsx` and `projects/edit/page.tsx`.
+  - Added an importer for the newly provided Dismantling Joint welding feet data.
+  - Separated UI rendering in `projects/page.tsx` to handle custom column formatting for Dismantling Joints (showing just "Welding Feet").
 
 ### Problems faced:
 - The dashboard was very slow to load (15s+) due to hundreds of redundant database queries firing simultaneously.

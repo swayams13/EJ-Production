@@ -76,6 +76,7 @@ class WeldingMaster(Base):
     total_welding_inches = Column(Float, default=0.0)
     total_welding_feet = Column(Float, default=0.0)
     grinding_feet = Column(Float, default=0.0)
+    joint_type = Column(String, default="EJ")
     version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -89,6 +90,7 @@ class ProjectProductionLine(Base):
     tig_feet = Column(Float, default=0.0)
     mig_feet = Column(Float, default=0.0)
     grinding_feet = Column(Float, default=0.0)
+    joint_type = Column(String, default="EJ")
     
     project = relationship("Project", back_populates="production_lines")
     parts = relationship("Part", back_populates="production_line", cascade="all, delete-orphan")
@@ -233,7 +235,9 @@ def init_db():
         "ALTER TABLE users ADD COLUMN experience VARCHAR;",
         "ALTER TABLE users ADD COLUMN skill VARCHAR;",
         "ALTER TABLE users ADD COLUMN department VARCHAR;",
-        "ALTER TABLE users ADD COLUMN base_productivity FLOAT;"
+        "ALTER TABLE users ADD COLUMN base_productivity FLOAT;",
+        "ALTER TABLE welding_master ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
+        "ALTER TABLE project_production_lines ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';"
     ]
     
     for query in columns:

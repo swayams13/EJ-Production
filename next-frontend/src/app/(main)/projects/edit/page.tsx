@@ -20,7 +20,7 @@ export default function EditProjects() {
   const [holdUntilDate, setHoldUntilDate] = useState<string>("");
   
   const [bellows, setBellows] = useState<any[]>([]);
-  const [sizes, setSizes] = useState<number[]>([]);
+  const [masterData, setMasterData] = useState<any[]>([]);
   const [duration, setDuration] = useState<number | null>(null);
   
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +31,7 @@ export default function EditProjects() {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`)
       .then((res) => res.json())
       .then((json) => {
-        setSizes(json.data ? json.data.map((item: any) => item.size) : []);
+        setMasterData(json.data || []);
       });
   }, []);
 
@@ -58,7 +58,7 @@ export default function EditProjects() {
         setAssignedTig(p.assigned_tig || 0);
         setAssignedMig(p.assigned_mig || 0);
         setAssignedGrinders(p.assigned_grinders || 0);
-        setBellows(p.bellows?.map((b: any) => ({ size: b.size, qty: b.quantity })) || []);
+        setBellows(p.bellows?.map((b: any) => ({ size: b.size, qty: b.quantity, type: b.type || "EJ" })) || []);
         fetchDuration(id, p.assigned_tig || 0, p.assigned_mig || 0, p.assigned_grinders || 0);
       }
     } else {
@@ -92,14 +92,14 @@ export default function EditProjects() {
   }, [assignedTig, assignedMig, assignedGrinders, selectedProjectId]);
 
   const handleAddBellow = () => {
-    setBellows([...bellows, { size: "", qty: 1 }]);
+    setBellows([...bellows, { size: "", qty: 1, type: "EJ" }]);
   };
 
   const handleRemoveBellow = (index: number) => {
     setBellows(bellows.filter((_, i) => i !== index));
   };
 
-  const handleBellowChange = (index: number, field: "size" | "qty", value: string | number) => {
+  const handleBellowChange = (index: number, field: "size" | "qty" | "type", value: string | number) => {
     const newBellows = [...bellows];
     newBellows[index] = { ...newBellows[index], [field]: value };
     setBellows(newBellows);
@@ -129,7 +129,8 @@ export default function EditProjects() {
 
       const validBellows = bellows.filter(b => b.size && b.qty > 0).map(b => ({
         size: Number(b.size),
-        qty: Number(b.qty)
+        qty: Number(b.qty),
+        type: b.type
       }));
 
       await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${selectedProjectId}/bellows`, {
@@ -319,7 +320,7 @@ export default function EditProjects() {
 
               <div className="pt-4 border-t border-slate-100">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium text-slate-800">Edit Expansion Joints</h3>
+                  <h3 className="text-lg font-medium text-slate-800">Edit Joints & Bellows</h3>
                   <button
                     type="button"
                     onClick={handleAddBellow}
@@ -332,6 +333,18 @@ export default function EditProjects() {
                 <div className="space-y-4">
                   {bellows.map((bellow, index) => (
                     <div key={index} className="flex gap-4 items-end">
+                      <div className="w-48">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                        <select
+                          className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-black"
+                          value={bellow.type}
+                          onChange={(e) => handleBellowChange(index, "type", e.target.value)}
+                          required
+                        >
+                          <option value="EJ">Expansion Joint</option>
+                          <option value="DJ">Dismantling Joint</option>
+                        </select>
+                      </div>
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-slate-700 mb-1">Size (NB)</label>
                         <select
@@ -341,8 +354,8 @@ export default function EditProjects() {
                           required
                         >
                           <option value="">Select Size</option>
-                          {sizes.map((s) => (
-                            <option key={s} value={s}>{s} NB</option>
+                          {masterData.filter(m => m.type === (bellow.type || 'EJ')).map((m) => (
+                            <option key={m.size} value={m.size}>{m.size} NB</option>
                           ))}
                         </select>
                       </div>

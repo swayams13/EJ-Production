@@ -112,9 +112,10 @@ export default function ProjectsList() {
                         <table className="min-w-full divide-y divide-slate-200 bg-white border border-slate-200 rounded-lg overflow-hidden">
                           <thead className="bg-slate-100">
                             <tr>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Type</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Size (NB)</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Quantity</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Total TIG (ft)</th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">TIG / Welding (ft)</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Total MIG (ft)</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Grinding (sq ft)</th>
                             </tr>
@@ -122,15 +123,21 @@ export default function ProjectsList() {
                           <tbody className="divide-y divide-slate-100">
                             {p.bellows.map((b: any, idx: number) => (
                               <tr key={idx}>
+                                <td className="px-4 py-2 text-sm text-slate-900">
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${b.type === 'DJ' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                                    {b.type === 'DJ' ? 'Dismantling Joint' : 'Expansion Joint'}
+                                  </span>
+                                </td>
                                 <td className="px-4 py-2 text-sm text-slate-900">{b.size}</td>
                                 <td className="px-4 py-2 text-sm text-slate-600">{b.quantity}</td>
                                 <td className="px-4 py-2 text-sm text-slate-600">{b.tig_feet}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.mig_feet}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.grinding_feet}</td>
+                                <td className="px-4 py-2 text-sm text-slate-600">{b.type === 'DJ' ? '-' : b.mig_feet}</td>
+                                <td className="px-4 py-2 text-sm text-slate-600">{b.type === 'DJ' ? '-' : b.grinding_feet}</td>
                               </tr>
                             ))}
                             <tr className="bg-slate-50 font-semibold">
                               <td className="px-4 py-2 text-sm text-slate-900">Total</td>
+                              <td className="px-4 py-2 text-sm text-slate-900"></td>
                               <td className="px-4 py-2 text-sm text-slate-900">{p.bellows.reduce((sum: number, b: any) => sum + b.quantity, 0)}</td>
                               <td className="px-4 py-2 text-sm text-indigo-600">{p.bellows.reduce((sum: number, b: any) => sum + b.tig_feet, 0).toFixed(2)}</td>
                               <td className="px-4 py-2 text-sm text-indigo-600">{p.bellows.reduce((sum: number, b: any) => sum + b.mig_feet, 0).toFixed(2)}</td>

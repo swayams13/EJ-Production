@@ -103,12 +103,13 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
     
     from datetime import date, timedelta
     today = date.today()
+    monday = today - timedelta(days=today.weekday())
     
     weekly_buckets = []
     for i in range(4):
-        start_date = today + timedelta(days=i*7)
-        end_date = start_date + timedelta(days=6)
-        name = f"{start_date.strftime('%d %b')} to {end_date.strftime('%d %b')}"
+        start_date = monday + timedelta(days=i*7)
+        end_date = start_date + timedelta(days=5)
+        name = f"{start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}"
         weekly_buckets.append({"id": i, "name": name, "capacity": weekly_capacity, "demand": 0})
         
     monthly_buckets = [{"id": i, "name": f"Month {i+1}", "capacity": monthly_capacity, "demand": 0} for i in range(3)]

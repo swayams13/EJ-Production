@@ -87,7 +87,7 @@ export default function ProjectsList() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                    {p.target_date ? new Date(p.target_date).toLocaleDateString() : 'N/A'}
+                    {p.target_date ? new Date(p.target_date).toLocaleDateString('en-GB') : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                     <div className="flex gap-2 text-xs font-medium">

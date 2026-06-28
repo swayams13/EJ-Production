@@ -184,7 +184,7 @@ export default function PlanningDashboard() {
                   <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap font-bold text-blue-700">{p.quotation_no}</td>
                     <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-700">{p.project_name || "-"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-800 font-medium">{p.target_date ? new Date(p.target_date).toLocaleDateString() : <span className="text-orange-500 text-xs">Unscheduled</span>}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-slate-800 font-medium">{p.target_date ? new Date(p.target_date).toLocaleDateString('en-GB') : <span className="text-orange-500 text-xs">Unscheduled</span>}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${
                         p.priority === 'P1' ? 'bg-red-100 text-red-700' : p.priority === 'P2' ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'

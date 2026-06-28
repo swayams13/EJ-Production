@@ -7,7 +7,7 @@ content = content.replace('<th className="px-6 py-4 text-left text-xs font-bold 
 
 # Replace table body
 content = content.replace('<td className="px-6 py-4 whitespace-nowrap text-slate-600">{p.customer_name || "Internal"}</td>',
-'<td className="px-6 py-4 whitespace-nowrap text-slate-600">{p.customer_name || "Internal"}</td>\n                    <td className="px-6 py-4 whitespace-nowrap text-slate-800 font-medium">{p.target_date ? new Date(p.target_date).toLocaleDateString() : <span className="text-orange-500 text-xs">Unscheduled</span>}</td>')
+'<td className="px-6 py-4 whitespace-nowrap text-slate-600">{p.customer_name || "Internal"}</td>\n                    <td className="px-6 py-4 whitespace-nowrap text-slate-800 font-medium">{p.target_date ? new Date(p.target_date).toLocaleDateString(\'en-GB\') : <span className="text-orange-500 text-xs">Unscheduled</span>}</td>')
 
 # Replace colSpan
 content = content.replace('colSpan={4}', 'colSpan={5}')

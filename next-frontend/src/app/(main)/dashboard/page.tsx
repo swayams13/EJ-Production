@@ -62,7 +62,7 @@ export default function Dashboard() {
       </div>
 
       {(data.hold_tig > 0 || data.hold_mig > 0 || data.hold_grind > 0 || data.hold_dj > 0) && (
-        <div className="mb-12">
+        <div className="mb-8">
           <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-rose-600 mb-3 uppercase tracking-wide">On Hold Work (Excluded from Pending)</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -71,6 +71,47 @@ export default function Dashboard() {
               <MetricCard title="Hold MIG (ft)" value={Math.round(data.hold_mig * 10) / 10} />
               <MetricCard title="Hold Grinding (sq ft)" value={Math.round(data.hold_grind * 10) / 10} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {data.overtime && (
+        <div className="mb-12">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-amber-600 mb-3 uppercase tracking-wide">Overtime Predictions (Required Hours)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center">
+                <div>
+                  <h4 className="text-slate-500 text-sm font-medium">TIG Overtime</h4>
+                  <div className="text-2xl font-bold text-amber-600">{Math.round(data.overtime.total_ot_tig * 10) / 10} hrs</div>
+                </div>
+                <div className="text-right">
+                  <h4 className="text-slate-400 text-xs font-medium uppercase">Per Welder</h4>
+                  <div className="text-lg font-semibold text-slate-700">{Math.round(data.overtime.ot_per_tig * 10) / 10} hrs</div>
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center">
+                <div>
+                  <h4 className="text-slate-500 text-sm font-medium">MIG Overtime</h4>
+                  <div className="text-2xl font-bold text-amber-600">{Math.round(data.overtime.total_ot_mig * 10) / 10} hrs</div>
+                </div>
+                <div className="text-right">
+                  <h4 className="text-slate-400 text-xs font-medium uppercase">Per Welder</h4>
+                  <div className="text-lg font-semibold text-slate-700">{Math.round(data.overtime.ot_per_mig * 10) / 10} hrs</div>
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center">
+                <div>
+                  <h4 className="text-slate-500 text-sm font-medium">Grinding Overtime</h4>
+                  <div className="text-2xl font-bold text-amber-600">{Math.round(data.overtime.total_ot_grind * 10) / 10} hrs</div>
+                </div>
+                <div className="text-right">
+                  <h4 className="text-slate-400 text-xs font-medium uppercase">Per Grinder</h4>
+                  <div className="text-lg font-semibold text-slate-700">{Math.round(data.overtime.ot_per_grind * 10) / 10} hrs</div>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-amber-600 mt-3">* Predictions assume a standard 8-hour shift based on your master productivity targets.</p>
           </div>
         </div>
       )}

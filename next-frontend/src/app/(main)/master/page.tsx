@@ -237,7 +237,7 @@ export default function MasterData() {
 
       {activeTab === 'workforce' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">Base Productivity (ft/day)</h2>
+          <h2 className="text-lg font-semibold text-slate-800 mb-6">Base Productivity (ft/hour)</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {workforce.map(w => (
               <div key={w.id} className="border border-slate-200 p-4 rounded-lg">

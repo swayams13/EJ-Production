@@ -291,6 +291,8 @@ def get_company_capacity_status(target_days=15):
     try:
         # Aggregation of all projects (Exclude completed projects)
         projects = session.query(Project).filter((Project.status != "Completed") | (Project.status == None)).all()
+        STANDARD_SHIFT_HOURS = 8
+        
         tot_tig = 0.0
         tot_dj = 0.0
         tot_mig = 0.0
@@ -305,12 +307,12 @@ def get_company_capacity_status(target_days=15):
         
         active_projects_count = 0
         
-        # Get Productivity
+        # Get Productivity (now treated as ft/hour)
         workforce = session.query(WorkforceMaster).all()
         prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-        tig_prod = prod.get("TIG Welder", 180)
-        mig_prod = prod.get("MIG Welder", 120)
-        grind_prod = prod.get("Grinder", 80)
+        tig_prod = prod.get("TIG Welder", 18) # default 18 ft/hr
+        mig_prod = prod.get("MIG Welder", 12) # default 12 ft/hr
+        grind_prod = prod.get("Grinder", 8) # default 8 ft/hr
         
         req_tig_welders = 0
         req_mig_welders = 0
@@ -324,7 +326,7 @@ def get_company_capacity_status(target_days=15):
             if lines:
                 proj_tig = sum((l.tig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'EJ')
                 proj_dj = sum((l.tig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'DJ')
-                proj_mig = sum((l.mig_feet or 0) for l in lines)
+                proj_mig = sum((l.tig_feet or 0) for l in lines)
                 proj_grind = sum((l.grinding_feet or 0) for l in lines)
                 
                 from backend.services.db_service import WeldingLog
@@ -353,9 +355,14 @@ def get_company_capacity_status(target_days=15):
                 assignment = session.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
                 proj_target_days = assignment.target_days if assignment and assignment.target_days else target_days
                 
-                p_req_tig = math.ceil((proj_tig + proj_dj) / (proj_target_days * tig_prod)) if proj_target_days > 0 and tig_prod > 0 else 0
-                p_req_mig = math.ceil(proj_mig / (proj_target_days * mig_prod)) if proj_target_days > 0 and mig_prod > 0 else 0
-                p_req_grind = math.ceil(proj_grind / (proj_target_days * grind_prod)) if proj_target_days > 0 and grind_prod > 0 else 0
+                # Math based on HOURLY productivity
+                daily_tig_cap = tig_prod * STANDARD_SHIFT_HOURS
+                daily_mig_cap = mig_prod * STANDARD_SHIFT_HOURS
+                daily_grind_cap = grind_prod * STANDARD_SHIFT_HOURS
+                
+                p_req_tig = math.ceil((proj_tig + proj_dj) / (proj_target_days * daily_tig_cap)) if proj_target_days > 0 and daily_tig_cap > 0 else 0
+                p_req_mig = math.ceil(proj_mig / (proj_target_days * daily_mig_cap)) if proj_target_days > 0 and daily_mig_cap > 0 else 0
+                p_req_grind = math.ceil(proj_grind / (proj_target_days * daily_grind_cap)) if proj_target_days > 0 and daily_grind_cap > 0 else 0
                 
                 req_tig_welders += p_req_tig
                 req_mig_welders += p_req_mig
@@ -394,9 +401,30 @@ def get_company_capacity_status(target_days=15):
             pool = CompanyResourcePool(total_tig_welders=0, total_mig_welders=0, total_grinders=0)
             
         # Daily Capacity
-        daily_tig = pool.total_tig_welders * tig_prod
-        daily_mig = pool.total_mig_welders * mig_prod
-        daily_grind = pool.total_grinders * grind_prod
+        daily_tig = pool.total_tig_welders * (tig_prod * STANDARD_SHIFT_HOURS)
+        daily_mig = pool.total_mig_welders * (mig_prod * STANDARD_SHIFT_HOURS)
+        daily_grind = pool.total_grinders * (grind_prod * STANDARD_SHIFT_HOURS)
+        
+        # Calculate Overtime Predictions
+        # 1. Calculate Total Required Hours across all pending active projects
+        total_req_tig_hours = (tot_tig + tot_dj) / tig_prod if tig_prod > 0 else 0
+        total_req_mig_hours = tot_mig / mig_prod if mig_prod > 0 else 0
+        total_req_grind_hours = tot_grind / grind_prod if grind_prod > 0 else 0
+        
+        # 2. Calculate Standard Available Hours across target_days
+        std_avail_tig_hours = pool.total_tig_welders * target_days * STANDARD_SHIFT_HOURS
+        std_avail_mig_hours = pool.total_mig_welders * target_days * STANDARD_SHIFT_HOURS
+        std_avail_grind_hours = pool.total_grinders * target_days * STANDARD_SHIFT_HOURS
+        
+        # 3. Calculate Total Overtime Hours Needed
+        total_ot_tig = max(0, total_req_tig_hours - std_avail_tig_hours)
+        total_ot_mig = max(0, total_req_mig_hours - std_avail_mig_hours)
+        total_ot_grind = max(0, total_req_grind_hours - std_avail_grind_hours)
+        
+        # 4. Calculate Overtime Per Person
+        ot_per_tig = total_ot_tig / pool.total_tig_welders if pool.total_tig_welders > 0 else total_ot_tig
+        ot_per_mig = total_ot_mig / pool.total_mig_welders if pool.total_mig_welders > 0 else total_ot_mig
+        ot_per_grind = total_ot_grind / pool.total_grinders if pool.total_grinders > 0 else total_ot_grind
         
         return {
             "active_projects": active_projects_count,
@@ -424,7 +452,20 @@ def get_company_capacity_status(target_days=15):
                 "mig": max(0, int(req_mig_welders) - pool.total_mig_welders),
                 "grinders": max(0, int(req_grind_welders) - pool.total_grinders)
             },
-            "months_breakdown": months_breakdown
+            "daily_capacity": {
+                "tig_ft": daily_tig,
+                "mig_ft": daily_mig,
+                "grind_ft": daily_grind
+            },
+            "months_breakdown": months_breakdown,
+            "overtime": {
+                "total_ot_tig": total_ot_tig,
+                "total_ot_mig": total_ot_mig,
+                "total_ot_grind": total_ot_grind,
+                "ot_per_tig": ot_per_tig,
+                "ot_per_mig": ot_per_mig,
+                "ot_per_grind": ot_per_grind
+            }
         }
     finally:
         session.close()

@@ -60,6 +60,7 @@ def import_welding_master_from_disk():
                     total_welding_inches=tot_in,
                     total_welding_feet=tot_ft,
                     grinding_feet=grind,
+                    joint_type="EJ",
                     version=new_version
                 )
                 session.add(wm)
@@ -127,11 +128,21 @@ def import_dismantling_joint_master():
 def get_welding_master_latest():
     session = SessionLocal()
     try:
-        latest = session.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
-        if not latest:
-            return []
-        v = latest.version
-        return session.query(WeldingMaster).filter(WeldingMaster.version == v).order_by(WeldingMaster.size).all()
+        results = []
+        for jt in ["EJ", "DJ"]:
+            if jt == "EJ":
+                latest = session.query(WeldingMaster).filter((WeldingMaster.joint_type == "EJ") | (WeldingMaster.joint_type == None)).order_by(WeldingMaster.version.desc()).first()
+            else:
+                latest = session.query(WeldingMaster).filter(WeldingMaster.joint_type == jt).order_by(WeldingMaster.version.desc()).first()
+            
+            if latest:
+                v = latest.version
+                if jt == "EJ":
+                    records = session.query(WeldingMaster).filter(WeldingMaster.version == v, ((WeldingMaster.joint_type == "EJ") | (WeldingMaster.joint_type == None))).order_by(WeldingMaster.size).all()
+                else:
+                    records = session.query(WeldingMaster).filter(WeldingMaster.version == v, WeldingMaster.joint_type == jt).order_by(WeldingMaster.size).all()
+                results.extend(records)
+        return results
     finally:
         session.close()
 

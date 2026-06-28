@@ -114,7 +114,16 @@ def auto_assign_tasks(
         
         base_daily_target = total_feet / target_days if target_days > 0 else 0
         
-        days_elapsed = (today - p.created_at.date()).days if p.created_at else 0
+        if p.created_at:
+            import datetime
+            if isinstance(p.created_at, str):
+                created_date = datetime.datetime.strptime(p.created_at.split()[0], '%Y-%m-%d').date()
+            else:
+                created_date = p.created_at.date()
+            days_elapsed = (today - created_date).days
+        else:
+            days_elapsed = 0
+            
         if days_elapsed < 0:
             days_elapsed = 0
             

@@ -14,7 +14,8 @@ export default function PlanningDashboard() {
     weekly_forecast: [], 
     monthly_forecast: [], 
     unscheduled_demand: 0,
-    factory_weekly_capacity: 0 
+    factory_weekly_capacity: 0,
+    pacing_metrics: []
   });
 
   useEffect(() => {
@@ -66,7 +67,54 @@ export default function PlanningDashboard() {
         </div>
       </div>
 
-      
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h2 className="text-lg font-bold text-slate-800">Daily Execution Plan (Takt Time Pacing)</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-white">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Total Scope</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Base Daily Target</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-rose-500 uppercase tracking-wider">Yesterday's Backlog</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-emerald-600 uppercase tracking-wider">Today's Requirement</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-100">
+              {(!metrics.pacing_metrics || metrics.pacing_metrics.length === 0) ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">No active projects require pacing.</td>
+                </tr>
+              ) : (
+                metrics.pacing_metrics.map((p: any) => (
+                  <tr key={p.project_id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">{p.project_number}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-slate-600">{p.total_feet} ft</td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-700">{p.base_daily_target} ft</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {p.backlog > 0 ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
+                          +{p.backlog} ft
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-sm font-medium">On Track</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-emerald-100 text-emerald-800">
+                        {p.today_requirement} ft
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
         <h2 className="text-xl font-bold text-slate-800 mb-6">4-Week Capacity Forecast</h2>
         <div className="space-y-6">

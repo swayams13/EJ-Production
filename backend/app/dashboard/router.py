@@ -111,6 +111,8 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
     today = date.today()
     late_projects = 0
     
+    pacing_metrics = []
+    
     for p in active_projects:
         # Top level metrics
         for line in p.production_lines:
@@ -140,6 +142,35 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
         else:
             unscheduled_demand += remaining_feet
             
+        # Pacing Engine Logic
+        from backend.services.db_service import ProjectResourceAssignment
+        assignment = db.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
+        target_days = assignment.target_days if assignment and assignment.target_days else 15
+        
+        base_daily_target = total_feet / target_days if target_days > 0 else 0
+        
+        days_elapsed = (today - p.created_at.date()).days if p.created_at else 0
+        if days_elapsed < 0:
+            days_elapsed = 0
+            
+        expected_completed = min(total_feet, base_daily_target * days_elapsed)
+        actual_completed = total_feet * (progress_pct / 100)
+        
+        backlog = max(0, expected_completed - actual_completed)
+        today_requirement = base_daily_target + backlog
+        
+        pacing_metrics.append({
+            "project_id": p.id,
+            "project_number": p.project_number,
+            "total_feet": round(total_feet, 1),
+            "base_daily_target": round(base_daily_target, 1),
+            "days_elapsed": days_elapsed,
+            "expected_completed": round(expected_completed, 1),
+            "actual_completed": round(actual_completed, 1),
+            "backlog": round(backlog, 1),
+            "today_requirement": round(today_requirement, 1)
+        })
+            
     # Clean up floats
     for b in weekly_buckets:
         b["demand"] = round(b["demand"], 1)
@@ -166,6 +197,7 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
         "weekly_forecast": weekly_buckets,
         "monthly_forecast": monthly_buckets,
         "unscheduled_demand": unscheduled_demand,
-        "factory_weekly_capacity": weekly_capacity
+        "factory_weekly_capacity": weekly_capacity,
+        "pacing_metrics": pacing_metrics
     }
     return {"success": True, "message": "Planning dashboard retrieved", "data": result}

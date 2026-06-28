@@ -153,6 +153,16 @@ class AuditLog(Base):
     details = Column(Text)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
+class RawMaterialInventory(Base):
+    __tablename__ = "raw_material_inventory"
+    id = Column(Integer, primary_key=True, index=True)
+    material_name = Column(String, index=True, nullable=False) # e.g. Bellows, Collar, Flange
+    size = Column(Integer, index=True, nullable=False)
+    joint_type = Column(String, index=True, nullable=False) # EJ, DJ
+    current_stock = Column(Integer, default=0, nullable=False)
+    minimum_required_stock = Column(Integer, default=0, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class WorkforceMaster(Base):
     __tablename__ = "workforce_master"
     id = Column(Integer, primary_key=True, index=True)

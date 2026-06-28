@@ -70,7 +70,7 @@ export default function SchedulerPage() {
                         type="date" 
                         value={date} 
                         onChange={(e) => setDate(e.target.value)} 
-                        className="px-4 py-2 border border-slate-300 rounded-lg shadow-sm focus:ring focus:ring-indigo-200 focus:outline-none"
+                        className="px-4 py-2 border border-slate-300 rounded-lg shadow-sm focus:ring focus:ring-indigo-200 focus:outline-none text-slate-900 font-medium bg-white"
                     />
                 </div>
             </div>

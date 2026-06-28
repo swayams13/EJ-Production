@@ -267,9 +267,9 @@ def get_duration(req: DurationRequest, db: Session = Depends(get_db)):
 @router.post("/simulate_duration")
 def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db)):
     tot_tig, tot_mig, tot_grind = 0, 0, 0
-    master_data = {(m.size, getattr(m, 'joint_type', 'EJ')): m for m in get_welding_master_latest()}
+    master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     for b in req.bellows:
-        m = master_data.get((b.size, getattr(b, 'type', 'EJ')))
+        m = master_data.get((b.size, getattr(b, 'type', 'EJ') or 'EJ'))
         if m:
             tot_tig += (m.tig_feet or 0) * b.qty
             tot_mig += (m.mig_feet or 0) * b.qty
@@ -300,9 +300,9 @@ class SimulateResourcesRequest(BaseModel):
 @router.post("/simulate_resources")
 def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_db)):
     tot_tig, tot_mig, tot_grind = 0, 0, 0
-    master_data = {(m.size, getattr(m, 'joint_type', 'EJ')): m for m in get_welding_master_latest()}
+    master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     for b in req.bellows:
-        m = master_data.get((b.size, getattr(b, 'type', 'EJ')))
+        m = master_data.get((b.size, getattr(b, 'type', 'EJ') or 'EJ'))
         if m:
             tot_tig += (m.tig_feet or 0) * b.qty
             tot_mig += (m.mig_feet or 0) * b.qty

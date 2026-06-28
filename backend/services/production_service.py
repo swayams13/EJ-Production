@@ -90,8 +90,8 @@ def import_dismantling_joint_master():
             
             for _, row in df.iterrows():
                 try:
-                    size = int(float(row.iloc[2])) # 50, 80, 100 etc are in 3rd column
-                    feet = float(row.iloc[3]) if pd.notna(row.iloc[3]) else 0.0
+                    size = int(float(row.iloc[1])) 
+                    feet = float(row.iloc[2]) if pd.notna(row.iloc[2]) else 0.0
                 except (ValueError, TypeError, IndexError):
                     continue
                     

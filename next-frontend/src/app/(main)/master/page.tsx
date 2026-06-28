@@ -11,6 +11,7 @@ export default function MasterData() {
   const [loading, setLoading] = useState(true);
   const [syncingEJ, setSyncingEJ] = useState(false);
   const [syncingDJ, setSyncingDJ] = useState(false);
+  const [masterType, setMasterType] = useState('EJ');
   const [message, setMessage] = useState("");
 
   const fetchData = () => {
@@ -132,29 +133,62 @@ export default function MasterData() {
           )}
 
           {(userRole === "Developer" || userRole === "GM") ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">TIG (ft)</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">MIG (ft)</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-200">
-                  {data.map((row) => (
-                    <tr key={row.size} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.type}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{row.grinding_feet}</td>
+            <div className="space-y-4">
+              <div className="flex space-x-2 border-b border-slate-200">
+                <button 
+                  onClick={() => setMasterType('EJ')} 
+                  className={`pb-2 px-3 font-medium text-sm ${masterType === 'EJ' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Expansion Joints
+                </button>
+                <button 
+                  onClick={() => setMasterType('DJ')} 
+                  className={`pb-2 px-3 font-medium text-sm ${masterType === 'DJ' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Dismantling Joints
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
+                      {masterType === 'EJ' ? (
+                        <>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">TIG (ft)</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">MIG (ft)</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
+                        </>
+                      ) : (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Welding Feet</th>
+                      )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-200">
+                    {data.filter(r => r.type === masterType).map((row) => (
+                      <tr key={`${row.type}-${row.size}`} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
+                        {masterType === 'EJ' ? (
+                          <>
+                            <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
+                            <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet}</td>
+                            <td className="px-4 py-3 text-sm text-slate-600">{row.grinding_feet}</td>
+                          </>
+                        ) : (
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
+                        )}
+                      </tr>
+                    ))}
+                    {data.filter(r => r.type === masterType).length === 0 && (
+                      <tr>
+                        <td colSpan={masterType === 'EJ' ? 4 : 2} className="px-4 py-8 text-center text-slate-500 text-sm">
+                          No {masterType === 'EJ' ? 'Expansion Joint' : 'Dismantling Joint'} records found. Please sync data.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="p-8 text-center bg-slate-50 rounded-lg border border-slate-200">

@@ -60,7 +60,7 @@ def get_wip_dashboard_api(db: Session = Depends(get_db)):
 @router.get("/executive")
 def get_executive_dashboard(db: Session = Depends(get_db)):
     total_active = db.query(Project).filter(Project.status == "Active").count()
-    total_hold = db.query(Project).filter(Project.status == "On Hold").count()
+    total_hold = db.query(Project).filter(Project.status == "Hold").count()
     total_completed = db.query(Project).filter(Project.status == "Completed").count()
     
     active_projects = db.query(Project).filter(Project.status != "Completed").all()

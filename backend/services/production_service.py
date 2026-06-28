@@ -427,7 +427,7 @@ def get_company_capacity_status(target_days=15):
         ot_per_grind = total_ot_grind / pool.total_grinders if pool.total_grinders > 0 else total_ot_grind
         
         active_count = session.query(Project).filter(Project.status == "Active").count()
-        hold_count = session.query(Project).filter(Project.status == "On Hold").count()
+        hold_count = session.query(Project).filter(Project.status == "Hold").count()
         completed_count = session.query(Project).filter(Project.status == "Completed").count()
         
         return {

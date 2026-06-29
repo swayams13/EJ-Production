@@ -12,6 +12,7 @@ export default function AddProjects() {
   const [error, setError] = useState("");
 
   const [quotationNo, setQuotationNo] = useState("");
+  const [payroll, setPayroll] = useState("Company");
   const [startDate, setStartDate] = useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [targetDate, setTargetDate] = useState("");
   const [bellows, setBellows] = useState([{ size: "", qty: 1, type: "EJ" }]);
@@ -146,6 +147,7 @@ export default function AddProjects() {
         body: JSON.stringify({
           quotation_no: quotationNo,
           target_date: targetDate || null,
+          payroll: payroll,
           bellows: validBellows,
           assigned_tig: assignedTig,
           assigned_mig: assignedMig,
@@ -173,9 +175,9 @@ export default function AddProjects() {
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h2 className="text-xl font-semibold text-slate-800 mb-4">Project Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Project Code / Quotation No *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Project Code *</label>
               <input
                 type="text"
                 required
@@ -184,6 +186,17 @@ export default function AddProjects() {
                 value={quotationNo}
                 onChange={(e) => setQuotationNo(e.target.value)}
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Payroll Option</label>
+              <select
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black bg-white"
+                value={payroll}
+                onChange={(e) => setPayroll(e.target.value)}
+              >
+                <option value="Company">Company</option>
+                <option value="Contractor">Contractor</option>
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>

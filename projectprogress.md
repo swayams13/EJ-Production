@@ -1,5 +1,22 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-06-29
+
+### What we did today:
+- **Project Payroll Option:** Added a new `payroll` field to the Projects model, supporting "Company" or "Contractor" assignments.
+- **Backend & Database Updates:** Created a database auto-migration to insert the column into PostgreSQL and updated `schemas.py` and `router.py` to seamlessly handle reading/writing the `payroll` state via the APIs.
+- **Frontend Enhancements:** Updated the Add Project and Edit Project forms to include a Payroll Option dropdown UI. Furthermore, the main Projects List table was enhanced with a dedicated Payroll column that features dynamically colored badges.
+
+### Problems faced:
+- The backend required a hard restart without active user interaction to successfully parse the migration script.
+
+### How we solved them:
+- Discovered that running uvicorn explicitly via `python3 -m uvicorn backend.main:app` out of the root directory seamlessly handled module paths and resolved `No module named 'backend'` errors.
+
+### What needs to be done next session:
+- Finalize reporting features, potentially filtering projects/capacity based on Company vs. Contractor.
+
+
 ## Date: 2026-06-28
 
 ### What we did today:

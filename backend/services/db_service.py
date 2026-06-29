@@ -61,6 +61,7 @@ class Project(Base):
     hold_type = Column(String, nullable=True)
     hold_until_date = Column(Date, nullable=True)
     target_date = Column(Date, nullable=True)
+    payroll = Column(String, default="Company", nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     production_lines = relationship("ProjectProductionLine", back_populates="project", cascade="all, delete-orphan")
@@ -250,7 +251,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN base_productivity FLOAT;",
         "ALTER TABLE welding_master ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
         "ALTER TABLE project_production_lines ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
-        "ALTER TABLE audit_logs ADD COLUMN username VARCHAR;"
+        "ALTER TABLE audit_logs ADD COLUMN username VARCHAR;",
+        "ALTER TABLE projects ADD COLUMN payroll VARCHAR DEFAULT 'Company';"
     ]
     
     for query in columns:

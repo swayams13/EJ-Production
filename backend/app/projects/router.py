@@ -54,6 +54,7 @@ def get_projects(db: Session = Depends(get_db)):
             "hold_until_date": getattr(p, "hold_until_date", None),
             "hold_type": getattr(p, "hold_type", None),
             "target_date": target_date,
+            "payroll": getattr(p, "payroll", "Company"),
             "priority": priority,
             "estimated_duration_days": assign.estimated_duration_days if assign else 0,
             "assigned_tig": assign.assigned_tig_welders if assign else 0,
@@ -97,6 +98,7 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db)):
         project_name=req.project_name or req.quotation_no,
         contact_person="Production User",
         target_date=req.target_date,
+        payroll=req.payroll,
         created_at=datetime.utcnow(),
         status="Active"
     )
@@ -177,6 +179,9 @@ def update_project(project_id: int, req: ProjectUpdate, db: Session = Depends(ge
         
     if req.target_date is not None:
         proj.target_date = req.target_date
+        
+    if req.payroll is not None:
+        proj.payroll = req.payroll
         
     assign = db.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == project_id).first()
     if assign:

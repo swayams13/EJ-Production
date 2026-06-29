@@ -61,6 +61,7 @@ export default function ProjectsList() {
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Progress</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Target Date</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned Resources</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Payroll</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Est. Days</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
             </tr>
@@ -95,6 +96,13 @@ export default function ProjectsList() {
                       <span className="bg-slate-100 px-2 py-1 rounded">MIG: {p.assigned_mig}</span>
                       <span className="bg-slate-100 px-2 py-1 rounded">Grind: {p.assigned_grinders}</span>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-md ${
+                      p.payroll === 'Company' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      {p.payroll || 'Company'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                     {p.estimated_duration_days > 0 ? (

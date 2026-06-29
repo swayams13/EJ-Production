@@ -11,6 +11,7 @@ class ProjectCreate(BaseModel):
     quotation_no: str
     project_name: Optional[str] = None
     target_date: Optional[date] = None
+    payroll: Optional[str] = "Company"
     bellows: List[BellowItem] = []
     assigned_tig: Optional[int] = 0
     assigned_mig: Optional[int] = 0
@@ -22,6 +23,7 @@ class ProjectUpdate(BaseModel):
     hold_type: Optional[str] = None
     hold_until_date: Optional[date] = None
     target_date: Optional[date] = None
+    payroll: Optional[str] = None
     assigned_tig: Optional[int] = None
     assigned_mig: Optional[int] = None
     assigned_grinders: Optional[int] = None

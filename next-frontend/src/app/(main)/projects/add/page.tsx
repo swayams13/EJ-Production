@@ -15,7 +15,7 @@ export default function AddProjects() {
   const [payroll, setPayroll] = useState("Company");
   const [startDate, setStartDate] = useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [targetDate, setTargetDate] = useState("");
-  const [bellows, setBellows] = useState([{ size: "", qty: 1, type: "EJ" }]);
+  const [bellows, setBellows] = useState<any[]>([{ size: "", qty: 1, type: "EJ", pn_rating: "" }]);
   
   const [assignedTig, setAssignedTig] = useState<number>(0);
   const [assignedMig, setAssignedMig] = useState<number>(0);
@@ -38,7 +38,8 @@ export default function AddProjects() {
     const validBellows = bellows.filter(b => b.size && b.qty > 0).map(b => ({
       size: Number(b.size),
       qty: Number(b.qty),
-      type: b.type
+      type: b.type,
+      pn_rating: b.pn_rating
     }));
     
     if (validBellows.length > 0 && targetDate && startDate) {
@@ -90,7 +91,8 @@ export default function AddProjects() {
     const validBellows = bellows.filter(b => b.size && b.qty > 0).map(b => ({
       size: Number(b.size),
       qty: Number(b.qty),
-      type: b.type
+      type: b.type,
+      pn_rating: b.pn_rating
     }));
 
     if (validBellows.length > 0) {
@@ -115,14 +117,14 @@ export default function AddProjects() {
   }, [bellows, targetDate]);
 
   const handleAddBellow = () => {
-    setBellows([...bellows, { size: "", qty: 1, type: "EJ" }]);
+    setBellows([...bellows, { size: "", qty: 1, type: "EJ", pn_rating: "" }]);
   };
 
   const handleRemoveBellow = (index: number) => {
     setBellows(bellows.filter((_, i) => i !== index));
   };
 
-  const handleBellowChange = (index: number, field: "size" | "qty" | "type", value: string | number) => {
+  const handleBellowChange = (index: number, field: "size" | "qty" | "type" | "pn_rating", value: string | number) => {
     const newBellows = [...bellows];
     newBellows[index] = { ...newBellows[index], [field]: value };
     setBellows(newBellows);
@@ -137,7 +139,8 @@ export default function AddProjects() {
     const validBellows = bellows.filter(b => b.size && b.qty > 0).map(b => ({
       size: Number(b.size),
       qty: Number(b.qty),
-      type: b.type
+      type: b.type,
+      pn_rating: b.pn_rating
     }));
 
     try {
@@ -253,6 +256,22 @@ export default function AddProjects() {
                   >
                     <option value="EJ">Expansion Joint</option>
                     <option value="DJ">Dismantling Joint</option>
+                  </select>
+                </div>
+                <div className="w-32">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">PN Rating</label>
+                  <select
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-black"
+                    value={bellow.pn_rating || ""}
+                    onChange={(e) => handleBellowChange(index, "pn_rating", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                  >
+                    <option value="">None</option>
+                    <option value="PN 6">PN 6</option>
+                    <option value="PN 10">PN 10</option>
+                    <option value="PN 16">PN 16</option>
+                    <option value="PN 20">PN 20</option>
+                    <option value="PN 25">PN 25</option>
                   </select>
                 </div>
                 <div className="flex-1">

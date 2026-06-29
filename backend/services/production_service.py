@@ -158,11 +158,12 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
         existing_lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
         existing_map = {(l.size, getattr(l, 'joint_type', 'EJ')): l for l in existing_lines}
         
-        new_items_set = {(item['size'], item.get('type', 'EJ')) for item in sizes_and_qtys}
+        new_items_set = {(item['size'], item.get('type', 'EJ'), item.get('pn_rating')) for item in sizes_and_qtys}
         
         # Delete lines that are no longer needed
         for key, line in existing_map.items():
-            if key not in new_items_set:
+            line_pn = getattr(line, 'pn_rating', None)
+            if (key[0], key[1], line_pn) not in new_items_set:
                 session.delete(line)
                 
         # Update or Create lines
@@ -178,13 +179,18 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
             mig = m.mig_feet * qty if m else 0
             grind = m.grinding_feet * qty if m else 0
             
+            pn_rating = item.get('pn_rating')
+            
             key = (size, j_type)
-            if key in existing_map:
-                line = existing_map[key]
-                line.quantity = qty
-                line.tig_feet = tig
-                line.mig_feet = mig
-                line.grinding_feet = grind
+            
+            # Find an existing line that matches size, type, and pn_rating
+            existing_line = next((l for k, l in existing_map.items() if k == key and getattr(l, 'pn_rating', None) == pn_rating), None)
+            
+            if existing_line:
+                existing_line.quantity = qty
+                existing_line.tig_feet = tig
+                existing_line.mig_feet = mig
+                existing_line.grinding_feet = grind
             else:
                 line = ProjectProductionLine(
                     project_id=project_id,
@@ -193,7 +199,8 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
                     tig_feet=tig,
                     mig_feet=mig,
                     grinding_feet=grind,
-                    joint_type=j_type
+                    joint_type=j_type,
+                    pn_rating=pn_rating
                 )
                 session.add(line)
                 session.flush() # get line.id

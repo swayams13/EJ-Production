@@ -6,6 +6,7 @@ class BellowItem(BaseModel):
     size: int
     qty: int
     type: Optional[str] = "EJ"
+    pn_rating: Optional[str] = None
 
 class ProjectCreate(BaseModel):
     quotation_no: str

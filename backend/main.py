@@ -60,6 +60,33 @@ try:
         conn.commit()
 except Exception:
     pass # Columns already exist
+
+try:
+    from backend.services.db_service import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE projects ADD COLUMN hold_type TEXT"))
+        conn.commit()
+except Exception:
+    pass
+
+try:
+    from backend.services.db_service import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE projects ADD COLUMN payroll TEXT DEFAULT 'Company'"))
+        conn.commit()
+except Exception:
+    pass
+
+try:
+    from backend.services.db_service import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE project_production_lines ADD COLUMN pn_rating TEXT"))
+        conn.commit()
+except Exception:
+    pass
 # Dependency
 
 # Models

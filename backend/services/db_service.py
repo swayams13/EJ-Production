@@ -93,6 +93,7 @@ class ProjectProductionLine(Base):
     mig_feet = Column(Float, default=0.0)
     grinding_feet = Column(Float, default=0.0)
     joint_type = Column(String, default="EJ")
+    pn_rating = Column(String, nullable=True)
     
     project = relationship("Project", back_populates="production_lines")
     parts = relationship("Part", back_populates="production_line", cascade="all, delete-orphan")

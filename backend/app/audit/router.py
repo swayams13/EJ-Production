@@ -1,5 +1,6 @@
 import csv
 import io
+from datetime import timedelta
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ def get_audit_logs(db: Session = Depends(get_db), current_user: dict = Depends(r
         user_display = user.full_name if user else (log.username or "System/Unknown")
         result.append({
             "id": log.id,
-            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "timestamp": (log.timestamp + timedelta(hours=5, minutes=30)).isoformat() if log.timestamp else None,
             "user": user_display,
             "action": log.action,
             "table_name": log.table_name,
@@ -47,7 +48,7 @@ def download_audit_logs_excel(db: Session = Depends(get_db), current_user: dict 
     
     for log, user in logs:
         user_display = user.full_name if user else (log.username or "System/Unknown")
-        timestamp = log.timestamp.strftime("%Y-%m-%d %H:%M:%S") if log.timestamp else ""
+        timestamp = (log.timestamp + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d %H:%M:%S") if log.timestamp else ""
         writer.writerow([log.id, timestamp, user_display, log.action, log.table_name, log.record_id, log.details])
         
     output.seek(0)

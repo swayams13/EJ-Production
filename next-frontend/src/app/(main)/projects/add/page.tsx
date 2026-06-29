@@ -236,12 +236,16 @@ export default function AddProjects() {
           <div className="space-y-4">
             {bellows.map((bellow, index) => (
               <div key={index} className="flex gap-4 items-end">
+                <div className="w-10 text-center pb-2">
+                  <span className="text-sm font-semibold text-slate-500">#{index + 1}</span>
+                </div>
                 <div className="w-48">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
                   <select
                     className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-black"
                     value={bellow.type}
                     onChange={(e) => handleBellowChange(index, "type", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                     required
                   >
                     <option value="EJ">Expansion Joint</option>
@@ -254,6 +258,7 @@ export default function AddProjects() {
                     className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-black"
                     value={bellow.size}
                     onChange={(e) => handleBellowChange(index, "size", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                     required
                   >
                     <option value="">Select Size</option>
@@ -271,6 +276,7 @@ export default function AddProjects() {
                     className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black bg-white"
                     value={bellow.qty}
                     onChange={(e) => handleBellowChange(index, "qty", parseInt(e.target.value) || 0)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                   />
                 </div>
                 {bellows.length > 1 && (

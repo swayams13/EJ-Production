@@ -6,6 +6,7 @@
 - **Project Payroll Option:** Added a new `payroll` field to the Projects model, supporting "Company" or "Contractor" assignments.
 - **Backend & Database Updates:** Created a database auto-migration to insert the column into PostgreSQL and updated `schemas.py` and `router.py` to seamlessly handle reading/writing the `payroll` state via the APIs.
 - **Frontend Enhancements:** Updated the Add Project and Edit Project forms to include a Payroll Option dropdown UI. Furthermore, the main Projects List table was enhanced with a dedicated Payroll column that features dynamically colored badges.
+- **Joint Assignment UX:** Improved the "Joints & Bellows" interface across the Add/Edit Project screens. Added automatically numbering (Sr. No. starting from #1) to each row to make tracking easier. Also prevented the `Enter` key from accidentally submitting the entire project form when a user is modifying the size or quantity of a joint.
 
 ### Problems faced:
 - The backend required a hard restart without active user interaction to successfully parse the migration script.

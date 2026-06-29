@@ -261,6 +261,14 @@ def init_db():
                 conn.execute(text(query))
         except Exception:
             pass
+            
+    # Safe migration for workforce_master
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE workforce_master RENAME COLUMN avg_productivity_per_day TO avg_productivity_per_hour;"))
+            conn.execute(text("UPDATE workforce_master SET avg_productivity_per_hour = avg_productivity_per_hour / 8.0;"))
+    except Exception:
+        pass
         
     session = SessionLocal()
     try:

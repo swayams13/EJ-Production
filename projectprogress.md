@@ -3,6 +3,7 @@
 ## Date: 2026-06-28
 
 ### What we did today:
+- **Dynamic RBAC Permission Engine:** Overhauled the User Management interface and Sidebar navigation to support fully dynamic, module-level access control. Developers can now grant or revoke access to any of the 16 system modules via toggle switches instantly. The JWT authentication flow was updated to bundle these permissions, eliminating extra database trips on the frontend.
 - **Planning Dashboard Optimization:** Fixed 4-Week Capacity Forecast to use dynamic real-world calendar date ranges. Modified the Master Schedule to display `quotation_no` (Project Code) instead of the customer details to keep it cleaner.
 - **Smart Scheduler Automation:** Overhauled the Daily Scheduler to become a "seamless" enterprise-grade system. It now automatically calculates and auto-assigns the daily goals upon opening the page if they haven't been assigned yet, without forcing the user to manually click options.
 - **Dynamic Resource Simulator Engine:** 

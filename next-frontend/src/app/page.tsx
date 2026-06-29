@@ -30,6 +30,7 @@ export default function Login() {
       const data = await res.json();
       // Simple auth state using localStorage for now
       localStorage.setItem("user_role", data.role);
+      localStorage.setItem("access_modules", data.access_modules || "[]");
       if (data.access_token) {
         localStorage.setItem("jwt_token", data.access_token);
       }

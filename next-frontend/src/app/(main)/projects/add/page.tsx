@@ -236,8 +236,11 @@ export default function AddProjects() {
           <div className="space-y-4">
             {bellows.map((bellow, index) => (
               <div key={index} className="flex gap-4 items-end">
-                <div className="w-10 text-center pb-2">
-                  <span className="text-sm font-semibold text-slate-500">#{index + 1}</span>
+                <div className="w-12 text-center">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Sr. No.</label>
+                  <div className="py-2">
+                    <span className="text-sm font-semibold text-slate-700">{index + 1}</span>
+                  </div>
                 </div>
                 <div className="w-48">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>

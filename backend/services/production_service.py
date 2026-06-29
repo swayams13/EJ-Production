@@ -226,15 +226,15 @@ def calculate_project_duration(project_id, tig_welders, mig_welders, grinders):
             tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
         workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+        prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
         
-        tig_prod = prod.get("TIG Welder", 180)
-        mig_prod = prod.get("MIG Welder", 120)
-        grind_prod = prod.get("Grinder", 80)
+        tig_prod = prod.get("TIG Welder", 22.5)
+        mig_prod = prod.get("MIG Welder", 15.0)
+        grind_prod = prod.get("Grinder", 10.0)
         
-        tig_days = math.ceil(tot_tig / (tig_welders * tig_prod)) if tig_welders > 0 and tig_prod > 0 else (math.ceil(tot_tig) if tot_tig > 0 else 0)
-        mig_days = math.ceil(tot_mig / (mig_welders * mig_prod)) if mig_welders > 0 and mig_prod > 0 else (math.ceil(tot_mig) if tot_mig > 0 else 0)
-        grind_days = math.ceil(tot_grind / (grinders * grind_prod)) if grinders > 0 and grind_prod > 0 else (math.ceil(tot_grind) if tot_grind > 0 else 0)
+        tig_days = math.ceil(tot_tig / (tig_welders * tig_prod * STANDARD_SHIFT_HOURS)) if tig_welders > 0 and tig_prod > 0 else (math.ceil(tot_tig) if tot_tig > 0 else 0)
+        mig_days = math.ceil(tot_mig / (mig_welders * mig_prod * STANDARD_SHIFT_HOURS)) if mig_welders > 0 and mig_prod > 0 else (math.ceil(tot_mig) if tot_mig > 0 else 0)
+        grind_days = math.ceil(tot_grind / (grinders * grind_prod * STANDARD_SHIFT_HOURS)) if grinders > 0 and grind_prod > 0 else (math.ceil(tot_grind) if tot_grind > 0 else 0)
         
         duration = max(tig_days, mig_days, grind_days)
         
@@ -309,10 +309,10 @@ def get_company_capacity_status(target_days=15):
         
         # Get Productivity (now treated as ft/hour)
         workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-        tig_prod = prod.get("TIG Welder", 18) # default 18 ft/hr
-        mig_prod = prod.get("MIG Welder", 12) # default 12 ft/hr
-        grind_prod = prod.get("Grinder", 8) # default 8 ft/hr
+        prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
+        tig_prod = prod.get("TIG Welder", 22.5) # default 22.5 ft/hr
+        mig_prod = prod.get("MIG Welder", 15.0) # default 15.0 ft/hr
+        grind_prod = prod.get("Grinder", 10.0) # default 10.0 ft/hr
         
         req_tig_welders = 0
         req_mig_welders = 0

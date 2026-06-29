@@ -168,7 +168,7 @@ class WorkforceMaster(Base):
     __tablename__ = "workforce_master"
     id = Column(Integer, primary_key=True, index=True)
     resource_type = Column(String, unique=True, index=True)
-    avg_productivity_per_day = Column(Float)
+    avg_productivity_per_hour = Column(Float)
     active = Column(Boolean, default=True)
 
 
@@ -267,9 +267,9 @@ def init_db():
         # Initialize Default Workforce
         if session.query(WorkforceMaster).count() == 0:
             session.add_all([
-                WorkforceMaster(resource_type="TIG Welder", avg_productivity_per_day=180.0),
-                WorkforceMaster(resource_type="MIG Welder", avg_productivity_per_day=120.0),
-                WorkforceMaster(resource_type="Grinder", avg_productivity_per_day=80.0)
+                WorkforceMaster(resource_type="TIG Welder", avg_productivity_per_hour=22.5),
+                WorkforceMaster(resource_type="MIG Welder", avg_productivity_per_hour=15.0),
+                WorkforceMaster(resource_type="Grinder", avg_productivity_per_hour=10.0)
             ])
             try:
                 session.commit()

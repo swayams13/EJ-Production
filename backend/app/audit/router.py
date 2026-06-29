@@ -10,6 +10,10 @@ router = APIRouter(prefix="/api/v1/audit", tags=["Audit"])
 
 @router.get("")
 def get_audit_logs(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer"]))):
+    if current_user.get("role") in ["Production Manager", "GM"]:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Audit Logs access denied for PM and GM")
+        
     logs = db.query(AuditLog, User).outerjoin(User, AuditLog.user_id == User.id).order_by(AuditLog.timestamp.desc()).limit(100).all()
     
     result = []
@@ -28,7 +32,11 @@ def get_audit_logs(db: Session = Depends(get_db), current_user: dict = Depends(r
     return {"success": True, "message": "Audit logs retrieved", "data": result}
 
 @router.get("/excel")
-def download_audit_logs_excel(db: Session = Depends(get_db)):
+def download_audit_logs_excel(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer"]))):
+    if current_user.get("role") in ["Production Manager", "GM"]:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Audit Logs access denied for PM and GM")
+        
     # Note: Not securing via Depends here if requested directly from browser, but ideally it should be.
     # We will fetch all logs for the export
     logs = db.query(AuditLog, User).outerjoin(User, AuditLog.user_id == User.id).order_by(AuditLog.timestamp.desc()).all()

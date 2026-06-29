@@ -3,6 +3,7 @@
 ## Date: 2026-06-28
 
 ### What we did today:
+- **Role-based Audit Log Access:** Revoked access to the System Audit Logs module specifically for the "Production Manager" and "GM" roles. This applies to both frontend sidebar visibility and direct backend API protection.
 - **Temporary Access Bypass:** Removed all role-based restrictions from the frontend sidebar and backend endpoints. All users now have full visibility and access to every module across the application, pending a future RBAC overhaul.
 - **Planning Dashboard Optimization:** Fixed 4-Week Capacity Forecast to use dynamic real-world calendar date ranges. Modified the Master Schedule to display `quotation_no` (Project Code) instead of the customer details to keep it cleaner.
 - **Smart Scheduler Automation:** Overhauled the Daily Scheduler to become a "seamless" enterprise-grade system. It now automatically calculates and auto-assigns the daily goals upon opening the page if they haven't been assigned yet, without forcing the user to manually click options.

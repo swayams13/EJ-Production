@@ -9,9 +9,11 @@
 
 ### Problems faced:
 - The backend required a hard restart without active user interaction to successfully parse the migration script.
+- The Production Entry API endpoints were erroneously attributing `System/Unknown` in the Audit Logs because they were tying the log to the optional physical operator instead of the authenticated user submitting the form.
 
 ### How we solved them:
 - Discovered that running uvicorn explicitly via `python3 -m uvicorn backend.main:app` out of the root directory seamlessly handled module paths and resolved `No module named 'backend'` errors.
+- Modified the production routing endpoints to extract the active session's `current_user["username"]`, query their exact database ID, and correctly bind that identity to the Audit Log transaction.
 
 ### What needs to be done next session:
 - Finalize reporting features, potentially filtering projects/capacity based on Company vs. Contractor.

@@ -61,8 +61,11 @@ def add_transaction(process_id: int, tx: TransactionCreate, db: Session = Depend
     )
     db.add(log)
     
+    db_user = db.query(User).filter_by(username=current_user["username"]).first() if current_user else None
+    
     audit = AuditLog(
-        user_id=tx.operator_id,
+        user_id=db_user.id if db_user else None,
+        username=current_user["username"] if current_user else None,
         action="Update",
         table_name="part_processes",
         record_id=proc.id,
@@ -118,8 +121,11 @@ def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get
     )
     db.add(log)
     
+    db_user = db.query(User).filter_by(username=current_user["username"]).first() if current_user else None
+    
     audit = AuditLog(
-        user_id=tx.operator_id,
+        user_id=db_user.id if db_user else None,
+        username=current_user["username"] if current_user else None,
         action="Update",
         table_name="welding_logs",
         record_id=req_id,

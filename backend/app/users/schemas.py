@@ -10,7 +10,3 @@ class UserCreate(BaseModel):
     skill: Optional[str] = None
     department: Optional[str] = None
     base_productivity: Optional[float] = None
-    access_modules: Optional[str] = "[]"
-
-class UserPermissionsUpdate(BaseModel):
-    access_modules: str

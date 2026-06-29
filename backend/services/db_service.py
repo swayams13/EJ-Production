@@ -32,7 +32,6 @@ class User(Base):
     skill = Column(String, nullable=True)
     department = Column(String, nullable=True)
     base_productivity = Column(Float, nullable=True)
-    access_modules = Column(Text, nullable=True, default="[]")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -249,7 +248,6 @@ def init_db():
         "ALTER TABLE users ADD COLUMN skill VARCHAR;",
         "ALTER TABLE users ADD COLUMN department VARCHAR;",
         "ALTER TABLE users ADD COLUMN base_productivity FLOAT;",
-        "ALTER TABLE users ADD COLUMN access_modules TEXT DEFAULT '[]';",
         "ALTER TABLE welding_master ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
         "ALTER TABLE project_production_lines ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
         "ALTER TABLE audit_logs ADD COLUMN username VARCHAR;"
@@ -264,26 +262,6 @@ def init_db():
         
     session = SessionLocal()
     try:
-        # Initialize Default Admin User
-        if session.query(User).count() == 0:
-            admin_user = os.getenv("ADMIN_USERNAME")
-            admin_pass = os.getenv("ADMIN_PASSWORD")
-            if admin_user and admin_pass:
-                from passlib.context import CryptContext
-                pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-                session.add(User(
-                    username=admin_user,
-                    hashed_password=pwd_context.hash(admin_pass),
-                    full_name="Admin User",
-                    role="Admin",
-                    department="Management",
-                    base_productivity=0
-                ))
-                try:
-                    session.commit()
-                except IntegrityError:
-                    session.rollback()
-
         # Initialize Default Workforce
         if session.query(WorkforceMaster).count() == 0:
             session.add_all([

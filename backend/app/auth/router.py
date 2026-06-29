@@ -77,13 +77,9 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         print(f"Failed to write audit log: {e}")
         db.rollback()
         
-    access_modules = "[]"
-    if 'user' in locals() and user:
-        access_modules = user.access_modules
-
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": req.username, "role": role}, expires_delta=access_token_expires
     )
     
-    return {"access_token": access_token, "token_type": "bearer", "role": role, "access_modules": access_modules}
+    return {"access_token": access_token, "token_type": "bearer", "role": role}

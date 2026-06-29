@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.services.db_service import get_db, User
-from backend.app.users.schemas import UserCreate, UserPermissionsUpdate
+from backend.app.users.schemas import UserCreate
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -12,7 +12,7 @@ from backend.app.auth.rbac import require_roles
 @router.get("")
 def get_users(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"]))):
     users = db.query(User).all()
-    result = [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username, "experience": u.experience, "skill": u.skill, "department": u.department, "base_productivity": u.base_productivity, "access_modules": u.access_modules} for u in users]
+    result = [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username, "experience": u.experience, "skill": u.skill, "department": u.department, "base_productivity": u.base_productivity} for u in users]
     return {"success": True, "message": "Users retrieved", "data": result}
 
 @router.post("")
@@ -39,19 +39,8 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         experience=user.experience,
         skill=user.skill,
         department=user.department,
-        base_productivity=user.base_productivity,
-        access_modules=user.access_modules
+        base_productivity=user.base_productivity
     )
     db.add(new_user)
     db.commit()
     return {"success": True, "message": "User created successfully", "data": {"id": new_user.id}}
-
-@router.put("/{user_id}/permissions")
-def update_user_permissions(user_id: int, req: UserPermissionsUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin"]))):
-    user = db.query(User).filter_by(id=user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    user.access_modules = req.access_modules
-    db.commit()
-    return {"success": True, "message": "Permissions updated successfully"}

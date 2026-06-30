@@ -1,5 +1,24 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-06-30
+
+### What we did today:
+- **Bulletproof DJ Resource Allocation:** Implemented an unconditional override for all Dismantling Joint (DJ) simulations. Whether reading from explicitly added DJ data or falling back to EJ templates, the engine now forcefully zeroes out TIG welders/feet and securely channels 100% of the workload into MIG calculations, perfectly aligning with backend dashboard metrics and resolving UI inconsistencies.
+- **Operator Deletion Integrity:** Comprehensive repair of the operator hard-deletion workflow. Hardened the database backend to proactively intercept and wipe all historical `attendance_logs` and `daily_task_assignments` tethered to an operator, while safely anonymizing their `audit_logs` and `production_logs`. This comprehensively resolves all PostgreSQL foreign key constraint exceptions.
+- **Project Planning Pipeline:** Added a brand-new "Planning" state to the Edit Projects panel. Updated the Executive Capacity Dashboard to specifically segregate and display "Planning Pending Feet" in a distinct sky-blue UI block, cleanly isolating upcoming scheduled workload away from immediate active demands.
+
+### Problems faced:
+- The backend's fallback logic for DJ projects broke when actual DJ entries were explicitly added to the master database with data accidentally entered in the TIG columns (replicating old company habits). The system accurately read the new master rows instead of triggering the fallback, which re-introduced TIG welder requirements.
+- Hard-deleting an operator triggered `ForeignKeyViolation` database crashes. It turned out PostgreSQL was violently rejecting the deletion because the operator had strict requirements tied to the new Attendance and Daily Tasks models.
+
+### How we solved them:
+- Removed the conditional fallback logic entirely and implemented a hard mathematical override across all three simulation endpoints (`simulate`, `simulate_resources`, `simulate_duration`) and the production line synchronization. The system no longer cares what column DJ feet are stored in—if the type is DJ, it always diverts the output entirely to MIG.
+- Mapped out every single table referencing `users.id` and updated the deletion route to perform an exhaustive, sequential cascading sweep (unlinking where `nullable=True` and deleting where `nullable=False`) immediately before deleting the user object.
+
+### What needs to be done next session:
+- Finalize reporting features, potentially filtering projects/capacity based on Company vs. Contractor.
+- Move towards Phase 7 (Material Intelligence Engine) and complete testing on production floors.
+
 ## Date: 2026-06-29
 
 ### What we did today:

@@ -76,13 +76,15 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
         
     try:
-        from backend.services.db_service import WeldingLog, ProductionLog, AttendanceLog
+        from backend.services.db_service import WeldingLog, ProductionLog, AttendanceLog, DailyTaskAssignment, AuditLog
         # Nullify references so historical production logs aren't deleted when an operator is removed
         db.query(WeldingLog).filter(WeldingLog.operator_id == user.id).update({WeldingLog.operator_id: None})
         db.query(ProductionLog).filter(ProductionLog.operator_id == user.id).update({ProductionLog.operator_id: None})
+        db.query(AuditLog).filter(AuditLog.user_id == user.id).update({AuditLog.user_id: None})
         
-        # Delete attendance logs since user_id is non-nullable and they are hard-deleting the user
+        # Delete attendance logs and daily task assignments since user_id is non-nullable
         db.query(AttendanceLog).filter(AttendanceLog.user_id == user.id).delete(synchronize_session=False)
+        db.query(DailyTaskAssignment).filter(DailyTaskAssignment.user_id == user.id).delete(synchronize_session=False)
         
         db.delete(user)
         db.commit()

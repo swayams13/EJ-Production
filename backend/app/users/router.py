@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.services.db_service import get_db, User
-from backend.app.users.schemas import UserCreate
+from backend.app.users.schemas import UserCreate, UserUpdate
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")

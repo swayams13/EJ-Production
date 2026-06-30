@@ -77,6 +77,20 @@ export default function Dashboard() {
         </div>
       )}
 
+      {((data.plan_tig && data.plan_tig > 0) || (data.plan_mig && data.plan_mig > 0) || (data.plan_grind && data.plan_grind > 0) || (data.plan_dj && data.plan_dj > 0)) && (
+        <div className="mb-8">
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-sky-600 mb-3 uppercase tracking-wide">Planning Pending Feet (Excluded from Pending)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <MetricCard title="Planning TIG (ft)" value={Math.round((data.plan_tig || 0) * 10) / 10} />
+              <MetricCard title="Planning DJ (ft)" value={Math.round((data.plan_dj || 0) * 10) / 10} />
+              <MetricCard title="Planning MIG (ft)" value={Math.round((data.plan_mig || 0) * 10) / 10} />
+              <MetricCard title="Planning Grinding (sq ft)" value={Math.round((data.plan_grind || 0) * 10) / 10} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {data.overtime && (
         <div className="mb-12">
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">

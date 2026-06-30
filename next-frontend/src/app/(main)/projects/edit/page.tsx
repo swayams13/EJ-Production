@@ -260,10 +260,12 @@ export default function EditProjects() {
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
                   >
+                    <option value="">Select Status</option>
                     <option value="Active">Active</option>
                     <option value="Hold">Hold</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="Planning">Planning</option>
                     <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
                   <p className="text-xs text-slate-500 mt-1">Status changes affect capacity metrics on dashboards.</p>
                 </div>

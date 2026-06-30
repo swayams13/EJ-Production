@@ -329,6 +329,11 @@ def get_company_capacity_status(target_days=15):
         hold_mig = 0.0
         hold_grind = 0.0
         
+        plan_tig = 0.0
+        plan_dj = 0.0
+        plan_mig = 0.0
+        plan_grind = 0.0
+        
         total_estimated_days = 0
         
         active_projects_count = 0
@@ -372,6 +377,11 @@ def get_company_capacity_status(target_days=15):
                     hold_dj += proj_dj
                     hold_mig += proj_mig
                     hold_grind += proj_grind
+                elif p.status == "Planning":
+                    plan_tig += proj_tig
+                    plan_dj += proj_dj
+                    plan_mig += proj_mig
+                    plan_grind += proj_grind
                 else:
                     tot_tig += proj_tig
                     tot_dj += proj_dj
@@ -468,6 +478,10 @@ def get_company_capacity_status(target_days=15):
             "hold_dj": hold_dj,
             "hold_mig": hold_mig,
             "hold_grind": hold_grind,
+            "plan_tig": plan_tig,
+            "plan_dj": plan_dj,
+            "plan_mig": plan_mig,
+            "plan_grind": plan_grind,
             "total_estimated_days": total_estimated_days,
             "pool": {
                 "tig": pool.total_tig_welders,

@@ -232,7 +232,18 @@ def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
     master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     
     for b in req.bellows:
-        m = master_data.get((b.size, getattr(b, 'type', 'EJ')))
+        b_type = getattr(b, 'type', 'EJ')
+        m = master_data.get((b.size, b_type))
+        
+        # Fallback to EJ master data if DJ is not explicitly in master table
+        if not m and b_type == 'DJ':
+            m = master_data.get((b.size, 'EJ'))
+            if m:
+                # For DJ, shift TIG feet to MIG feet
+                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
+                continue
+                
         if m:
             tot_tig += (m.tig_feet or 0) * b.qty
             tot_mig += (m.mig_feet or 0) * b.qty

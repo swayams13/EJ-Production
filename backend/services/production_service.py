@@ -175,9 +175,20 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
             j_type = item.get('type', 'EJ')
             m = master_data.get((size, j_type))
             
-            tig = m.tig_feet * qty if m else 0
-            mig = m.mig_feet * qty if m else 0
-            grind = m.grinding_feet * qty if m else 0
+            tig = 0
+            mig = 0
+            grind = 0
+            
+            if not m and j_type == 'DJ':
+                m_ej = master_data.get((size, 'EJ'))
+                if m_ej:
+                    tig = 0
+                    mig = ((m_ej.tig_feet or 0) + (m_ej.mig_feet or 0)) * qty
+                    grind = (m_ej.grinding_feet or 0) * qty
+            elif m:
+                tig = (m.tig_feet or 0) * qty
+                mig = (m.mig_feet or 0) * qty
+                grind = (m.grinding_feet or 0) * qty
             
             pn_rating = item.get('pn_rating')
             
@@ -281,11 +292,12 @@ def calculate_required_resources_for_deadline(project_id, target_days):
             tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
         workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+        prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
         
-        tig_prod = prod.get("TIG Welder", 180)
-        mig_prod = prod.get("MIG Welder", 120)
-        grind_prod = prod.get("Grinder", 80)
+        STANDARD_SHIFT_HOURS = 8
+        tig_prod = prod.get("TIG Welder", 22.5) * STANDARD_SHIFT_HOURS
+        mig_prod = prod.get("MIG Welder", 15.0) * STANDARD_SHIFT_HOURS
+        grind_prod = prod.get("Grinder", 10.0) * STANDARD_SHIFT_HOURS
         
         effective_target_days = max(1, target_days)
         req_tig = math.ceil(tot_tig / (effective_target_days * tig_prod)) if tig_prod > 0 else 0

@@ -334,16 +334,16 @@ def get_company_capacity_status(target_days=15):
             active_projects_count += 1
             lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
             if lines:
-                proj_tig = sum((l.tig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'EJ')
-                proj_dj = sum((l.mig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'DJ')
-                proj_mig = sum((l.mig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'EJ')
+                proj_tig = sum((l.tig_feet or 0) for l in lines if (getattr(l, 'joint_type', None) or 'EJ') == 'EJ')
+                proj_dj = sum((l.mig_feet or 0) for l in lines if (getattr(l, 'joint_type', None) or 'EJ') == 'DJ')
+                proj_mig = sum((l.mig_feet or 0) for l in lines if (getattr(l, 'joint_type', None) or 'EJ') == 'EJ')
                 proj_grind = sum((l.grinding_feet or 0) for l in lines)
                 
                 from backend.services.db_service import WeldingLog
                 line_ids = [l.id for l in lines]
                 if line_ids:
                     logs = session.query(WeldingLog).filter(WeldingLog.production_line_id.in_(line_ids)).all()
-                    line_map = {l.id: getattr(l, 'joint_type', 'EJ') for l in lines}
+                    line_map = {l.id: (getattr(l, 'joint_type', None) or 'EJ') for l in lines}
                     
                     proj_tig = max(0, proj_tig - sum(l.feet_done for l in logs if l.process_type == "TIG" and line_map.get(l.production_line_id) == "EJ"))
                     proj_dj = max(0, proj_dj - sum(l.feet_done for l in logs if l.process_type == "MIG" and line_map.get(l.production_line_id) == "DJ"))

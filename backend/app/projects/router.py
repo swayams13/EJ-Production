@@ -297,7 +297,16 @@ def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db
     tot_tig, tot_mig, tot_grind = 0, 0, 0
     master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     for b in req.bellows:
-        m = master_data.get((b.size, getattr(b, 'type', 'EJ') or 'EJ'))
+        b_type = getattr(b, 'type', 'EJ')
+        m = master_data.get((b.size, b_type))
+        
+        if not m and b_type == 'DJ':
+            m = master_data.get((b.size, 'EJ'))
+            if m:
+                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
+                continue
+                
         if m:
             tot_tig += (m.tig_feet or 0) * b.qty
             tot_mig += (m.mig_feet or 0) * b.qty
@@ -332,17 +341,27 @@ def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_
     tot_tig, tot_mig, tot_grind = 0, 0, 0
     master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     for b in req.bellows:
-        m = master_data.get((b.size, getattr(b, 'type', 'EJ') or 'EJ'))
+        b_type = getattr(b, 'type', 'EJ')
+        m = master_data.get((b.size, b_type))
+        
+        if not m and b_type == 'DJ':
+            m = master_data.get((b.size, 'EJ'))
+            if m:
+                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
+                continue
+                
         if m:
             tot_tig += (m.tig_feet or 0) * b.qty
             tot_mig += (m.mig_feet or 0) * b.qty
             tot_grind += (m.grinding_feet or 0) * b.qty
             
     workforce = db.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-    tig_prod = prod.get("TIG Welder", 180)
-    mig_prod = prod.get("MIG Welder", 120)
-    grind_prod = prod.get("Grinder", 80)
+    prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
+    STANDARD_SHIFT_HOURS = 8
+    tig_prod = prod.get("TIG Welder", 22.5) * STANDARD_SHIFT_HOURS
+    mig_prod = prod.get("MIG Welder", 15.0) * STANDARD_SHIFT_HOURS
+    grind_prod = prod.get("Grinder", 10.0) * STANDARD_SHIFT_HOURS
     
     target_days = 15
     if req.target_date:
@@ -350,9 +369,9 @@ def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_
         if days_away > 0:
             target_days = days_away
             
-    req_tig = math.ceil(tot_tig / (tig_prod * target_days)) if tig_prod > 0 else 0
-    req_mig = math.ceil(tot_mig / (mig_prod * target_days)) if mig_prod > 0 else 0
-    req_grind = math.ceil(tot_grind / (grind_prod * target_days)) if grind_prod > 0 else 0
+    req_tig = math.ceil(tot_tig / (target_days * tig_prod)) if tig_prod > 0 else 0
+    req_mig = math.ceil(tot_mig / (target_days * mig_prod)) if mig_prod > 0 else 0
+    req_grind = math.ceil(tot_grind / (target_days * grind_prod)) if grind_prod > 0 else 0
     
     return {"success": True, "message": "Resources simulated", "data": {
         "assigned_tig": req_tig,

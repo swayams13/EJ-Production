@@ -75,6 +75,15 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    db.delete(user)
-    db.commit()
-    return {"success": True, "message": "User deleted successfully"}
+    try:
+        from backend.services.db_service import WeldingLog, ProductionLog
+        # Nullify references so historical production logs aren't deleted when an operator is removed
+        db.query(WeldingLog).filter(WeldingLog.operator_id == user.id).update({WeldingLog.operator_id: None})
+        db.query(ProductionLog).filter(ProductionLog.operator_id == user.id).update({ProductionLog.operator_id: None})
+        
+        db.delete(user)
+        db.commit()
+        return {"success": True, "message": "User deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Cannot delete user: {str(e)}")

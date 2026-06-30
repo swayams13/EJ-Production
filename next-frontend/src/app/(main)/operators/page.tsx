@@ -88,12 +88,18 @@ export default function OperatorsPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this operator?")) return;
     try {
-      await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users/${id}`, {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users/${id}`, {
         method: "DELETE"
       });
-      fetchOperators();
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`Failed to delete: ${errData.detail || "Unknown error"}`);
+      } else {
+        fetchOperators();
+      }
     } catch (err) {
       console.error(err);
+      alert("Failed to delete operator. Check your connection.");
     }
   };
 

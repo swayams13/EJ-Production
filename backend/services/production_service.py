@@ -182,13 +182,17 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
             if not m and j_type == 'DJ':
                 m_ej = master_data.get((size, 'EJ'))
                 if m_ej:
+                    m = m_ej
+                    
+            if m:
+                if j_type == 'DJ':
                     tig = 0
-                    mig = ((m_ej.tig_feet or 0) + (m_ej.mig_feet or 0)) * qty
-                    grind = (m_ej.grinding_feet or 0) * qty
-            elif m:
-                tig = (m.tig_feet or 0) * qty
-                mig = (m.mig_feet or 0) * qty
-                grind = (m.grinding_feet or 0) * qty
+                    mig = ((m.tig_feet or 0) + (m.mig_feet or 0)) * qty
+                    grind = (m.grinding_feet or 0) * qty
+                else:
+                    tig = (m.tig_feet or 0) * qty
+                    mig = (m.mig_feet or 0) * qty
+                    grind = (m.grinding_feet or 0) * qty
             
             pn_rating = item.get('pn_rating')
             

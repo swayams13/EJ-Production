@@ -235,19 +235,17 @@ def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
         b_type = getattr(b, 'type', 'EJ')
         m = master_data.get((b.size, b_type))
         
-        # Fallback to EJ master data if DJ is not explicitly in master table
         if not m and b_type == 'DJ':
             m = master_data.get((b.size, 'EJ'))
-            if m:
-                # For DJ, shift TIG feet to MIG feet
-                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-                continue
                 
         if m:
-            tot_tig += (m.tig_feet or 0) * b.qty
-            tot_mig += (m.mig_feet or 0) * b.qty
-            tot_grind += (m.grinding_feet or 0) * b.qty
+            if b_type == 'DJ':
+                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
+            else:
+                tot_tig += (m.tig_feet or 0) * b.qty
+                tot_mig += (m.mig_feet or 0) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
             
     workforce = db.query(WorkforceMaster).all()
     prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
@@ -302,15 +300,15 @@ def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db
         
         if not m and b_type == 'DJ':
             m = master_data.get((b.size, 'EJ'))
-            if m:
-                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-                continue
                 
         if m:
-            tot_tig += (m.tig_feet or 0) * b.qty
-            tot_mig += (m.mig_feet or 0) * b.qty
-            tot_grind += (m.grinding_feet or 0) * b.qty
+            if b_type == 'DJ':
+                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
+            else:
+                tot_tig += (m.tig_feet or 0) * b.qty
+                tot_mig += (m.mig_feet or 0) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
             
     workforce = db.query(WorkforceMaster).all()
     prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
@@ -346,15 +344,15 @@ def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_
         
         if not m and b_type == 'DJ':
             m = master_data.get((b.size, 'EJ'))
-            if m:
-                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-                continue
                 
         if m:
-            tot_tig += (m.tig_feet or 0) * b.qty
-            tot_mig += (m.mig_feet or 0) * b.qty
-            tot_grind += (m.grinding_feet or 0) * b.qty
+            if b_type == 'DJ':
+                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
+            else:
+                tot_tig += (m.tig_feet or 0) * b.qty
+                tot_mig += (m.mig_feet or 0) * b.qty
+                tot_grind += (m.grinding_feet or 0) * b.qty
             
     workforce = db.query(WorkforceMaster).all()
     prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}

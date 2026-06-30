@@ -44,3 +44,37 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     return {"success": True, "message": "User created successfully", "data": {"id": new_user.id}}
+
+@router.put("/{user_id}")
+def update_user(user_id: int, req: UserUpdate, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if req.full_name is not None:
+        user.full_name = req.full_name
+    if req.role is not None:
+        user.role = req.role
+    if req.department is not None:
+        user.department = req.department
+    if req.skill is not None:
+        user.skill = req.skill
+    if req.experience is not None:
+        user.experience = req.experience
+    if req.base_productivity is not None:
+        user.base_productivity = req.base_productivity
+    if req.password:
+        user.hashed_password = pwd_context.hash(req.password)
+        
+    db.commit()
+    return {"success": True, "message": "User updated successfully"}
+
+@router.delete("/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    db.delete(user)
+    db.commit()
+    return {"success": True, "message": "User deleted successfully"}

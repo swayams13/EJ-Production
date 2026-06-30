@@ -16,6 +16,7 @@ export default function OperatorsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const fetchOperators = () => {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`)
@@ -35,8 +36,12 @@ export default function OperatorsPage() {
     setSuccess("");
 
     try {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`, {
-        method: "POST",
+      const url = editingId 
+        ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users/${editingId}`
+        : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`;
+      
+      const res = await apiFetch(url, {
+        method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           full_name: fullName,
@@ -54,20 +59,41 @@ export default function OperatorsPage() {
         if (Array.isArray(errMsg)) {
           errMsg = errMsg.map((e: any) => `${e.loc.join('.')}: ${e.msg}`).join(' | ');
         }
-        throw new Error(errMsg || "Failed to create operator");
+        throw new Error(errMsg || "Failed to save operator");
       }
 
-      setSuccess("Operator profile created successfully!");
+      setSuccess(editingId ? "Operator updated successfully!" : "Operator profile created successfully!");
       setFullName("");
       setExperience("");
       setBaseProductivity("");
+      setEditingId(null);
       
-      // Refresh the list
       fetchOperators();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (op: any) => {
+    setEditingId(op.id);
+    setFullName(op.name || "");
+    setDepartment(op.department || "Welding");
+    setSkill(op.skill || "TIG Welder");
+    setExperience(op.experience || "");
+    setBaseProductivity(op.base_productivity ? op.base_productivity.toString() : "");
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this operator?")) return;
+    try {
+      await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users/${id}`, {
+        method: "DELETE"
+      });
+      fetchOperators();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -82,8 +108,11 @@ export default function OperatorsPage() {
         {/* Add Operator Form */}
         <div className="md:col-span-1">
           <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800">Add Operator</h2>
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-800">{editingId ? "Edit Operator" : "Add Operator"}</h2>
+              {editingId && (
+                <button onClick={() => { setEditingId(null); setFullName(""); setBaseProductivity(""); setExperience(""); }} className="text-sm text-slate-500 hover:text-slate-800 font-medium">Cancel Edit</button>
+              )}
             </div>
             <div className="p-6">
               {error && (
@@ -139,7 +168,7 @@ export default function OperatorsPage() {
                 <div className="pt-2">
                   <button type="submit" disabled={submitting} 
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-md transition-all disabled:opacity-50 uppercase tracking-wide">
-                    {submitting ? "Saving..." : "Create Profile"}
+                    {submitting ? "Saving..." : (editingId ? "Update Profile" : "Create Profile")}
                   </button>
                 </div>
               </form>
@@ -167,12 +196,13 @@ export default function OperatorsPage() {
                       <p className="text-slate-500 text-sm font-medium">@{op.username} • {op.department || 'No Dept'} • {op.skill || 'No Skill'}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider block mb-1 text-center">
-                      {op.role}
-                    </span>
+                  <div className="text-right flex flex-col items-end gap-2">
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEdit(op)} className="text-blue-500 hover:text-blue-700 text-sm font-bold bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded">Edit</button>
+                      <button onClick={() => handleDelete(op.id)} className="text-rose-500 hover:text-rose-700 text-sm font-bold bg-rose-50 hover:bg-rose-100 px-3 py-1 rounded">Delete</button>
+                    </div>
                     {op.base_productivity && (
-                      <span className="text-xs font-bold text-emerald-600">
+                      <span className="text-xs font-bold text-emerald-600 mt-1">
                         Target: {op.base_productivity}/day
                       </span>
                     )}

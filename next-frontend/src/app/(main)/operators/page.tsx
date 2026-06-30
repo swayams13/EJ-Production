@@ -19,7 +19,7 @@ export default function OperatorsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const fetchOperators = () => {
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`)
       .then(res => res.json())
       .then(resData => setOperators(resData.data.filter((u: any) => u.role === "Operator")))
       .catch(err => console.error("Failed to fetch operators:", err));
@@ -37,8 +37,8 @@ export default function OperatorsPage() {
 
     try {
       const url = editingId 
-        ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users/${editingId}`
-        : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users`;
+        ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users/${editingId}`
+        : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`;
       
       const res = await apiFetch(url, {
         method: editingId ? "PUT" : "POST",
@@ -88,7 +88,7 @@ export default function OperatorsPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this operator?")) return;
     try {
-      await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/users/${id}`, {
+      await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users/${id}`, {
         method: "DELETE"
       });
       fetchOperators();

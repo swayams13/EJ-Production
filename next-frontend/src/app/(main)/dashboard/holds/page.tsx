@@ -9,7 +9,7 @@ export default function HoldsDashboard() {
 
   const fetchHolds = () => {
     setLoading(true);
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/holds`)
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/holds`)
       .then(res => res.json())
       .then(data => {
         setHolds(data.data || []);
@@ -27,7 +27,7 @@ export default function HoldsDashboard() {
 
   const resumeProject = async (projectId: number) => {
     try {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects/${projectId}`, {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Active' })

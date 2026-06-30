@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4500';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
 
 export default function SchedulerPage() {
     const [assignments, setAssignments] = useState<any[]>([]);

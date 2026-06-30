@@ -21,8 +21,8 @@ export default function PlanningDashboard() {
   useEffect(() => {
     const fetchPlanning = () => {
       Promise.all([
-        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/projects`).then(res => res.json()),
-        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/planning`).then(res => res.json())
+        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`).then(res => res.json()),
+        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/planning`).then(res => res.json())
       ])
       .then(([projectsRes, metricsData]) => {
         setProjects(projectsRes.data || []);

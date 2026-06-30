@@ -17,9 +17,9 @@ export default function MasterData() {
   const fetchData = () => {
     setLoading(true);
     Promise.all([
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/welding`).then(r => r.json()),
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce`).then(r => r.json()),
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`).then(r => r.json())
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/welding`).then(r => r.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/workforce`).then(r => r.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/pool`).then(r => r.json())
     ]).then(([weldingRes, workforceRes, poolRes]) => {
       setData(weldingRes.data || []);
       setWorkforce(workforceRes.data || []);
@@ -37,7 +37,7 @@ export default function MasterData() {
     setSyncingEJ(true);
     setMessage("");
     try {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync/ej`, { method: "POST" });
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/sync/ej`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
       setMessage("EJ " + json.message);
@@ -53,7 +53,7 @@ export default function MasterData() {
     setSyncingDJ(true);
     setMessage("");
     try {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync/dj`, { method: "POST" });
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/sync/dj`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
       setMessage("DJ " + json.message);
@@ -69,7 +69,7 @@ export default function MasterData() {
     setSyncingAll(true);
     setMessage("");
     try {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/sync/all`, { method: "POST" });
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/sync/all`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
       setMessage(json.message);
@@ -82,7 +82,7 @@ export default function MasterData() {
   };
 
   const updateWorkforce = async (id: number, productivity: number) => {
-    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/workforce/${id}`, {
+    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/workforce/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productivity })
@@ -93,7 +93,7 @@ export default function MasterData() {
 
   const updatePool = async (e: React.FormEvent) => {
     e.preventDefault();
-    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/master/pool`, {
+    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/pool`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(pool)

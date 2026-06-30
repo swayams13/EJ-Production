@@ -17,7 +17,7 @@ export default function Login() {
 
     try {
       // Pointing to FastAPI backend
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/auth/login`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),

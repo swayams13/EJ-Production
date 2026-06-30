@@ -9,7 +9,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchDashboard = () => {
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/status`)
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/status`)
         .then((res) => res.json())
         .then((resData) => {
           setData(resData.data);
@@ -24,7 +24,7 @@ export default function Dashboard() {
   }, []);
 
   const handleDownloadExcel = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4500"}/api/v1/dashboard/export`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/export`;
   };
 
   if (loading) return <div className="text-slate-500">Loading dashboard...</div>;

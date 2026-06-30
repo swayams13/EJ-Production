@@ -103,6 +103,25 @@ try:
             WHERE process_type = 'TIG' 
             AND production_line_id IN (SELECT id FROM project_production_lines WHERE joint_type = 'DJ')
         """))
+        
+        # Migrate welders for DJ-only projects
+        conn.execute(text("""
+            UPDATE project_resource_assignments
+            SET assigned_mig_welders = COALESCE(assigned_mig_welders, 0) + COALESCE(assigned_tig_welders, 0),
+                assigned_tig_welders = 0
+            WHERE assigned_tig_welders > 0
+            AND project_id IN (
+                SELECT project_id 
+                FROM project_production_lines 
+                WHERE joint_type = 'DJ'
+            ) 
+            AND project_id NOT IN (
+                SELECT project_id 
+                FROM project_production_lines 
+                WHERE joint_type != 'DJ' OR joint_type IS NULL
+            )
+        """))
+        
         conn.commit()
 except Exception:
     pass

@@ -328,9 +328,9 @@ export default function OperatorEntry() {
             </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {(requirements.find(r => r.id.toString() === requirementId)?.type === "DJ" ? ["TIG"] : ["TIG", "MIG", "Grinding"]).map(type => {
+                {(requirements.find(r => r.id.toString() === requirementId)?.type === "DJ" ? ["MIG"] : ["TIG", "MIG", "Grinding"]).map(type => {
                   const isDJ = requirements.find(r => r.id.toString() === requirementId)?.type === "DJ";
-                  const displayType = (isDJ && type === "TIG") ? "Welding" : type;
+                  const displayType = (isDJ && type === "MIG") ? "Welding" : type;
                   const target = weldingSummary?.targets?.[type] || 0;
                   const completed = weldingSummary?.completed?.[type] || 0;
                   const pending = Math.max(0, target - completed);

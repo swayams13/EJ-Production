@@ -87,6 +87,25 @@ try:
         conn.commit()
 except Exception:
     pass
+
+# Migrate DJ feet from TIG to MIG
+try:
+    from backend.services.db_service import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        # Move feet in production lines
+        conn.execute(text("UPDATE project_production_lines SET mig_feet = COALESCE(mig_feet, 0) + COALESCE(tig_feet, 0), tig_feet = 0 WHERE joint_type = 'DJ' AND tig_feet > 0"))
+        
+        # Update process type in welding logs
+        conn.execute(text("""
+            UPDATE welding_logs 
+            SET process_type = 'MIG' 
+            WHERE process_type = 'TIG' 
+            AND production_line_id IN (SELECT id FROM project_production_lines WHERE joint_type = 'DJ')
+        """))
+        conn.commit()
+except Exception:
+    pass
 # Dependency
 
 # Models

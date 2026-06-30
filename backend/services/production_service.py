@@ -239,6 +239,9 @@ def calculate_project_duration(project_id, tig_welders, mig_welders, grinders):
         mig_prod = prod.get("MIG Welder", 15.0)
         grind_prod = prod.get("Grinder", 10.0)
         
+        STANDARD_SHIFT_HOURS = 8
+
+        
         tig_days = math.ceil(tot_tig / (tig_welders * tig_prod * STANDARD_SHIFT_HOURS)) if tig_welders > 0 and tig_prod > 0 else (math.ceil(tot_tig) if tot_tig > 0 else 0)
         mig_days = math.ceil(tot_mig / (mig_welders * mig_prod * STANDARD_SHIFT_HOURS)) if mig_welders > 0 and mig_prod > 0 else (math.ceil(tot_mig) if tot_mig > 0 else 0)
         grind_days = math.ceil(tot_grind / (grinders * grind_prod * STANDARD_SHIFT_HOURS)) if grinders > 0 and grind_prod > 0 else (math.ceil(tot_grind) if tot_grind > 0 else 0)

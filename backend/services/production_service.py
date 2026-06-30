@@ -103,9 +103,9 @@ def import_dismantling_joint_master():
                 wm = WeldingMaster(
                     size=size,
                     tig_inches=0.0,
-                    tig_feet=feet, # Assigning to tig_feet for capacity calculation
+                    tig_feet=0.0,
                     mig_inches=0.0,
-                    mig_feet=0.0,
+                    mig_feet=feet, # Assigning to mig_feet for capacity calculation
                     total_welding_inches=0.0,
                     total_welding_feet=feet,
                     grinding_feet=0.0,
@@ -332,8 +332,8 @@ def get_company_capacity_status(target_days=15):
             lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == p.id).all()
             if lines:
                 proj_tig = sum((l.tig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'EJ')
-                proj_dj = sum((l.tig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'DJ')
-                proj_mig = sum((l.tig_feet or 0) for l in lines)
+                proj_dj = sum((l.mig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'DJ')
+                proj_mig = sum((l.mig_feet or 0) for l in lines if getattr(l, 'joint_type', 'EJ') == 'EJ')
                 proj_grind = sum((l.grinding_feet or 0) for l in lines)
                 
                 from backend.services.db_service import WeldingLog
@@ -343,9 +343,9 @@ def get_company_capacity_status(target_days=15):
                     line_map = {l.id: getattr(l, 'joint_type', 'EJ') for l in lines}
                     
                     proj_tig = max(0, proj_tig - sum(l.feet_done for l in logs if l.process_type == "TIG" and line_map.get(l.production_line_id) == "EJ"))
-                    proj_dj = max(0, proj_dj - sum(l.feet_done for l in logs if l.process_type == "TIG" and line_map.get(l.production_line_id) == "DJ"))
+                    proj_dj = max(0, proj_dj - sum(l.feet_done for l in logs if l.process_type == "MIG" and line_map.get(l.production_line_id) == "DJ"))
                     
-                    proj_mig = max(0, proj_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
+                    proj_mig = max(0, proj_mig - sum(l.feet_done for l in logs if l.process_type == "MIG" and line_map.get(l.production_line_id) == "EJ"))
                     proj_grind = max(0, proj_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
                 
                 if p.status == "Hold":
@@ -367,8 +367,8 @@ def get_company_capacity_status(target_days=15):
                 daily_mig_cap = mig_prod * STANDARD_SHIFT_HOURS
                 daily_grind_cap = grind_prod * STANDARD_SHIFT_HOURS
                 
-                p_req_tig = math.ceil((proj_tig + proj_dj) / (proj_target_days * daily_tig_cap)) if proj_target_days > 0 and daily_tig_cap > 0 else 0
-                p_req_mig = math.ceil(proj_mig / (proj_target_days * daily_mig_cap)) if proj_target_days > 0 and daily_mig_cap > 0 else 0
+                p_req_tig = math.ceil(proj_tig / (proj_target_days * daily_tig_cap)) if proj_target_days > 0 and daily_tig_cap > 0 else 0
+                p_req_mig = math.ceil((proj_mig + proj_dj) / (proj_target_days * daily_mig_cap)) if proj_target_days > 0 and daily_mig_cap > 0 else 0
                 p_req_grind = math.ceil(proj_grind / (proj_target_days * daily_grind_cap)) if proj_target_days > 0 and daily_grind_cap > 0 else 0
                 
                 req_tig_welders += p_req_tig
@@ -414,8 +414,8 @@ def get_company_capacity_status(target_days=15):
         
         # Calculate Overtime Predictions
         # 1. Calculate Total Required Hours across all pending active projects
-        total_req_tig_hours = (tot_tig + tot_dj) / tig_prod if tig_prod > 0 else 0
-        total_req_mig_hours = tot_mig / mig_prod if mig_prod > 0 else 0
+        total_req_tig_hours = tot_tig / tig_prod if tig_prod > 0 else 0
+        total_req_mig_hours = (tot_mig + tot_dj) / mig_prod if mig_prod > 0 else 0
         total_req_grind_hours = tot_grind / grind_prod if grind_prod > 0 else 0
         
         # 2. Calculate Standard Available Hours across target_days

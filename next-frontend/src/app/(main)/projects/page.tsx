@@ -144,8 +144,8 @@ export default function ProjectsList() {
                                 </td>
                                 <td className="px-4 py-2 text-sm text-slate-900">{b.size}</td>
                                 <td className="px-4 py-2 text-sm text-slate-600">{b.quantity}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.tig_feet}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.type === 'DJ' ? '-' : b.mig_feet}</td>
+                                <td className="px-4 py-2 text-sm text-slate-600">{b.type === 'DJ' ? '-' : b.tig_feet}</td>
+                                <td className="px-4 py-2 text-sm text-slate-600">{b.mig_feet}</td>
                                 <td className="px-4 py-2 text-sm text-slate-600">{b.type === 'DJ' ? '-' : b.grinding_feet}</td>
                               </tr>
                             ))}

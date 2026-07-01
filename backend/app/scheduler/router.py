@@ -132,9 +132,22 @@ def auto_assign_tasks(
     from backend.services.db_service import ProjectResourceAssignment
     
     for p in projects:
-        total_feet = 0
+        total_tig = 0
+        total_mig = 0
+        total_grind = 0
+        
         for line in p.production_lines:
-            total_feet += (line.tig_feet or 0) + (line.mig_feet or 0) + (line.grinding_feet or 0)
+            jtype = getattr(line, 'joint_type', None) or 'EJ'
+            if jtype == 'DJ':
+                total_mig += (line.mig_feet or 0) + (line.tig_feet or 0)
+            else:
+                total_tig += (line.tig_feet or 0)
+                total_mig += (line.mig_feet or 0)
+            total_grind += (line.grinding_feet or 0)
+            
+        total_feet = total_tig + total_mig + total_grind
+        if total_feet == 0:
+            continue
             
         assignment = db.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == p.id).first()
         target_days = assignment.target_days if assignment and assignment.target_days else 15
@@ -162,21 +175,38 @@ def auto_assign_tasks(
         today_requirement = base_daily_target + backlog
         
         if today_requirement > 0:
+            tig_req = today_requirement * (total_tig / total_feet)
+            mig_req = today_requirement * (total_mig / total_feet)
+            grind_req = today_requirement * (total_grind / total_feet)
+            
             project_requirements.append({
                 "project": p,
-                "remaining_req": today_requirement
+                "remaining_TIG": tig_req,
+                "remaining_MIG": mig_req,
+                "remaining_GRINDING": grind_req
             })
             
     if not project_requirements:
         return {"success": True, "message": "No active projects require pacing assignments today."}
 
     # 2. Assignment Logic
-    VALID_PROCESS_TYPES = ["TIG", "MIG", "GRINDING", "TIG WELDER", "MIG WELDER", "GRINDER"]
     for skill, available_workers in workers_by_skill.items():
-        if not skill or skill.upper() not in VALID_PROCESS_TYPES:
+        if not skill:
             continue
             
-        process_type = skill
+        skill_upper = skill.upper()
+        if "TIG" in skill_upper:
+            req_key = "remaining_TIG"
+            process_type = "TIG"
+        elif "MIG" in skill_upper:
+            req_key = "remaining_MIG"
+            process_type = "MIG"
+        elif "GRIND" in skill_upper:
+            req_key = "remaining_GRINDING"
+            process_type = "Grinding"
+        else:
+            continue
+            
         req_index = 0
         
         for w in available_workers:
@@ -184,12 +214,12 @@ def auto_assign_tasks(
             while w["remaining_capacity"] > 0 and req_index < len(project_requirements):
                 req = project_requirements[req_index]
                 
-                if req["remaining_req"] <= 0:
+                if req[req_key] <= 0:
                     req_index += 1
                     continue
                     
                 # Take whatever is smaller: the worker's remaining shift time, or the project's remaining requirement
-                assigned_feet = min(w["remaining_capacity"], req["remaining_req"])
+                assigned_feet = min(w["remaining_capacity"], req[req_key])
                 
                 assignment = DailyTaskAssignment(
                     project_id=req["project"].id,
@@ -204,9 +234,9 @@ def auto_assign_tasks(
                 
                 w["assigned_feet"] += assigned_feet
                 w["remaining_capacity"] -= assigned_feet
-                req["remaining_req"] -= assigned_feet
+                req[req_key] -= assigned_feet
                 
-                if req["remaining_req"] <= 0:
+                if req[req_key] <= 0:
                     req_index += 1
                     
         # 3. Overtime Assignment (If there are still projects left unassigned in this skill)
@@ -217,12 +247,12 @@ def auto_assign_tasks(
             for w in available_workers:
                 while w["ot_remaining_capacity"] > 0 and req_index < len(project_requirements):
                     req = project_requirements[req_index]
-                    if req["remaining_req"] <= 0:
+                    if req[req_key] <= 0:
                         req_index += 1
                         continue
                         
                     # Worker can do a maximum of 50% extra capacity as overtime
-                    assigned_ot_feet = min(w["ot_remaining_capacity"], req["remaining_req"])
+                    assigned_ot_feet = min(w["ot_remaining_capacity"], req[req_key])
                     
                     assignment = DailyTaskAssignment(
                         project_id=req["project"].id,
@@ -238,9 +268,9 @@ def auto_assign_tasks(
                     
                     w["assigned_feet"] += assigned_ot_feet
                     w["ot_remaining_capacity"] -= assigned_ot_feet
-                    req["remaining_req"] -= assigned_ot_feet
+                    req[req_key] -= assigned_ot_feet
                     
-                    if req["remaining_req"] <= 0:
+                    if req[req_key] <= 0:
                         req_index += 1
 
     db.commit()

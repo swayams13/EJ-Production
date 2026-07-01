@@ -248,18 +248,15 @@ def calculate_project_duration(project_id, tig_welders, mig_welders, grinders):
             tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
         workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
+        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
         
-        tig_prod = prod.get("TIG Welder", 22.5)
-        mig_prod = prod.get("MIG Welder", 15.0)
-        grind_prod = prod.get("Grinder", 10.0)
+        tig_prod = prod.get("TIG Welder", 180.0)
+        mig_prod = prod.get("MIG Welder", 120.0)
+        grind_prod = prod.get("Grinder", 80.0)
         
-        STANDARD_SHIFT_HOURS = 8
-
-        
-        tig_days = math.ceil(tot_tig / (tig_welders * tig_prod * STANDARD_SHIFT_HOURS)) if tig_welders > 0 and tig_prod > 0 else (math.ceil(tot_tig) if tot_tig > 0 else 0)
-        mig_days = math.ceil(tot_mig / (mig_welders * mig_prod * STANDARD_SHIFT_HOURS)) if mig_welders > 0 and mig_prod > 0 else (math.ceil(tot_mig) if tot_mig > 0 else 0)
-        grind_days = math.ceil(tot_grind / (grinders * grind_prod * STANDARD_SHIFT_HOURS)) if grinders > 0 and grind_prod > 0 else (math.ceil(tot_grind) if tot_grind > 0 else 0)
+        tig_days = math.ceil(tot_tig / (tig_welders * tig_prod)) if tig_welders > 0 and tig_prod > 0 else (math.ceil(tot_tig) if tot_tig > 0 else 0)
+        mig_days = math.ceil(tot_mig / (mig_welders * mig_prod)) if mig_welders > 0 and mig_prod > 0 else (math.ceil(tot_mig) if tot_mig > 0 else 0)
+        grind_days = math.ceil(tot_grind / (grinders * grind_prod)) if grinders > 0 and grind_prod > 0 else (math.ceil(tot_grind) if tot_grind > 0 else 0)
         
         duration = max(tig_days, mig_days, grind_days)
         
@@ -296,12 +293,11 @@ def calculate_required_resources_for_deadline(project_id, target_days):
             tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
         workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
+        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
         
-        STANDARD_SHIFT_HOURS = 8
-        tig_prod = prod.get("TIG Welder", 22.5) * STANDARD_SHIFT_HOURS
-        mig_prod = prod.get("MIG Welder", 15.0) * STANDARD_SHIFT_HOURS
-        grind_prod = prod.get("Grinder", 10.0) * STANDARD_SHIFT_HOURS
+        tig_prod = prod.get("TIG Welder", 180.0)
+        mig_prod = prod.get("MIG Welder", 120.0)
+        grind_prod = prod.get("Grinder", 80.0)
         
         effective_target_days = max(1, target_days)
         req_tig = math.ceil(tot_tig / (effective_target_days * tig_prod)) if tig_prod > 0 else 0
@@ -317,7 +313,6 @@ def get_company_capacity_status(target_days=15):
     try:
         # Aggregation of all projects (Exclude completed projects)
         projects = session.query(Project).filter((Project.status != "Completed") | (Project.status == None)).all()
-        STANDARD_SHIFT_HOURS = 8
         
         tot_tig = 0.0
         tot_dj = 0.0
@@ -338,12 +333,12 @@ def get_company_capacity_status(target_days=15):
         
         active_projects_count = 0
         
-        # Get Productivity (now treated as ft/hour)
+        # Get Productivity (now treated as ft/day)
         workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
-        tig_prod = prod.get("TIG Welder", 22.5) # default 22.5 ft/hr
-        mig_prod = prod.get("MIG Welder", 15.0) # default 15.0 ft/hr
-        grind_prod = prod.get("Grinder", 10.0) # default 10.0 ft/hr
+        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+        tig_prod = prod.get("TIG Welder", 180.0)
+        mig_prod = prod.get("MIG Welder", 120.0)
+        grind_prod = prod.get("Grinder", 80.0)
         
         req_tig_welders = 0
         req_mig_welders = 0
@@ -392,9 +387,9 @@ def get_company_capacity_status(target_days=15):
                 proj_target_days = assignment.target_days if assignment and assignment.target_days else target_days
                 
                 # Math based on HOURLY productivity
-                daily_tig_cap = tig_prod * STANDARD_SHIFT_HOURS
-                daily_mig_cap = mig_prod * STANDARD_SHIFT_HOURS
-                daily_grind_cap = grind_prod * STANDARD_SHIFT_HOURS
+                daily_tig_cap = tig_prod
+                daily_mig_cap = mig_prod
+                daily_grind_cap = grind_prod
                 
                 p_req_tig = math.ceil(proj_tig / (proj_target_days * daily_tig_cap)) if proj_target_days > 0 and daily_tig_cap > 0 else 0
                 p_req_mig = math.ceil((proj_mig + proj_dj) / (proj_target_days * daily_mig_cap)) if proj_target_days > 0 and daily_mig_cap > 0 else 0
@@ -437,27 +432,27 @@ def get_company_capacity_status(target_days=15):
             pool = CompanyResourcePool(total_tig_welders=0, total_mig_welders=0, total_grinders=0)
             
         # Daily Capacity
-        daily_tig = pool.total_tig_welders * (tig_prod * STANDARD_SHIFT_HOURS)
-        daily_mig = pool.total_mig_welders * (mig_prod * STANDARD_SHIFT_HOURS)
-        daily_grind = pool.total_grinders * (grind_prod * STANDARD_SHIFT_HOURS)
+        daily_tig = pool.total_tig_welders * tig_prod
+        daily_mig = pool.total_mig_welders * mig_prod
+        daily_grind = pool.total_grinders * grind_prod
         
         # Calculate Overtime Predictions
-        # 1. Calculate Total Required Hours across all pending active projects
-        total_req_tig_hours = tot_tig / tig_prod if tig_prod > 0 else 0
-        total_req_mig_hours = (tot_mig + tot_dj) / mig_prod if mig_prod > 0 else 0
-        total_req_grind_hours = tot_grind / grind_prod if grind_prod > 0 else 0
+        # 1. Calculate Total Required Days across all pending active projects
+        total_req_tig_days = tot_tig / tig_prod if tig_prod > 0 else 0
+        total_req_mig_days = (tot_mig + tot_dj) / mig_prod if mig_prod > 0 else 0
+        total_req_grind_days = tot_grind / grind_prod if grind_prod > 0 else 0
         
-        # 2. Calculate Standard Available Hours across target_days
-        std_avail_tig_hours = pool.total_tig_welders * target_days * STANDARD_SHIFT_HOURS
-        std_avail_mig_hours = pool.total_mig_welders * target_days * STANDARD_SHIFT_HOURS
-        std_avail_grind_hours = pool.total_grinders * target_days * STANDARD_SHIFT_HOURS
+        # 2. Calculate Standard Available Days across target_days
+        std_avail_tig_days = pool.total_tig_welders * target_days
+        std_avail_mig_days = pool.total_mig_welders * target_days
+        std_avail_grind_days = pool.total_grinders * target_days
         
-        # 3. Calculate Total Overtime Hours Needed
-        total_ot_tig = max(0, total_req_tig_hours - std_avail_tig_hours)
-        total_ot_mig = max(0, total_req_mig_hours - std_avail_mig_hours)
-        total_ot_grind = max(0, total_req_grind_hours - std_avail_grind_hours)
+        # 3. Calculate Total Overtime Days Needed
+        total_ot_tig = max(0, total_req_tig_days - std_avail_tig_days)
+        total_ot_mig = max(0, total_req_mig_days - std_avail_mig_days)
+        total_ot_grind = max(0, total_req_grind_days - std_avail_grind_days)
         
-        # 4. Calculate Overtime Per Person
+        # 4. Calculate Overtime Per Person (in days)
         ot_per_tig = total_ot_tig / pool.total_tig_welders if pool.total_tig_welders > 0 else total_ot_tig
         ot_per_mig = total_ot_mig / pool.total_mig_welders if pool.total_mig_welders > 0 else total_ot_mig
         ot_per_grind = total_ot_grind / pool.total_grinders if pool.total_grinders > 0 else total_ot_grind

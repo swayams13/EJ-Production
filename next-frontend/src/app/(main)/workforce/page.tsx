@@ -78,7 +78,7 @@ export default function WorkforceDashboard() {
               >
                 <option value="" disabled>Select a worker...</option>
                 {metrics.map(user => (
-                  <option key={user.user_id} value={user.user_id}>{user.name} ({user.department || 'Unknown'})</option>
+                  <option key={user.user_id} value={user.user_id}>{user.name} ({user.department || user.skill || 'Unknown'})</option>
                 ))}
               </select>
             </div>
@@ -118,7 +118,7 @@ export default function WorkforceDashboard() {
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
                     <th className="py-3 px-4">Name</th>
-                    <th className="py-3 px-4">Primary Skill</th>
+                    <th className="py-3 px-4">Dept / Skill</th>
                     <th className="py-3 px-4">Attendance</th>
                     <th className="py-3 px-4">Efficiency</th>
                     <th className="py-3 px-4">Quality</th>
@@ -130,7 +130,7 @@ export default function WorkforceDashboard() {
                     <tr key={user.user_id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-4 font-bold text-slate-800">{user.name}</td>
                       <td className="py-3 px-4 text-slate-600">
-                        {user.skill || 'Unassigned'}
+                        {user.department || user.skill || 'N/A'} {user.department && user.skill ? `/ ${user.skill}` : ''}
                       </td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-1 rounded text-xs font-bold ${user.attendance_score >= 80 ? 'bg-green-100 text-green-800' : 'bg-rose-100 text-rose-800'}`}>

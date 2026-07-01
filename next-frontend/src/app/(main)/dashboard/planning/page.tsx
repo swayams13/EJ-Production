@@ -77,22 +77,22 @@ export default function PlanningDashboard() {
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Total Scope</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Base Daily Target</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-rose-500 uppercase tracking-wider">Yesterday's Backlog</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-emerald-600 uppercase tracking-wider">Today's Requirement</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">TIG Today</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-blue-600 uppercase tracking-wider">MIG Today</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-emerald-600 uppercase tracking-wider">Grind Today</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
               {(!metrics.pacing_metrics || metrics.pacing_metrics.length === 0) ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">No active projects require pacing.</td>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">No active projects require pacing.</td>
                 </tr>
               ) : (
                 metrics.pacing_metrics.map((p: any) => (
                   <tr key={p.project_id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">{p.project_number}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-slate-600">{p.total_feet} ft</td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-700">{p.base_daily_target} ft</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {p.backlog > 0 ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
@@ -103,8 +103,18 @@ export default function PlanningDashboard() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-emerald-100 text-emerald-800">
-                        {p.today_requirement} ft
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-indigo-50 text-indigo-700">
+                        {p.tig_req} ft
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-blue-50 text-blue-700">
+                        {p.mig_req} ft
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700">
+                        {p.grind_req} ft
                       </span>
                     </td>
                   </tr>

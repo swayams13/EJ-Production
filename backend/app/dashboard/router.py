@@ -134,7 +134,20 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
             late_projects += 1
             
         # Forecasting metrics
-        total_feet = sum((line.tig_feet or 0) + (line.mig_feet or 0) + (line.grinding_feet or 0) for line in p.production_lines)
+        total_tig = 0
+        total_mig = 0
+        total_grind = 0
+        
+        for line in p.production_lines:
+            jtype = getattr(line, 'joint_type', None) or 'EJ'
+            if jtype == 'DJ':
+                total_mig += (line.mig_feet or 0) + (line.tig_feet or 0)
+            else:
+                total_tig += (line.tig_feet or 0)
+                total_mig += (line.mig_feet or 0)
+            total_grind += (line.grinding_feet or 0)
+            
+        total_feet = total_tig + total_mig + total_grind
         progress_pct = MESService.calculate_project_progress(db, p.id)
         remaining_feet = total_feet * (1 - (progress_pct / 100))
         
@@ -192,6 +205,10 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
         backlog = max(0, expected_completed - actual_completed)
         today_requirement = base_daily_target + backlog
         
+        tig_req = today_requirement * (total_tig / total_feet) if total_feet > 0 else 0
+        mig_req = today_requirement * (total_mig / total_feet) if total_feet > 0 else 0
+        grind_req = today_requirement * (total_grind / total_feet) if total_feet > 0 else 0
+        
         pacing_metrics.append({
             "project_id": p.id,
             "project_number": p.quotation_no,
@@ -201,7 +218,10 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
             "expected_completed": round(expected_completed, 1),
             "actual_completed": round(actual_completed, 1),
             "backlog": round(backlog, 1),
-            "today_requirement": round(today_requirement, 1)
+            "today_requirement": round(today_requirement, 1),
+            "tig_req": round(tig_req, 1),
+            "mig_req": round(mig_req, 1),
+            "grind_req": round(grind_req, 1)
         })
             
     # Clean up floats

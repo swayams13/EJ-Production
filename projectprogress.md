@@ -17,6 +17,12 @@
 
 ### What needs to be done next session:
 - Finalize reporting features, potentially filtering projects/capacity based on Company vs. Contractor.
+## Date: 2026-07-01
+
+### What we did today:
+- **Daily Target Reversion:** Reverted the system's core capacity math from feet/hour back to target feet/day for a more seamless experience. Migrated the database to rename `avg_productivity_per_hour` back to `avg_productivity_per_day` and multiplied existing rates by 8. Updated simulation logic and master routing endpoints accordingly.
+- Preparing to integrate the new master employee list featuring multi-skill allocation and individualized daily targets.
+
 - Move towards Phase 7 (Material Intelligence Engine) and complete testing on production floors.
 
 ## Date: 2026-06-29

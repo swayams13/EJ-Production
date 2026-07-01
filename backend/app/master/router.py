@@ -37,14 +37,14 @@ def sync_all_master_api():
 def get_workforce_api(db = Depends(get_db)):
     from backend.services.db_service import WorkforceMaster
     wf = db.query(WorkforceMaster).order_by(WorkforceMaster.id).all()
-    return {"success": True, "message": "Workforce retrieved", "data": [{"id": w.id, "resource_type": w.resource_type, "productivity": w.avg_productivity_per_hour} for w in wf]}
+    return {"success": True, "message": "Workforce retrieved", "data": [{"id": w.id, "resource_type": w.resource_type, "productivity": w.avg_productivity_per_day} for w in wf]}
 
 @router.put("/workforce/{wf_id}")
 def update_workforce_api(wf_id: int, req: WorkforceUpdate, db = Depends(get_db)):
     from backend.services.db_service import WorkforceMaster
     w = db.query(WorkforceMaster).filter(WorkforceMaster.id == wf_id).first()
     if w:
-        w.avg_productivity_per_hour = req.productivity
+        w.avg_productivity_per_day = req.productivity
         db.commit()
     return {"success": True, "message": "Workforce updated", "data": {}}
 

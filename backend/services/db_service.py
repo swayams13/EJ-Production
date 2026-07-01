@@ -169,7 +169,7 @@ class WorkforceMaster(Base):
     __tablename__ = "workforce_master"
     id = Column(Integer, primary_key=True, index=True)
     resource_type = Column(String, unique=True, index=True)
-    avg_productivity_per_hour = Column(Float)
+    avg_productivity_per_day = Column(Float)
     active = Column(Boolean, default=True)
 
 
@@ -211,6 +211,20 @@ class DailyTaskAssignment(Base):
     
     project = relationship("Project")
     user = relationship("User")
+
+class Employee(Base):
+    __tablename__ = "employees"
+    id = Column(Integer, primary_key=True, index=True)
+    emp_id = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    company = Column(String, nullable=False)  # D2 or P1
+    skill_1 = Column(String, nullable=True)
+    skill_2 = Column(String, nullable=True)
+    skill_3 = Column(String, nullable=True)
+    skill_4 = Column(String, nullable=True)
+    experience_years = Column(Integer, default=0)
+    target_per_day = Column(Float, default=0.0)
+    active = Column(Boolean, default=True)
 
 class CompanyResourcePool(Base):
     __tablename__ = "company_resource_pool"
@@ -276,9 +290,9 @@ def init_db():
         # Initialize Default Workforce
         if session.query(WorkforceMaster).count() == 0:
             session.add_all([
-                WorkforceMaster(resource_type="TIG Welder", avg_productivity_per_hour=22.5),
-                WorkforceMaster(resource_type="MIG Welder", avg_productivity_per_hour=15.0),
-                WorkforceMaster(resource_type="Grinder", avg_productivity_per_hour=10.0)
+                WorkforceMaster(resource_type="TIG Welder", avg_productivity_per_day=180.0),
+                WorkforceMaster(resource_type="MIG Welder", avg_productivity_per_day=120.0),
+                WorkforceMaster(resource_type="Grinder", avg_productivity_per_day=80.0)
             ])
             try:
                 session.commit()

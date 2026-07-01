@@ -248,18 +248,16 @@ def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
                 tot_grind += (m.grinding_feet or 0) * b.qty
             
     workforce = db.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
+    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
     
-    tig_prod = prod.get("TIG Welder", 22.5)
-    mig_prod = prod.get("MIG Welder", 15.0)
-    grind_prod = prod.get("Grinder", 10.0)
+    tig_prod = prod.get("TIG Welder", 180.0)
+    mig_prod = prod.get("MIG Welder", 120.0)
+    grind_prod = prod.get("Grinder", 80.0)
     
-    # 8 hours per day standard shift
-    STANDARD_SHIFT_HOURS = 8
     effective_target_days = max(1, req.target_days)
-    req_tig = math.ceil(tot_tig / (effective_target_days * STANDARD_SHIFT_HOURS * tig_prod)) if tig_prod > 0 else 0
-    req_mig = math.ceil(tot_mig / (effective_target_days * STANDARD_SHIFT_HOURS * mig_prod)) if mig_prod > 0 else 0
-    req_grind = math.ceil(tot_grind / (effective_target_days * STANDARD_SHIFT_HOURS * grind_prod)) if grind_prod > 0 else 0
+    req_tig = math.ceil(tot_tig / (effective_target_days * tig_prod)) if tig_prod > 0 else 0
+    req_mig = math.ceil(tot_mig / (effective_target_days * mig_prod)) if mig_prod > 0 else 0
+    req_grind = math.ceil(tot_grind / (effective_target_days * grind_prod)) if grind_prod > 0 else 0
     
     return {"success": True, "message": "Simulation successful", "data": {
         "req_tig": req_tig,
@@ -311,16 +309,14 @@ def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db
                 tot_grind += (m.grinding_feet or 0) * b.qty
             
     workforce = db.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
-    tig_prod = prod.get("TIG Welder", 22.5)
-    mig_prod = prod.get("MIG Welder", 15.0)
-    grind_prod = prod.get("Grinder", 10.0)
+    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+    tig_prod = prod.get("TIG Welder", 180.0)
+    mig_prod = prod.get("MIG Welder", 120.0)
+    grind_prod = prod.get("Grinder", 80.0)
     
-    STANDARD_SHIFT_HOURS = 8
-    
-    days_tig = (tot_tig / (req.assigned_tig * tig_prod * STANDARD_SHIFT_HOURS)) if req.assigned_tig > 0 and tig_prod > 0 else (tot_tig / (tig_prod * STANDARD_SHIFT_HOURS) if tig_prod > 0 else 0)
-    days_mig = (tot_mig / (req.assigned_mig * mig_prod * STANDARD_SHIFT_HOURS)) if req.assigned_mig > 0 and mig_prod > 0 else (tot_mig / (mig_prod * STANDARD_SHIFT_HOURS) if mig_prod > 0 else 0)
-    days_grind = (tot_grind / (req.assigned_grinders * grind_prod * STANDARD_SHIFT_HOURS)) if req.assigned_grinders > 0 and grind_prod > 0 else (tot_grind / (grind_prod * STANDARD_SHIFT_HOURS) if grind_prod > 0 else 0)
+    days_tig = (tot_tig / (req.assigned_tig * tig_prod)) if req.assigned_tig > 0 and tig_prod > 0 else (tot_tig / tig_prod if tig_prod > 0 else 0)
+    days_mig = (tot_mig / (req.assigned_mig * mig_prod)) if req.assigned_mig > 0 and mig_prod > 0 else (tot_mig / mig_prod if mig_prod > 0 else 0)
+    days_grind = (tot_grind / (req.assigned_grinders * grind_prod)) if req.assigned_grinders > 0 and grind_prod > 0 else (tot_grind / grind_prod if grind_prod > 0 else 0)
     
     if req.assigned_tig == 0 and tot_tig > 0: days_tig = 999
     if req.assigned_mig == 0 and tot_mig > 0: days_mig = 999
@@ -355,11 +351,10 @@ def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_
                 tot_grind += (m.grinding_feet or 0) * b.qty
             
     workforce = db.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
-    STANDARD_SHIFT_HOURS = 8
-    tig_prod = prod.get("TIG Welder", 22.5) * STANDARD_SHIFT_HOURS
-    mig_prod = prod.get("MIG Welder", 15.0) * STANDARD_SHIFT_HOURS
-    grind_prod = prod.get("Grinder", 10.0) * STANDARD_SHIFT_HOURS
+    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+    tig_prod = prod.get("TIG Welder", 180.0)
+    mig_prod = prod.get("MIG Welder", 120.0)
+    grind_prod = prod.get("Grinder", 80.0)
     
     target_days = 15
     if req.target_date:

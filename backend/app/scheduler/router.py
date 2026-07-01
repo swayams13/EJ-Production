@@ -84,17 +84,36 @@ def auto_assign_tasks(
     # Sort workers by base_productivity (simulating efficiency/track record)
     workers.sort(key=lambda w: w.base_productivity or 0, reverse=True)
     
-    # Group by skill
+    from backend.services.db_service import Employee
+    employees = db.query(Employee).all()
+    emp_map = {e.name: e for e in employees}
+    
+    # Group by skill using multi-skill from Employee map
     workers_by_skill = {}
     for w in workers:
-        if w.skill not in workers_by_skill:
-            workers_by_skill[w.skill] = []
-        workers_by_skill[w.skill].append({
+        emp = emp_map.get(w.full_name)
+        skills = []
+        target = w.base_productivity or 50.0
+        
+        if emp:
+            skills = [s for s in [emp.skill_1, emp.skill_2, emp.skill_3, emp.skill_4] if s]
+            target = emp.target_per_day
+        elif w.skill:
+            skills = [w.skill]
+            
+        worker_info = {
             "user_id": w.id,
-            "base_productivity": w.base_productivity or 50.0,
+            "base_productivity": target,
+            "remaining_capacity": target,
             "assigned_feet": 0.0,
-            "can_do_overtime": True # Top workers can do overtime
-        })
+            "ot_remaining_capacity": target * 0.5, # 50% extra for OT
+            "can_do_overtime": True
+        }
+        
+        for s in skills:
+            if s not in workers_by_skill:
+                workers_by_skill[s] = []
+            workers_by_skill[s].append(worker_info)
 
     # Get Active Projects ordered by priority (created_at)
     projects = db.query(Project).filter(
@@ -157,12 +176,8 @@ def auto_assign_tasks(
         req_index = 0
         
         for w in available_workers:
-            # Worker has an 8-hour shift capacity
-            worker_daily_capacity = w["base_productivity"] * 8
-            worker_remaining_capacity = worker_daily_capacity
-            
             # While the worker has time in their shift AND there are projects left
-            while worker_remaining_capacity > 0 and req_index < len(project_requirements):
+            while w["remaining_capacity"] > 0 and req_index < len(project_requirements):
                 req = project_requirements[req_index]
                 
                 if req["remaining_req"] <= 0:
@@ -170,7 +185,7 @@ def auto_assign_tasks(
                     continue
                     
                 # Take whatever is smaller: the worker's remaining shift time, or the project's remaining requirement
-                assigned_feet = min(worker_remaining_capacity, req["remaining_req"])
+                assigned_feet = min(w["remaining_capacity"], req["remaining_req"])
                 
                 assignment = DailyTaskAssignment(
                     project_id=req["project"].id,
@@ -184,7 +199,7 @@ def auto_assign_tasks(
                 db.add(assignment)
                 
                 w["assigned_feet"] += assigned_feet
-                worker_remaining_capacity -= assigned_feet
+                w["remaining_capacity"] -= assigned_feet
                 req["remaining_req"] -= assigned_feet
                 
                 if req["remaining_req"] <= 0:
@@ -196,33 +211,33 @@ def auto_assign_tasks(
             available_workers.sort(key=lambda x: x["base_productivity"], reverse=True)
             
             for w in available_workers:
-                if req_index >= len(project_requirements):
-                    break
+                while w["ot_remaining_capacity"] > 0 and req_index < len(project_requirements):
+                    req = project_requirements[req_index]
+                    if req["remaining_req"] <= 0:
+                        req_index += 1
+                        continue
+                        
+                    # Worker can do a maximum of 50% extra capacity as overtime
+                    assigned_ot_feet = min(w["ot_remaining_capacity"], req["remaining_req"])
                     
-                req = project_requirements[req_index]
-                if req["remaining_req"] <= 0:
-                    req_index += 1
-                    continue
+                    assignment = DailyTaskAssignment(
+                        project_id=req["project"].id,
+                        user_id=w["user_id"],
+                        process_type=process_type,
+                        date=target_date,
+                        target_feet=assigned_ot_feet,
+                        is_overtime=True,
+                        status="Pending",
+                        notes=f"Auto-assigned overtime due to backlog."
+                    )
+                    db.add(assignment)
                     
-                # Worker can do a maximum of 4 hours overtime per day
-                worker_max_ot_capacity = w["base_productivity"] * 4
-                assigned_ot_feet = min(worker_max_ot_capacity, req["remaining_req"])
-                
-                assignment = DailyTaskAssignment(
-                    project_id=req["project"].id,
-                    user_id=w["user_id"],
-                    process_type=process_type,
-                    date=target_date,
-                    target_feet=assigned_ot_feet,
-                    is_overtime=True,
-                    status="Pending",
-                    notes=f"Auto-assigned overtime ({round(assigned_ot_feet / w['base_productivity'], 1)} hrs) due to backlog."
-                )
-                db.add(assignment)
-                
-                req["remaining_req"] -= assigned_ot_feet
-                if req["remaining_req"] <= 0:
-                    req_index += 1
+                    w["assigned_feet"] += assigned_ot_feet
+                    w["ot_remaining_capacity"] -= assigned_ot_feet
+                    req["remaining_req"] -= assigned_ot_feet
+                    
+                    if req["remaining_req"] <= 0:
+                        req_index += 1
 
     db.commit()
     return {"success": True, "message": "Auto-assignment completed successfully."}

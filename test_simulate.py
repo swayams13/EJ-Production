@@ -8,7 +8,7 @@ def test_simulate():
     masters = session.query(WeldingMaster).filter(WeldingMaster.size.in_([600, 1000])).all()
         
     workforce = session.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_hour for w in workforce}
+    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
     print("Productivity Data:", prod)
 
     # Let's simulate size 600 EJ (qty 10), and size 1000 DJ (qty 5), target days 7
@@ -27,16 +27,15 @@ def test_simulate():
             tot_mig += (m.mig_feet or 0) * b["qty"]
             tot_grind += (m.grinding_feet or 0) * b["qty"]
             
-    tig_prod = prod.get("TIG Welder", 22.5)
-    mig_prod = prod.get("MIG Welder", 15.0)
-    grind_prod = prod.get("Grinder", 10.0)
+    tig_prod = prod.get("TIG Welder", 180.0)
+    mig_prod = prod.get("MIG Welder", 120.0)
+    grind_prod = prod.get("Grinder", 80.0)
     
     target_days = 7
-    STANDARD_SHIFT_HOURS = 8
     
-    req_tig = math.ceil(tot_tig / (target_days * STANDARD_SHIFT_HOURS * tig_prod)) if tig_prod > 0 else 0
-    req_mig = math.ceil(tot_mig / (target_days * STANDARD_SHIFT_HOURS * mig_prod)) if mig_prod > 0 else 0
-    req_grind = math.ceil(tot_grind / (target_days * STANDARD_SHIFT_HOURS * grind_prod)) if grind_prod > 0 else 0
+    req_tig = math.ceil(tot_tig / (target_days * tig_prod)) if tig_prod > 0 else 0
+    req_mig = math.ceil(tot_mig / (target_days * mig_prod)) if mig_prod > 0 else 0
+    req_grind = math.ceil(tot_grind / (target_days * grind_prod)) if grind_prod > 0 else 0
     
     print("\nSimulation Result:")
     print(f"Total TIG feet: {tot_tig}, Required TIG Welders for {target_days} days: {req_tig}")

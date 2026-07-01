@@ -3,15 +3,17 @@
 ## The completed foundation:
 - **Phase 1:** Foundation Stabilization *(Completed: We've set up the core tracking, capacity metrics, and database.)*
 - **Phase 2:** Shop Floor Visibility *(Completed: Daily production entry, progress tracking, and dashboards are live.)*
+- **Phase 3:** Workforce Intelligence *(Completed: Worker database, attendance, and efficiency rankings are live.)*
+- **Phase 4:** Smart Task Allocation Engine *(Completed: Automated daily task assignments based on worker skill.)*
+- **Phase 5:** Weekly & Monthly Planning Engine *(Completed: Forecasting capacity vs. required workload with dynamic 4-week projections.)*
+- **Phase 6:** Hold Management System *(Completed: Advanced tracking of client/material holds and timeline impacts.)*
 
 ## What we are tackling now:
-- **Phase 3:** Workforce Intelligence *(Worker database, attendance, efficiency scoring, and ranking top/bottom performers.)*
+- **Phase 7:** Material Intelligence Engine *(Tracking raw materials like bellows/collars to prevent blocked projects.)*
+- **Multi-Metric Process Architecture:** *(Expanding pacing engine to track Fitters, Hydro Testers, TIG Tackers, and Welding Position Operators using Hours/Units.)*
+- **Finalizing Reporting:** *(Filtering projects/capacity based on Company vs. Contractor payroll.)*
 
 ## The road ahead:
-- **Phase 4:** Smart Task Allocation Engine *(Automating daily task assignment based on worker skill and priority.)*
-- **Phase 5:** Weekly & Monthly Planning Engine *(Forecasting capacity vs. required workload.)*
-- **Phase 6:** Hold Management System *(Advanced tracking of client/material holds - we actually just completed a large chunk of this!)*
-- **Phase 7:** Material Intelligence Engine *(Tracking raw materials like bellows/collars to prevent blocked projects.)*
 - **Phase 8:** Procurement Visibility *(Purchase orders and shortage alerts.)*
 - **Phase 9:** Progressive Delivery Planning *(Handling large, multi-month contract deliveries.)*
 - **Phase 10:** Workforce Shortage Engine *(Calculating overtime needs and reallocation based on attendance.)*

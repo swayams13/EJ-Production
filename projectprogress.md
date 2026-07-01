@@ -20,10 +20,16 @@
 ## Date: 2026-07-01
 
 ### What we did today:
-- **Daily Target Reversion:** Reverted the system's core capacity math from feet/hour back to target feet/day for a more seamless experience. Migrated the database to rename `avg_productivity_per_hour` back to `avg_productivity_per_day` and multiplied existing rates by 8. Updated simulation logic and master routing endpoints accordingly.
-- Preparing to integrate the new master employee list featuring multi-skill allocation and individualized daily targets.
+- **Daily Target Reversion & Math Fixes:** Reverted the system's core capacity math from feet/hour back to target feet/day for a more seamless experience. Discovered and removed lingering hourly multipliers in `production_service.py` that were causing project creation API crashes, restoring flawless project generation.
+- **Workforce Integration:** Seamlessly integrated 57 multi-skilled workers from the master Excel list into the Railway production database.
+- **Auto-Scheduler Hardening:** Fixed a bug where the auto-assignment engine attempted to assign production pacing tasks to Fitters. Implemented a strict skill-filtering pipeline so pacing algorithms only target active Welding (TIG/MIG) and Grinding roles.
+- **Workforce UI Enhancement:** Cleaned up the Workforce Intelligence dashboard by completely stripping out the unused "Department" column, ensuring all workers are intelligently identified exclusively by their Primary Skill across all tables and dropdown menus.
+- **Future Architecture Blueprint:** Researched and designed a comprehensive `implementation_plan.md` to upgrade the pacing engine into a "Multi-Metric Process" model. This future architecture will natively track Fitters, Hydro Testers, TIG Tackers, and Welding Position Operators using Hours/Units alongside the Welders' Linear Feet.
 
+### What needs to be done next session:
+- Finalize reporting features, potentially filtering projects/capacity based on Company vs. Contractor.
 - Move towards Phase 7 (Material Intelligence Engine) and complete testing on production floors.
+- Execute the Multi-Metric Process architecture when Fitter/Hydro tracking is greenlit.
 
 ## Date: 2026-06-29
 

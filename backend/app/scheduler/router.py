@@ -171,7 +171,11 @@ def auto_assign_tasks(
         return {"success": True, "message": "No active projects require pacing assignments today."}
 
     # 2. Assignment Logic
+    VALID_PROCESS_TYPES = ["TIG", "MIG", "GRINDING", "TIG WELDER", "MIG WELDER", "GRINDER"]
     for skill, available_workers in workers_by_skill.items():
+        if not skill or skill.upper() not in VALID_PROCESS_TYPES:
+            continue
+            
         process_type = skill
         req_index = 0
         

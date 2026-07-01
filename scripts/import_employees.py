@@ -65,5 +65,5 @@ def import_employees(file_path):
             session.rollback()
 
 if __name__ == "__main__":
-    file_path = "/Users/sonusingh/AI DEVELOPMENT DESPL/Precise Engineers/EJ Production Tracker/Employee Details - 29-06-2026.xlsx"
+    file_path = os.path.join(os.path.dirname(__file__), '..', 'Employee Details - 29-06-2026.xlsx')
     import_employees(file_path)

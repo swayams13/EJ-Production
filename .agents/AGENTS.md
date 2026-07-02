@@ -10,3 +10,4 @@
 - **Git Push Rules**: Whatever code is being pushed should ALWAYS be pushed first to the `demo` branch. 
 - The entire codebase (frontend, backend, database scripts, everything) must be pushed to the `demo` branch.
 - Only after verification on the `demo` branch should the code be merged and pushed to the `main` branch.
+- **CRITICAL**: From now on, DO NOT automatically merge the `demo` branch to the `main` branch. You MUST ask for explicit permission and instruct the user to verify the changes on `demo` first before merging to `main`.

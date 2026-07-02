@@ -181,10 +181,12 @@ class SimulateDurationRequest(BaseModel):
 from backend.app.auth.router import router as auth_router
 from backend.app.production.router import router as production_router
 from backend.app.workforce.router import router as workforce_router
+from backend.app.websocket.router import router as websocket_router
 
 app.include_router(auth_router)
 app.include_router(production_router)
 app.include_router(workforce_router)
+app.include_router(websocket_router)
 
 if __name__ == "__main__":
     import uvicorn

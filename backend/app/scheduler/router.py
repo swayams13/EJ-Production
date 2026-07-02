@@ -88,21 +88,25 @@ def auto_assign_tasks(
     employees = db.query(Employee).all()
     emp_map = {e.name: e for e in employees}
     
-    # Group by skill using multi-skill from Employee map
-    workers_by_skill = {}
+    # Create unified worker capacity tracker
+    worker_map = {}
+    worker_skills_map = {} # user_id -> [(tier, skill_string)]
     for w in workers:
         emp = emp_map.get(w.full_name)
         skills = []
         target = w.base_productivity or 50.0
         
         if emp:
-            skills = [s for s in [emp.skill_1, emp.skill_2, emp.skill_3, emp.skill_4] if s]
+            # Pad with None so we have exactly 4 levels
+            raw_skills = [emp.skill_1, emp.skill_2, emp.skill_3, emp.skill_4]
+            skills = [(i, s) for i, s in enumerate(raw_skills) if s]
             target = emp.target_per_day
         elif w.skill:
-            skills = [w.skill]
+            skills = [(0, w.skill)]
             
         worker_info = {
             "user_id": w.id,
+            "worker_name": w.full_name,
             "base_productivity": target,
             "remaining_capacity": target,
             "assigned_feet": 0.0,
@@ -110,10 +114,8 @@ def auto_assign_tasks(
             "can_do_overtime": True
         }
         
-        for s in skills:
-            if s not in workers_by_skill:
-                workers_by_skill[s] = []
-            workers_by_skill[s].append(worker_info)
+        worker_map[w.id] = worker_info
+        worker_skills_map[w.id] = skills
 
     # Get Active Projects ordered by priority (created_at)
     projects = db.query(Project).filter(
@@ -189,62 +191,73 @@ def auto_assign_tasks(
     if not project_requirements:
         return {"success": True, "message": "No active projects require pacing assignments today."}
 
-    # 2. Assignment Logic
-    for skill, available_workers in workers_by_skill.items():
-        if not skill:
-            continue
+    # 2. Assignment Logic (Tiered By Skill Priority)
+    # Order of processing constraints: MIG -> TIG -> GRINDING
+    process_order = [
+        ("MIG", "remaining_MIG", "MIG"),
+        ("TIG", "remaining_TIG", "TIG"),
+        ("GRIND", "remaining_GRINDING", "Grinding")
+    ]
+    
+    for skill_keyword, req_key, process_type in process_order:
+        # 4 passes: Primary (0), Secondary (1), Tertiary (2), Quaternary (3)
+        for tier in range(4):
+            # Find all workers that have this skill at the current tier
+            tier_workers = []
+            for uid, skills in worker_skills_map.items():
+                for lvl, s in skills:
+                    if lvl == tier and skill_keyword in s.upper():
+                        tier_workers.append(worker_map[uid])
             
-        skill_upper = skill.upper()
-        if "TIG" in skill_upper:
-            req_key = "remaining_TIG"
-            process_type = "TIG"
-        elif "MIG" in skill_upper:
-            req_key = "remaining_MIG"
-            process_type = "MIG"
-        elif "GRIND" in skill_upper:
-            req_key = "remaining_GRINDING"
-            process_type = "Grinding"
-        else:
-            continue
+            # Sort tier workers by remaining capacity (descending) to balance work
+            tier_workers.sort(key=lambda w: w["remaining_capacity"], reverse=True)
             
-        req_index = 0
-        
-        for w in available_workers:
-            # While the worker has time in their shift AND there are projects left
-            while w["remaining_capacity"] > 0 and req_index < len(project_requirements):
-                req = project_requirements[req_index]
-                
-                if req[req_key] <= 0:
-                    req_index += 1
-                    continue
+            # Assign work to these workers
+            req_index = 0
+            for w in tier_workers:
+                # While the worker has time in their shift AND there are projects left
+                while w["remaining_capacity"] > 0 and req_index < len(project_requirements):
+                    req = project_requirements[req_index]
                     
-                # Take whatever is smaller: the worker's remaining shift time, or the project's remaining requirement
-                assigned_feet = min(w["remaining_capacity"], req[req_key])
-                
-                assignment = DailyTaskAssignment(
-                    project_id=req["project"].id,
-                    user_id=w["user_id"],
-                    process_type=process_type,
-                    date=target_date,
-                    target_feet=assigned_feet,
-                    is_overtime=False,
-                    status="Pending"
-                )
-                db.add(assignment)
-                
-                w["assigned_feet"] += assigned_feet
-                w["remaining_capacity"] -= assigned_feet
-                req[req_key] -= assigned_feet
-                
-                if req[req_key] <= 0:
-                    req_index += 1
+                    if req[req_key] <= 0:
+                        req_index += 1
+                        continue
+                        
+                    assigned_feet = min(w["remaining_capacity"], req[req_key])
+                    
+                    assignment = DailyTaskAssignment(
+                        project_id=req["project"].id,
+                        user_id=w["user_id"],
+                        process_type=process_type,
+                        date=target_date,
+                        target_feet=assigned_feet,
+                        is_overtime=False,
+                        status="Pending"
+                    )
+                    db.add(assignment)
+                    
+                    w["assigned_feet"] += assigned_feet
+                    w["remaining_capacity"] -= assigned_feet
+                    req[req_key] -= assigned_feet
+                    
+                    if req[req_key] <= 0:
+                        req_index += 1
                     
         # 3. Overtime Assignment (If there are still projects left unassigned in this skill)
-        if req_index < len(project_requirements):
+        # We check if there are any pending requirements left for this process type
+        has_pending = any(req[req_key] > 0 for req in project_requirements)
+        if has_pending:
+            # Gather all workers who have this skill across ANY tier
+            all_skill_workers = []
+            for uid, skills in worker_skills_map.items():
+                if any(skill_keyword in s.upper() for lvl, s in skills):
+                    all_skill_workers.append(worker_map[uid])
+                    
             # Sort workers descending by base productivity for overtime
-            available_workers.sort(key=lambda x: x["base_productivity"], reverse=True)
+            all_skill_workers.sort(key=lambda x: x["base_productivity"], reverse=True)
             
-            for w in available_workers:
+            req_index = 0
+            for w in all_skill_workers:
                 while w["ot_remaining_capacity"] > 0 and req_index < len(project_requirements):
                     req = project_requirements[req_index]
                     if req[req_key] <= 0:
@@ -261,8 +274,7 @@ def auto_assign_tasks(
                         date=target_date,
                         target_feet=assigned_ot_feet,
                         is_overtime=True,
-                        status="Pending",
-                        notes=f"Auto-assigned overtime due to backlog."
+                        status="Pending"
                     )
                     db.add(assignment)
                     
@@ -272,6 +284,6 @@ def auto_assign_tasks(
                     
                     if req[req_key] <= 0:
                         req_index += 1
-
+                        
     db.commit()
-    return {"success": True, "message": "Auto-assignment completed successfully."}
+    return {"success": True, "message": f"Successfully assigned target tracking plans to {len(worker_map)} workers for today."}

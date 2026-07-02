@@ -45,6 +45,26 @@ def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db)):
         }
     }
 
+@router.get("/sync-dj-temp")
+def sync_dj_temp():
+    """
+    Temporary route to trigger the DJ import script without needing the Railway Console.
+    """
+    from sqlalchemy import text
+    from backend.services.db_service import SessionLocal
+    
+    session = SessionLocal()
+    try:
+        session.execute(text("SELECT setval('welding_master_id_seq', COALESCE((SELECT MAX(id)+1 FROM welding_master), 1), false);"))
+        session.commit()
+    except Exception as e:
+        session.rollback()
+    finally:
+        session.close()
+        
+    success, msg = import_dismantling_joint_master()
+    return {"success": success, "message": msg}
+
 @router.post("/sync/ej")
 def sync_ej_master_api():
     success, msg = import_welding_master_from_disk()

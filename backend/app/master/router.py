@@ -11,10 +11,25 @@ def get_welding_master_api():
     formatted_data = [{"size": d.size, "type": getattr(d, 'joint_type', 'EJ'), "tig_feet": round(d.tig_feet, 2) if d.tig_feet else 0, "mig_feet": round(d.mig_feet, 2) if d.mig_feet else 0, "grinding_feet": round(d.grinding_feet, 2) if d.grinding_feet else 0} for d in data]
     return {"success": True, "message": "Welding master retrieved", "data": formatted_data}
 
+@router.get("/fix-ej-version")
+def fix_ej_version_api(db: Session = Depends(get_db)):
+    from backend.services.db_service import WeldingMaster
+    bad_ejs = db.query(WeldingMaster).filter(WeldingMaster.joint_type == 'EJ', WeldingMaster.version > 11).all()
+    count = 0
+    for ej in bad_ejs:
+        ej.version = 11
+        count += 1
+    db.commit()
+    return {"success": True, "message": f"Fixed {count} broken EJ records!"}
+
 @router.post("/welding-size")
 def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db)):
     from backend.services.db_service import WeldingMaster
-    latest = db.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
+    
+    latest = db.query(WeldingMaster).filter(
+        WeldingMaster.joint_type == req.joint_type
+    ).order_by(WeldingMaster.version.desc()).first()
+    
     v = latest.version if latest else 1
     
     wm = WeldingMaster(

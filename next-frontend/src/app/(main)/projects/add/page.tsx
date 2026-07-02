@@ -327,7 +327,7 @@ export default function AddProjects() {
                     required
                   >
                     <option value="">Select Size</option>
-                    {masterData.filter(m => m.type === bellow.type).sort((a,b) => a.size - b.size).map((m) => (
+                    {masterData.filter(m => m.type === bellow.type).map((m) => (
                       <option key={`${m.size}-${m.type}`} value={m.size}>{m.size} NB</option>
                     ))}
                     <option value="CUSTOM" className="font-bold text-indigo-600">+ Add Custom Size</option>

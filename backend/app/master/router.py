@@ -15,13 +15,22 @@ def get_welding_master_api():
 @router.get("/fix-ej-version")
 def fix_ej_version_api(db: Session = Depends(get_db)):
     from backend.services.db_service import WeldingMaster
-    bad_ejs = db.query(WeldingMaster).filter(WeldingMaster.joint_type == 'EJ', WeldingMaster.version > 11).all()
+    from sqlalchemy import func
+    
+    # Find the correct EJ version (the one with the most records)
+    versions = db.query(WeldingMaster.version, func.count(WeldingMaster.id)).filter(WeldingMaster.joint_type == 'EJ').group_by(WeldingMaster.version).all()
+    if not versions:
+        return {"success": False, "message": "No EJ records found"}
+        
+    correct_version = max(versions, key=lambda x: x[1])[0]
+    
+    bad_ejs = db.query(WeldingMaster).filter(WeldingMaster.joint_type == 'EJ', WeldingMaster.version != correct_version).all()
     count = 0
     for ej in bad_ejs:
-        ej.version = 11
+        ej.version = correct_version
         count += 1
     db.commit()
-    return {"success": True, "message": f"Fixed {count} broken EJ records!"}
+    return {"success": True, "message": f"Fixed {count} broken EJ records by securely restoring them to version {correct_version}!"}
 
 @router.post("/welding-size")
 def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db)):

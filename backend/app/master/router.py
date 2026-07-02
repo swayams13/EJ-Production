@@ -65,6 +65,37 @@ def sync_dj_temp():
     success, msg = import_dismantling_joint_master()
     return {"success": success, "message": msg}
 
+@router.get("/backfill-grinding")
+def backfill_grinding_feet():
+    """
+    Temporary route to backfill grinding feet for all previously loaded projects (both EJ and DJ).
+    """
+    from backend.services.db_service import SessionLocal, ProjectProductionLine, WeldingMaster
+    
+    session = SessionLocal()
+    try:
+        lines = session.query(ProjectProductionLine).all()
+        updated_count = 0
+        for line in lines:
+            master = session.query(WeldingMaster).filter(
+                WeldingMaster.size == line.size,
+                WeldingMaster.joint_type == line.joint_type
+            ).order_by(WeldingMaster.version.desc()).first()
+            
+            if master and master.grinding_feet:
+                expected_grinding = float(line.quantity) * float(master.grinding_feet)
+                if line.grinding_feet != expected_grinding:
+                    line.grinding_feet = expected_grinding
+                    updated_count += 1
+                    
+        session.commit()
+        return {"success": True, "message": f"Successfully backfilled grinding feet for {updated_count} production lines."}
+    except Exception as e:
+        session.rollback()
+        return {"success": False, "message": str(e)}
+    finally:
+        session.close()
+
 @router.post("/sync/ej")
 def sync_ej_master_api():
     success, msg = import_welding_master_from_disk()

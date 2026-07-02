@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 from backend.services.production_service import get_welding_master_latest, import_welding_master_from_disk, import_dismantling_joint_master
 from backend.services.db_service import get_db
 from backend.app.master.schemas import WorkforceUpdate, PoolUpdate, WeldingSizeCreate

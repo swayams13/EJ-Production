@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from backend.services.production_service import get_welding_master_latest, import_welding_master_from_disk, import_dismantling_joint_master
 from backend.services.db_service import get_db
-from backend.app.master.schemas import WorkforceUpdate, PoolUpdate
+from backend.app.master.schemas import WorkforceUpdate, PoolUpdate, WeldingSizeCreate
 
 router = APIRouter(prefix="/api/v1/master", tags=["Master"])
 
@@ -10,6 +10,40 @@ def get_welding_master_api():
     data = get_welding_master_latest()
     formatted_data = [{"size": d.size, "type": getattr(d, 'joint_type', 'EJ'), "tig_feet": round(d.tig_feet, 2) if d.tig_feet else 0, "mig_feet": round(d.mig_feet, 2) if d.mig_feet else 0, "grinding_feet": round(d.grinding_feet, 2) if d.grinding_feet else 0} for d in data]
     return {"success": True, "message": "Welding master retrieved", "data": formatted_data}
+
+@router.post("/welding-size")
+def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db)):
+    from backend.services.db_service import WeldingMaster
+    latest = db.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
+    v = latest.version if latest else 1
+    
+    wm = WeldingMaster(
+        size=req.size,
+        tig_inches=0.0,
+        tig_feet=req.tig_feet,
+        mig_inches=0.0,
+        mig_feet=req.mig_feet,
+        total_welding_inches=0.0,
+        total_welding_feet=req.tig_feet + req.mig_feet,
+        grinding_feet=req.grinding_feet,
+        joint_type=req.joint_type,
+        version=v
+    )
+    db.add(wm)
+    db.commit()
+    db.refresh(wm)
+    
+    return {
+        "success": True, 
+        "message": f"Custom {req.joint_type} size added", 
+        "data": {
+            "size": wm.size,
+            "type": wm.joint_type,
+            "tig_feet": wm.tig_feet,
+            "mig_feet": wm.mig_feet,
+            "grinding_feet": wm.grinding_feet
+        }
+    }
 
 @router.post("/sync/ej")
 def sync_ej_master_api():

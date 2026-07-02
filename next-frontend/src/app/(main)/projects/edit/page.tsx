@@ -25,6 +25,11 @@ export default function EditProjects() {
   const [masterData, setMasterData] = useState<any[]>([]);
   const [duration, setDuration] = useState<number | null>(null);
   
+  const [customSizeModalOpen, setCustomSizeModalOpen] = useState(false);
+  const [customSizeData, setCustomSizeData] = useState({ size: "", tig_feet: "", mig_feet: "", grinding_feet: "", joint_type: "EJ" });
+  const [customSizeRowIndex, setCustomSizeRowIndex] = useState(-1);
+  const [savingCustomSize, setSavingCustomSize] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
@@ -142,9 +147,46 @@ export default function EditProjects() {
   };
 
   const handleBellowChange = (index: number, field: "size" | "qty" | "type" | "pn_rating", value: string | number) => {
+    if (field === "size" && value === "CUSTOM") {
+      setCustomSizeRowIndex(index);
+      setCustomSizeData({ size: "", tig_feet: "", mig_feet: "", grinding_feet: "", joint_type: bellows[index].type || "EJ" });
+      setCustomSizeModalOpen(true);
+      return;
+    }
     const newBellows = [...bellows];
     newBellows[index] = { ...newBellows[index], [field]: value };
     setBellows(newBellows);
+  };
+  
+  const saveCustomSize = async () => {
+    try {
+      setSavingCustomSize(true);
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/welding-size`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          size: Number(customSizeData.size),
+          tig_feet: Number(customSizeData.tig_feet),
+          mig_feet: Number(customSizeData.mig_feet),
+          grinding_feet: Number(customSizeData.grinding_feet),
+          joint_type: customSizeData.joint_type
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMasterData([...masterData, data.data]);
+        const newBellows = [...bellows];
+        newBellows[customSizeRowIndex].size = data.data.size;
+        setBellows(newBellows);
+        setCustomSizeModalOpen(false);
+      } else {
+        alert(data.detail || data.message || "Failed to save custom size");
+      }
+    } catch (err: any) {
+      alert("Network error while saving size");
+    } finally {
+      setSavingCustomSize(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -448,9 +490,10 @@ export default function EditProjects() {
                           required
                         >
                           <option value="">Select Size</option>
-                          {masterData.filter(m => m.type === (bellow.type || 'EJ')).map((m) => (
-                            <option key={m.size} value={m.size}>{m.size} NB</option>
+                          {masterData.filter(m => m.type === bellow.type).map((m) => (
+                            <option key={`${m.size}-${m.type}`} value={m.size}>{m.size} NB</option>
                           ))}
+                          <option value="CUSTOM" className="font-bold text-indigo-600">+ Add Custom Size</option>
                         </select>
                       </div>
                       <div className="w-32">
@@ -510,6 +553,50 @@ export default function EditProjects() {
           </button>
         </div>
       </form>
+      {customSizeModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden transform transition-all border border-slate-200">
+            <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-slate-800">Add Custom {customSizeData.joint_type} Size</h3>
+              <button onClick={() => setCustomSizeModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Size (NB)</label>
+                <input type="number" className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500 bg-white" 
+                  value={customSizeData.size} onChange={e => setCustomSizeData({...customSizeData, size: e.target.value})} placeholder="e.g. 5000" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">TIG (Feet)</label>
+                  <input type="number" step="0.1" className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500 bg-white" 
+                    value={customSizeData.tig_feet} onChange={e => setCustomSizeData({...customSizeData, tig_feet: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">MIG (Feet)</label>
+                  <input type="number" step="0.1" className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500 bg-white" 
+                    value={customSizeData.mig_feet} onChange={e => setCustomSizeData({...customSizeData, mig_feet: e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Grinding (Sq. Feet)</label>
+                <input type="number" step="0.1" className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500 bg-white" 
+                  value={customSizeData.grinding_feet} onChange={e => setCustomSizeData({...customSizeData, grinding_feet: e.target.value})} />
+              </div>
+            </div>
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button type="button" onClick={() => setCustomSizeModalOpen(false)} className="px-5 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button type="button" onClick={saveCustomSize} disabled={savingCustomSize || !customSizeData.size} className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {savingCustomSize ? 'Saving...' : 'Save Custom Size'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

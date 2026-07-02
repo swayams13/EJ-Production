@@ -78,7 +78,7 @@ def import_welding_master_from_disk():
 
 def import_dismantling_joint_master():
     try:
-        file_path = "ANALYSIS DISMANTLING JOINT WELDING FEETS PER SIZE_27.06.2026.xlsx"
+        file_path = "ANALYSIS DISMANTLING JOINT WELDING FEETS PER SIZE 27.06.2026.xlsx"
         df = pd.read_excel(file_path)
         
         session = SessionLocal()
@@ -93,6 +93,7 @@ def import_dismantling_joint_master():
                 try:
                     size = int(float(row.iloc[1])) 
                     feet = float(row.iloc[2]) if pd.notna(row.iloc[2]) else 0.0
+                    grind_feet = float(row.iloc[3]) if len(row) > 3 and pd.notna(row.iloc[3]) else 0.0
                 except (ValueError, TypeError, IndexError):
                     continue
                     
@@ -105,10 +106,10 @@ def import_dismantling_joint_master():
                     tig_inches=0.0,
                     tig_feet=0.0,
                     mig_inches=0.0,
-                    mig_feet=feet, # Assigning to mig_feet for capacity calculation
+                    mig_feet=feet,
                     total_welding_inches=0.0,
                     total_welding_feet=feet,
-                    grinding_feet=0.0,
+                    grinding_feet=grind_feet,
                     joint_type="DJ",
                     version=new_version
                 )

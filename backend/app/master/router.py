@@ -12,25 +12,28 @@ def get_welding_master_api():
     formatted_data = [{"size": d.size, "type": getattr(d, 'joint_type', 'EJ'), "tig_feet": round(d.tig_feet, 2) if d.tig_feet else 0, "mig_feet": round(d.mig_feet, 2) if d.mig_feet else 0, "grinding_feet": round(d.grinding_feet, 2) if d.grinding_feet else 0} for d in data]
     return {"success": True, "message": "Welding master retrieved", "data": formatted_data}
 
-@router.get("/fix-ej-version")
-def fix_ej_version_api(db: Session = Depends(get_db)):
+@router.get("/dedupe-db")
+def dedupe_db(db: Session = Depends(get_db)):
     from backend.services.db_service import WeldingMaster
-    from sqlalchemy import func
     
-    # Find the correct EJ version (the one with the most records)
-    versions = db.query(WeldingMaster.version, func.count(WeldingMaster.id)).filter(WeldingMaster.joint_type == 'EJ').group_by(WeldingMaster.version).all()
-    if not versions:
-        return {"success": False, "message": "No EJ records found"}
-        
-    correct_version = max(versions, key=lambda x: x[1])[0]
+    all_records = db.query(WeldingMaster).all()
+    seen = set()
+    deleted_count = 0
     
-    bad_ejs = db.query(WeldingMaster).filter(WeldingMaster.joint_type == 'EJ', WeldingMaster.version != correct_version).all()
-    count = 0
-    for ej in bad_ejs:
-        ej.version = correct_version
-        count += 1
+    # Sort by ID descending to keep newest
+    all_records.sort(key=lambda x: x.id, reverse=True)
+    
+    for r in all_records:
+        key = f"{r.joint_type}-{r.size}"
+        if key in seen:
+            db.delete(r)
+            deleted_count += 1
+        else:
+            seen.add(key)
+            r.version = 100 # Synchronize to a clean global version
+            
     db.commit()
-    return {"success": True, "message": f"Fixed {count} broken EJ records by securely restoring them to version {correct_version}!"}
+    return {"success": True, "message": f"Deleted {deleted_count} duplicates and synchronized all sizes!"}
 
 @router.post("/welding-size")
 def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db)):

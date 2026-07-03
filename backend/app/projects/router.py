@@ -43,21 +43,25 @@ def debug_reload_feet(db: Session = Depends(get_db)):
     
     # Recalculate resources for all projects
     from backend.services.db_service import Project, ProjectResourceAssignment
-    from backend.services.production_service import calculate_project_duration
+    from backend.services.production_service import calculate_required_resources_for_deadline
+    from datetime import date
     
     projects = db.query(Project).all()
     res_updated = 0
     for p in projects:
         assign = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
         if assign:
-            calculate_project_duration(
-                p.id, 
-                assign.assigned_tig_welders, 
-                assign.assigned_mig_welders, 
-                assign.assigned_grinders
-            )
+            target_days = (p.target_date - date.today()).days if p.target_date else 15
+            target_days = max(1, target_days)
+            req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(p.id, target_days)
+            
+            assign.assigned_tig_welders = req_tig
+            assign.assigned_mig_welders = req_mig
+            assign.assigned_grinders = req_grind
+            assign.estimated_duration_days = target_days
             res_updated += 1
             
+    db.commit()
     return {"success": True, "message": f"Successfully reloaded {updated_count} project production lines and recalculated metrics for {res_updated} projects."}
 
 @router.get("")

@@ -8,31 +8,24 @@ with open(filepath, "r") as f:
 title = "# EJ Production Tracker - Daily Progress Log\n\n"
 body = content.replace(title, "")
 
-new_progress = """## Date: 2026-06-28
+new_progress = """## Date: 2026-07-03 (Session 2)
 
 ### What we did today:
-- **Planning Dashboard Optimization:** Fixed 4-Week Capacity Forecast to use dynamic real-world calendar date ranges. Modified the Master Schedule to display `quotation_no` (Project Code) instead of the customer details to keep it cleaner.
-- **Smart Scheduler Automation:** Overhauled the Daily Scheduler to become a "seamless" enterprise-grade system. It now automatically calculates and auto-assigns the daily goals upon opening the page if they haven't been assigned yet, without forcing the user to manually click options.
-- **Dynamic Resource Simulator Engine:** 
-  - Created a new backend simulation endpoint (`simulate_resources`).
-  - Integrated this engine directly into the "Create Project" and "Edit Project" pages. Now, whenever the user changes bellows sizes, quantities, or the target deadline, the required TIG Welders, MIG Welders, and Grinders dynamically recalculate and instantly update on the UI before saving.
-  - Successfully combined the backend capacity requirements for both Expansion Joints (EJ) and Dismantling Joints (DJ) into a single "TIG" metric as requested.
-- **Edit Project UI Polish:** Added a dynamic "Target Date" modifier directly to the Edit Projects panel, allowing instant rescheduling.
+- **Dynamic Resource Synchronization:** Added a major feature to automatically sync active project requirements when Master Data is updated.
+- **Backend Refactoring:** Refactored `backend/app/projects/router.py` to correctly calculate `assigned_tig_welders`, `assigned_mig_welders`, and `assigned_grinders` against target deadlines instead of statically estimating durations based on fixed workforce numbers.
+- **Trigger Automation:** Integrated `auto_sync_all_projects_with_master()` into `backend/app/master/router.py` endpoints so that any Excel upload automatically cascades updates to all affected projects.
 
 ### Problems faced:
-- Live resource calculations suddenly returned zeroes for DJ type bellows and gave incorrect total metrics.
-- The user wanted a completely automated scheduler that wouldn't require daily manual button clicks.
+- The user noticed that after syncing, the Pending MIG and Grinding feet dropped while TIG feet remained the same. This was because the projects were created using an older version of the Master Data, and our newly built debug reload endpoint faithfully snapped them to the newer, lower values.
+- Following the feet updates, the user requested that all workforce assignments (welders/days) also be dynamically recalculated in tandem. Our first attempt incorrectly recalculated Estimated Duration instead of the Assigned Resources, leaving the UI appearing unchanged.
 
 ### How we solved them:
-- Discovered and fixed a python dictionary key-matching bug where database records containing `None` for joint_type were failing to match against `"EJ"` lookup strings. Adjusted the backend `simulate_resources` logic to safely default null records to `"EJ"`, perfectly restoring parity with the original calculator.
-- Implemented lazy-loading auto-initialization inside `scheduler/page.tsx`, which silently handles assignment execution when the supervisor first visits the page for the day.
-
-### What is pending:
-- We still need to test the Smart Task Allocation modules thoroughly with live production data.
-- Refine the auto-assignment algorithm to pull the exact remaining feet required per project from `ProjectProductionLine` instead of simulating distribution.
+- Rewrote the debug endpoint to properly invoke `calculate_required_resources_for_deadline` and overwrite the `assigned_tig_welders`, `mig_welders`, and `grinders` dynamically on the `ProjectResourceAssignment` table.
+- Bound this entire synchronization script natively to the "Sync EJ Data" and "Sync DJ Data" buttons so the user never has to run debug scripts again.
 
 ### What needs to be done next session:
-- Finalize any further UX improvements for the Planning Dashboard.
+- Execute the **Pagarbook / Excel Attendance Integration** as outlined in the implementation plan.
+- Finalize reporting features, potentially filtering projects/capacity based on Company vs. Contractor.
 - Move towards Phase 7 (Material Intelligence Engine) and complete testing on production floors.
 
 """
@@ -43,3 +36,4 @@ with open(filepath, "w") as f:
     f.write(final_content)
 
 print("Progress successfully prepended.")
+

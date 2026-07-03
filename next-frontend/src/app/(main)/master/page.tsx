@@ -265,6 +265,33 @@ export default function MasterData() {
       {activeTab === 'pool' && (
         <form onSubmit={updatePool} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-6">Company Resource Pool</h2>
+
+          {pool.required && (
+            <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">Live Requirements (Active Projects)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex justify-between items-center p-2 bg-white border border-slate-100 rounded">
+                  <span className="text-sm text-slate-600">TIG Required: <strong>{pool.required.tig}</strong></span>
+                  <span className={`text-sm font-bold ${pool.total_tig_welders - pool.required.tig < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    Deficit: {pool.total_tig_welders - pool.required.tig}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-white border border-slate-100 rounded">
+                  <span className="text-sm text-slate-600">MIG Required: <strong>{pool.required.mig}</strong></span>
+                  <span className={`text-sm font-bold ${pool.total_mig_welders - pool.required.mig < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    Deficit: {pool.total_mig_welders - pool.required.mig}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-white border border-slate-100 rounded">
+                  <span className="text-sm text-slate-600">Grinders Required: <strong>{pool.required.grinders}</strong></span>
+                  <span className={`text-sm font-bold ${pool.total_grinders - pool.required.grinders < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    Deficit: {pool.total_grinders - pool.required.grinders}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Total TIG Welders</label>

@@ -164,7 +164,13 @@ def update_workforce_api(wf_id: int, req: WorkforceUpdate, db = Depends(get_db))
 @router.get("/pool")
 def get_pool_api(db = Depends(get_db)):
     from backend.services.db_service import CompanyResourcePool
+    from backend.services.production_service import get_company_capacity_status
     pool = db.query(CompanyResourcePool).first()
+    
+    # Get current requirements from production service
+    capacity_status = get_company_capacity_status()
+    req = capacity_status.get("required", {"tig": 0, "mig": 0, "grinders": 0})
+    
     if not pool:
         data = {"total_tig_welders": 0, "total_mig_welders": 0, "total_grinders": 0}
     else:
@@ -173,6 +179,8 @@ def get_pool_api(db = Depends(get_db)):
             "total_mig_welders": pool.total_mig_welders,
             "total_grinders": pool.total_grinders
         }
+        
+    data["required"] = req
     return {"success": True, "message": "Pool retrieved", "data": data}
 
 @router.put("/pool")

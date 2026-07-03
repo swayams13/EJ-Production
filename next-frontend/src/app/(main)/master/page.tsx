@@ -201,18 +201,20 @@ export default function MasterData() {
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Welding Feet</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
                       {data.filter(r => r.type === 'DJ').map((row) => (
                         <tr key={`DJ-${row.size}`} className="hover:bg-slate-50">
                           <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet || row.tig_feet}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.grinding_feet}</td>
                         </tr>
                       ))}
                       {data.filter(r => r.type === 'DJ').length === 0 && (
                         <tr>
-                          <td colSpan={2} className="px-4 py-8 text-center text-slate-500 text-sm">
+                          <td colSpan={3} className="px-4 py-8 text-center text-slate-500 text-sm">
                             No Dismantling Joint records found. Please sync data.
                           </td>
                         </tr>

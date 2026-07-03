@@ -40,7 +40,25 @@ def debug_reload_feet(db: Session = Depends(get_db)):
                 line.grinding_feet = new_grind
                 updated_count += 1
     db.commit()
-    return {"success": True, "message": f"Successfully reloaded {updated_count} project production lines with live master values."}
+    
+    # Recalculate resources for all projects
+    from backend.services.db_service import Project, ProjectResourceAssignment
+    from backend.services.production_service import calculate_project_duration
+    
+    projects = db.query(Project).all()
+    res_updated = 0
+    for p in projects:
+        assign = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
+        if assign:
+            calculate_project_duration(
+                p.id, 
+                assign.assigned_tig_welders, 
+                assign.assigned_mig_welders, 
+                assign.assigned_grinders
+            )
+            res_updated += 1
+            
+    return {"success": True, "message": f"Successfully reloaded {updated_count} project production lines and recalculated metrics for {res_updated} projects."}
 
 @router.get("")
 def get_projects(db: Session = Depends(get_db)):

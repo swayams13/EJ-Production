@@ -41,6 +41,28 @@ def reload_projects():
 
         db.commit()
         print(f"Successfully reloaded {updated_count} project production lines with live master values.")
+        
+        # Now recalculate resources for all projects based on the new lines
+        from backend.services.db_service import Project, ProjectResourceAssignment
+        from backend.services.production_service import calculate_project_duration
+        
+        projects = db.query(Project).all()
+        res_updated = 0
+        for p in projects:
+            assign = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
+            if assign:
+                # We recalculate based on their current assigned workers
+                duration, req_tig, req_mig, req_grind = calculate_project_duration(
+                    p.id, 
+                    assign.assigned_tig_welders, 
+                    assign.assigned_mig_welders, 
+                    assign.assigned_grinders
+                )
+                res_updated += 1
+                
+        # calculate_project_duration commits its own transaction, so no need to commit here for those
+        print(f"Successfully recalculated resource requirements and estimated days for {res_updated} projects.")
+        
     except Exception as e:
         db.rollback()
         print(f"Error reloading projects: {e}")

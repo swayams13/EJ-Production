@@ -452,7 +452,7 @@ def get_company_capacity_status(target_days=15):
         if not pool:
             pool = CompanyResourcePool(total_tig_welders=0, total_mig_welders=0, total_grinders=0)
             
-        today_date = date.today()
+        today_date = datetime.date.today()
         from backend.services.db_service import AttendanceLog, User
         any_logs = session.query(AttendanceLog).filter(AttendanceLog.date == today_date).first()
         

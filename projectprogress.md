@@ -1,5 +1,26 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-03
+
+### What we did today:
+- **Master Data UI Update:** Added the "Grinding (sq ft)" column to the Dismantling Joints (DJ) table in the Master Data dashboard as requested.
+- **Welding Feet Data Fallback:** Fixed an issue where the Dismantling Joint welding feet were displaying as 0. The backend was updated on July 1 to store DJ welding feet in `mig_feet` instead of `tig_feet`, but the frontend was still looking for `tig_feet`. Added a robust fallback (`mig_feet || tig_feet`) to ensure both new and old DJ records display correctly.
+- **Deployment & Syncing:** Pushed all UI fixes to the `demo` branch for verification and then successfully merged into the `main` branch for production deployment.
+
+### Problems faced:
+- The user reported that DJ welding feet were showing as 0. After rolling back and investigating, discovered that the values were *already* 0 because the user's Railway production database still had the old data structure (before July 1) where DJ feet were stored in `tig_feet`, while our new UI update only looked for `mig_feet`.
+- The user verified the fix on `demo` but it wasn't showing on production because our strict workflow dictates that changes aren't merged to `main` without explicit approval.
+
+### How we solved them:
+- Modified the frontend table mapping in `next-frontend/src/app/(main)/master/page.tsx` to intelligently fallback to `tig_feet` if `mig_feet` is 0.
+- Requested and received explicit permission from the user to merge `demo` into `main`, which successfully deployed the fixes to production.
+
+### What needs to be done next session:
+- Execute the **Pagarbook / Excel Attendance Integration** as outlined in the implementation plan.
+- Finalize reporting features, potentially filtering projects/capacity based on Company vs. Contractor.
+- Move towards Phase 7 (Material Intelligence Engine) and complete testing on production floors.
+
+
 ## Date: 2026-07-02
 
 ### What we did today:

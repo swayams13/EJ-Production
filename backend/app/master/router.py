@@ -201,13 +201,10 @@ import io
 import os
 from datetime import date
 from fastapi.responses import StreamingResponse
-from backend.app.users.router import get_current_active_user
+from backend.app.auth.rbac import require_roles
 
 @router.get("/backup")
-def download_database_backup(current_user = Depends(get_current_active_user)):
-    if current_user.role not in ["Developer", "GM"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-        
+def download_database_backup(current_user: dict = Depends(require_roles(["Developer", "GM"]))):
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         raise HTTPException(status_code=500, detail="DATABASE_URL not configured")

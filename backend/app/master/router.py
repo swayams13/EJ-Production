@@ -124,11 +124,67 @@ def backfill_grinding_feet():
     finally:
         session.close()
 
+def auto_sync_all_projects_with_master():
+    from backend.services.db_service import SessionLocal, ProjectProductionLine, Project, ProjectResourceAssignment
+    from backend.services.production_service import get_welding_master_latest, calculate_required_resources_for_deadline
+    from datetime import date
+    
+    db = SessionLocal()
+    try:
+        master_records = get_welding_master_latest()
+        master_data = {(m.size, m.joint_type): m for m in master_records}
+        
+        lines = db.query(ProjectProductionLine).all()
+        for line in lines:
+            size = line.size
+            qty = line.quantity
+            j_type = getattr(line, 'joint_type', 'EJ')
+            
+            m = master_data.get((size, j_type))
+            if not m and j_type == 'DJ':
+                m = master_data.get((size, 'EJ'))
+                
+            if m:
+                if j_type == 'DJ':
+                    new_tig = 0.0
+                    new_mig = ((m.tig_feet or 0.0) + (m.mig_feet or 0.0)) * qty
+                    new_grind = (m.grinding_feet or 0.0) * qty
+                else:
+                    new_tig = (m.tig_feet or 0.0) * qty
+                    new_mig = (m.mig_feet or 0.0) * qty
+                    new_grind = (m.grinding_feet or 0.0) * qty
+                
+                if line.tig_feet != new_tig or line.mig_feet != new_mig or line.grinding_feet != new_grind:
+                    line.tig_feet = new_tig
+                    line.mig_feet = new_mig
+                    line.grinding_feet = new_grind
+
+        projects = db.query(Project).all()
+        for p in projects:
+            assign = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
+            if assign:
+                target_days = (p.target_date - date.today()).days if p.target_date else 15
+                target_days = max(1, target_days)
+                req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(p.id, target_days)
+                
+                assign.assigned_tig_welders = req_tig
+                assign.assigned_mig_welders = req_mig
+                assign.assigned_grinders = req_grind
+                assign.estimated_duration_days = target_days
+                
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Auto-sync failed: {e}")
+    finally:
+        db.close()
+
 @router.post("/sync/ej")
 def sync_ej_master_api():
     success, msg = import_welding_master_from_disk()
     if not success:
         raise HTTPException(status_code=500, detail=msg)
+    auto_sync_all_projects_with_master()
     return {"success": True, "message": msg, "data": {}}
 
 @router.post("/sync/dj")
@@ -136,6 +192,7 @@ def sync_dj_master_api():
     success, msg = import_dismantling_joint_master()
     if not success:
         raise HTTPException(status_code=500, detail=msg)
+    auto_sync_all_projects_with_master()
     return {"success": True, "message": msg, "data": {}}
 
 @router.post("/sync/all")
@@ -144,6 +201,7 @@ def sync_all_master_api():
     s2, m2 = import_dismantling_joint_master()
     if not s1 or not s2:
         raise HTTPException(status_code=500, detail=f"EJ: {m1}, DJ: {m2}")
+    auto_sync_all_projects_with_master()
     return {"success": True, "message": f"EJ: {m1} | DJ: {m2}", "data": {}}
 
 @router.get("/workforce")

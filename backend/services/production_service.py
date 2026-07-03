@@ -432,10 +432,30 @@ def get_company_capacity_status(target_days=15):
         if not pool:
             pool = CompanyResourcePool(total_tig_welders=0, total_mig_welders=0, total_grinders=0)
             
+        today_date = date.today()
+        from backend.services.db_service import AttendanceLog, User
+        any_logs = session.query(AttendanceLog).filter(AttendanceLog.date == today_date).first()
+        
+        if any_logs:
+            present_logs = session.query(AttendanceLog).filter(
+                AttendanceLog.date == today_date,
+                AttendanceLog.status.in_(["Present", "Overtime"])
+            ).all()
+            present_user_ids = [log.user_id for log in present_logs]
+            present_users = session.query(User).filter(User.id.in_(present_user_ids)).all()
+            
+            live_tig = sum(1 for u in present_users if (u.skill == "TIG Welder" or u.department == "TIG Welder"))
+            live_mig = sum(1 for u in present_users if (u.skill == "MIG Welder" or u.department == "MIG Welder"))
+            live_grind = sum(1 for u in present_users if (u.skill == "Grinder" or u.department == "Grinder"))
+        else:
+            live_tig = pool.total_tig_welders
+            live_mig = pool.total_mig_welders
+            live_grind = pool.total_grinders
+            
         # Daily Capacity
-        daily_tig = pool.total_tig_welders * tig_prod
-        daily_mig = pool.total_mig_welders * mig_prod
-        daily_grind = pool.total_grinders * grind_prod
+        daily_tig = live_tig * tig_prod
+        daily_mig = live_mig * mig_prod
+        daily_grind = live_grind * grind_prod
         
         # Calculate Overtime Predictions
         # 1. Calculate Total Required Days across all pending active projects
@@ -444,9 +464,9 @@ def get_company_capacity_status(target_days=15):
         total_req_grind_days = tot_grind / grind_prod if grind_prod > 0 else 0
         
         # 2. Calculate Standard Available Days across target_days
-        std_avail_tig_days = pool.total_tig_welders * target_days
-        std_avail_mig_days = pool.total_mig_welders * target_days
-        std_avail_grind_days = pool.total_grinders * target_days
+        std_avail_tig_days = live_tig * target_days
+        std_avail_mig_days = live_mig * target_days
+        std_avail_grind_days = live_grind * target_days
         
         # 3. Calculate Total Overtime Days Needed
         total_ot_tig = max(0, total_req_tig_days - std_avail_tig_days)
@@ -480,9 +500,9 @@ def get_company_capacity_status(target_days=15):
             "plan_grind": plan_grind,
             "total_estimated_days": total_estimated_days,
             "pool": {
-                "tig": pool.total_tig_welders,
-                "mig": pool.total_mig_welders,
-                "grinders": pool.total_grinders,
+                "tig": live_tig,
+                "mig": live_mig,
+                "grinders": live_grind,
             },
             "required": {
                 "tig": int(req_tig_welders),
@@ -490,9 +510,9 @@ def get_company_capacity_status(target_days=15):
                 "grinders": int(req_grind_welders)
             },
             "shortage": {
-                "tig": max(0, int(req_tig_welders) - pool.total_tig_welders),
-                "mig": max(0, int(req_mig_welders) - pool.total_mig_welders),
-                "grinders": max(0, int(req_grind_welders) - pool.total_grinders)
+                "tig": max(0, int(req_tig_welders) - live_tig),
+                "mig": max(0, int(req_mig_welders) - live_mig),
+                "grinders": max(0, int(req_grind_welders) - live_grind)
             },
             "daily_capacity": {
                 "tig_ft": daily_tig,

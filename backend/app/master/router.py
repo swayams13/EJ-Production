@@ -195,37 +195,3 @@ def update_pool_api(req: PoolUpdate, db = Depends(get_db)):
     pool.total_grinders = req.total_grinders
     db.commit()
     return {"success": True, "message": "Pool updated", "data": {}}
-
-import subprocess
-import io
-import os
-from datetime import date
-from fastapi.responses import StreamingResponse
-from backend.app.auth.rbac import require_roles
-
-@router.get("/backup")
-def download_database_backup(current_user: dict = Depends(require_roles(["Developer", "GM"]))):
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
-        
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-        
-    try:
-        process = subprocess.Popen(
-            ["pg_dump", db_url, "--clean", "--if-exists", "--no-owner", "--no-privileges"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        stdout, stderr = process.communicate()
-        
-        if process.returncode != 0:
-            raise Exception(f"pg_dump failed: {stderr.decode()}")
-            
-        return StreamingResponse(
-            io.BytesIO(stdout),
-            media_type="application/sql",
-            headers={"Content-Disposition": f"attachment; filename=EJ_Tracker_Backup_{date.today()}.sql"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

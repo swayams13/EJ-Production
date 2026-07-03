@@ -12,32 +12,7 @@ export default function MasterData() {
   const [syncingEJ, setSyncingEJ] = useState(false);
   const [syncingDJ, setSyncingDJ] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [message, setMessage] = useState("");
-
-  const handleDownloadBackup = async () => {
-    setDownloading(true);
-    try {
-      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/backup`);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text);
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `EJ_Tracker_Backup_${new Date().toISOString().split('T')[0]}.sql`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      alert("Failed to download backup: " + err.message);
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   const fetchData = () => {
     setLoading(true);
@@ -131,22 +106,8 @@ export default function MasterData() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Production & Capacity Master</h1>
-          <p className="text-slate-500">Manage the algorithm's base constants, master data, and total company resources.</p>
-        </div>
-        {(userRole === "Developer" || userRole === "GM") && (
-          <button
-            onClick={handleDownloadBackup}
-            disabled={downloading}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-            {downloading ? "Downloading..." : "Database Backup (.sql)"}
-          </button>
-        )}
-      </div>
+      <h1 className="text-3xl font-bold text-slate-900 mb-2">Production & Capacity Master</h1>
+      <p className="text-slate-500 mb-8">Manage the algorithm's base constants, master data, and total company resources.</p>
 
       <div className="flex space-x-4 mb-6 border-b border-slate-200">
         <button onClick={() => setActiveTab('welding')} className={`pb-2 px-1 font-medium ${activeTab === 'welding' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Welding Workload Engine</button>

@@ -188,7 +188,9 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-slate-200">
-            {data.months_breakdown && Object.entries(data.months_breakdown).map(([month, details]: [string, any]) => (
+            {data.months_breakdown && Object.entries(data.months_breakdown)
+              .sort(([monthA], [monthB]) => new Date(monthA).getTime() - new Date(monthB).getTime())
+              .map(([month, details]: [string, any]) => (
               <tr key={month} className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{month}</td>
                 <td className="px-4 py-3 text-sm text-slate-900">{Math.round(details.tig_feet * 10) / 10}</td>

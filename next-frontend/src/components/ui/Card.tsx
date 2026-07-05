@@ -22,7 +22,7 @@ export function CardHeader({
 }) {
   return (
     <div className={`flex items-center justify-between border-b border-line px-4 py-3 ${className}`}>
-      <h3 className="text-sm font-bold text-ink">{title}</h3>
+      <h3 className="text-base font-bold text-ink">{title}</h3>
       {action}
     </div>
   );

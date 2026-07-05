@@ -23,7 +23,7 @@ export default function ProgressBar({
   return (
     <div>
       {showLabel && (
-        <div className="mb-1 flex justify-between text-sm font-semibold">
+        <div className="mb-1 flex justify-between text-base font-semibold">
           <span className="text-ink">{label}</span>
           <span className="font-data tabular-nums text-ink-soft">{clamped}%</span>
         </div>

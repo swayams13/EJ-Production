@@ -24,10 +24,10 @@ export default function Alert({
   children?: React.ReactNode;
 }) {
   return (
-    <div className={`flex items-start gap-2.5 rounded-md border p-3.5 text-sm ${toneClasses[tone]}`}>
+    <div className={`flex items-start gap-2.5 rounded-md border p-3.5 text-base ${toneClasses[tone]}`}>
       <span aria-hidden="true">{toneIcon[tone]}</span>
       <div>
-        <strong className="block text-[12.5px] mb-0.5">{title}</strong>
+        <strong className="block text-sm mb-0.5">{title}</strong>
         {children}
       </div>
     </div>

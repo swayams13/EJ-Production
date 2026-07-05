@@ -3,7 +3,7 @@ import { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 export function Table({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">{children}</table>
+      <table className="w-full border-collapse text-base">{children}</table>
     </div>
   );
 }
@@ -28,7 +28,7 @@ export function Th({
 }: ThHTMLAttributes<HTMLTableCellElement> & { className?: string; numeric?: boolean }) {
   return (
     <th
-      className={`border-b-[1.5px] border-ink-soft px-2.5 py-2.5 font-data text-[10.5px] font-medium uppercase tracking-wide text-ink-soft ${
+      className={`border-b-[1.5px] border-ink-soft px-2.5 py-2.5 font-data text-xs font-medium uppercase tracking-wide text-ink-soft ${
         numeric ? "text-center" : "text-left"
       } ${className}`}
       {...rest}

@@ -19,7 +19,7 @@ const dotClasses: Record<BadgeTone, string> = {
 export default function Badge({ tone = "neutral", children }: { tone?: BadgeTone; children: React.ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${toneClasses[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${toneClasses[tone]}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${dotClasses[tone]}`} />
       {children}

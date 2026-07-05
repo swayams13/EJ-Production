@@ -20,7 +20,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 ${variantClasses[variant]} ${className}`}
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-4 py-2 text-base font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 ${variantClasses[variant]} ${className}`}
         {...rest}
       >
         {children}

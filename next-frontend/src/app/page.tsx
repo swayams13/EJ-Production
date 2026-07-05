@@ -41,12 +41,12 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-ink p-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-paper p-4">
+      <Card className="w-full max-w-md shadow-sm">
         <CardBody className="gap-6 p-8">
           <div className="text-center">
-            <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">EJ Tracker</h1>
-            <p className="text-ink-soft">System Authentication</p>
+            <h1 className="font-display text-4xl font-extrabold uppercase tracking-wide text-brand-deep">EJ Tracker</h1>
+            <p className="text-base text-ink-soft">System Authentication</p>
           </div>
 
           <form onSubmit={handleLogin} className="flex flex-col gap-5">

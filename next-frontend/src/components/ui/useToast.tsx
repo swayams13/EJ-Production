@@ -44,7 +44,7 @@ export function useToast() {
               <div
                 key={t.id}
                 role="status"
-                className={`rounded-md px-4 py-2.5 text-sm font-medium shadow-lg ${toneClasses[t.tone]}`}
+                className={`rounded-md px-4 py-2.5 text-base font-medium shadow-lg ${toneClasses[t.tone]}`}
               >
                 {t.message}
               </div>

@@ -40,10 +40,10 @@ export default function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 pb-0">
-          <h4 id="modal-title" className="text-sm font-bold text-ink mb-1">
+          <h4 id="modal-title" className="text-base font-bold text-ink mb-1">
             {title}
           </h4>
-          {description && <p className="text-[12.5px] text-ink-soft">{description}</p>}
+          {description && <p className="text-sm text-ink-soft">{description}</p>}
         </div>
         <div className="flex justify-end gap-2 p-4">{children}</div>
       </div>

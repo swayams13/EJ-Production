@@ -1,7 +1,7 @@
 import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, forwardRef } from "react";
 
 const fieldClasses =
-  "w-full rounded-md border border-line bg-paper-raised px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-1";
+  "w-full rounded-md border border-line bg-paper-raised px-3 py-2 text-base text-ink placeholder:text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-1";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   ({ className = "", ...rest }, ref) => (
@@ -28,7 +28,7 @@ Textarea.displayName = "Textarea";
 
 export function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-ink-soft">
       {children}
     </label>
   );

@@ -20,10 +20,10 @@ export default function MetricCard({
 
   return (
     <Card className="p-5">
-      <span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">
+      <span className="block text-sm font-semibold uppercase tracking-wide text-ink-soft mb-2">
         {label}
       </span>
-      <span className={`font-data tabular-nums text-2xl font-bold ${valueColor}`}>{value}</span>
+      <span className={`font-data tabular-nums text-3xl font-bold ${valueColor}`}>{value}</span>
     </Card>
   );
 }

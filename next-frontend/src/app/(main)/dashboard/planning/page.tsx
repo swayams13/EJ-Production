@@ -2,37 +2,87 @@
 import { apiFetch } from "@/lib/api";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import {
+  Card,
+  MetricCard,
+  ProgressBar,
+  Alert,
+  Badge,
+  Spinner,
+  Table,
+  THead,
+  TBody,
+  Tr,
+  Th,
+  Td,
+} from "@/components/ui";
+
+interface PacingMetric {
+  project_id: number;
+  project_number: string;
+  total_feet: number;
+  backlog: number;
+  tig_req: number;
+  mig_req: number;
+  grind_req: number;
+}
+
+interface WeekForecast {
+  id: number;
+  name: string;
+  capacity: number;
+  demand: number;
+}
+
+interface PlanningMetrics {
+  weekly_target: number;
+  current_load: number;
+  on_time_delivery: number;
+  weekly_forecast: WeekForecast[];
+  monthly_forecast: unknown[];
+  unscheduled_demand: number;
+  factory_weekly_capacity: number;
+  pacing_metrics: PacingMetric[];
+}
+
+interface ProjectRow {
+  id: number;
+  quotation_no: string;
+  project_name?: string;
+  target_date?: string;
+  priority: string;
+  status: string;
+}
 
 export default function PlanningDashboard() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [metrics, setMetrics] = useState({ 
-    weekly_target: 0, 
-    current_load: 0, 
-    on_time_delivery: 100, 
-    weekly_forecast: [], 
-    monthly_forecast: [], 
+  const [metrics, setMetrics] = useState<PlanningMetrics>({
+    weekly_target: 0,
+    current_load: 0,
+    on_time_delivery: 100,
+    weekly_forecast: [],
+    monthly_forecast: [],
     unscheduled_demand: 0,
     factory_weekly_capacity: 0,
-    pacing_metrics: []
+    pacing_metrics: [],
   });
 
   useEffect(() => {
     const fetchPlanning = () => {
       Promise.all([
-        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`).then(res => res.json()),
-        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/planning`).then(res => res.json())
+        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`).then((res) => res.json()),
+        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/planning`).then((res) => res.json()),
       ])
-      .then(([projectsRes, metricsData]) => {
-        setProjects(projectsRes.data || []);
-        setMetrics(metricsData.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+        .then(([projectsRes, metricsData]) => {
+          setProjects(projectsRes.data || []);
+          setMetrics(metricsData.data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          setLoading(false);
+        });
     };
 
     fetchPlanning();
@@ -40,176 +90,163 @@ export default function PlanningDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  const priorityTone = (priority: string) =>
+    priority === "P1" ? "critical" : priority === "P2" ? "warning" : "success";
+
   return (
-    <div>
-      <div className="bg-slate-900 p-8 text-white rounded-b-3xl shadow-lg mb-8 mx-[-2rem] mt-[-2rem]">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">Production Planning</h1>
-        <p className="text-slate-300 text-lg font-medium">Master schedule and active project prioritization.</p>
+    <div className="flex flex-col gap-8">
+      <div>
+        <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">
+          Production Planning
+        </h1>
+        <p className="text-ink-soft">Master schedule and active project prioritization.</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-slate-800">Capacity Overview</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-4 border border-blue-100 bg-blue-50 rounded-xl">
-            <h3 className="text-sm font-bold text-blue-700 uppercase tracking-wider mb-1">Weekly Target</h3>
-            <p className="text-3xl font-black text-blue-900">{metrics.weekly_target} <span className="text-lg font-medium text-blue-600">Units</span></p>
-          </div>
-          <div className="p-4 border border-amber-100 bg-amber-50 rounded-xl">
-            <h3 className="text-sm font-bold text-amber-700 uppercase tracking-wider mb-1">Current Load</h3>
-            <p className="text-3xl font-black text-amber-900">{metrics.current_load} <span className="text-lg font-medium text-amber-600">%</span></p>
-          </div>
-          <div className="p-4 border border-emerald-100 bg-emerald-50 rounded-xl">
-            <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider mb-1">On-Time Delivery</h3>
-            <p className="text-3xl font-black text-emerald-900">{metrics.on_time_delivery} <span className="text-lg font-medium text-emerald-600">%</span></p>
-          </div>
-        </div>
-      </div>
+      <section className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <MetricCard label="Weekly Target (Units)" value={metrics.weekly_target} />
+        <MetricCard label="Current Load (%)" value={metrics.current_load} tone="warning" />
+        <MetricCard label="On-Time Delivery (%)" value={metrics.on_time_delivery} tone="success" />
+      </section>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h2 className="text-lg font-bold text-slate-800">Daily Execution Plan (Takt Time Pacing)</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-white">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Total Scope</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-rose-500 uppercase tracking-wider">Yesterday's Backlog</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">TIG Today</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-blue-600 uppercase tracking-wider">MIG Today</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-emerald-600 uppercase tracking-wider">Grind Today</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
-              {(!metrics.pacing_metrics || metrics.pacing_metrics.length === 0) ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">No active projects require pacing.</td>
-                </tr>
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
+          Daily Execution Plan (Takt Time Pacing)
+        </h2>
+        <Card>
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Project</Th>
+                <Th numeric>Total Scope</Th>
+                <Th numeric>Yesterday&apos;s Backlog</Th>
+                <Th numeric>TIG Today</Th>
+                <Th numeric>MIG Today</Th>
+                <Th numeric>Grind Today</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {!metrics.pacing_metrics || metrics.pacing_metrics.length === 0 ? (
+                <Tr>
+                  <Td colSpan={6} className="text-center text-ink-soft">
+                    No active projects require pacing.
+                  </Td>
+                </Tr>
               ) : (
-                metrics.pacing_metrics.map((p: any) => (
-                  <tr key={p.project_id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">{p.project_number}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-600">{p.total_feet} ft</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                metrics.pacing_metrics.map((p) => (
+                  <Tr key={p.project_id}>
+                    <Td className="font-bold text-ink">{p.project_number}</Td>
+                    <Td numeric>{p.total_feet} ft</Td>
+                    <Td numeric>
                       {p.backlog > 0 ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
-                          +{p.backlog} ft
-                        </span>
+                        <Badge tone="critical">+{p.backlog} ft</Badge>
                       ) : (
-                        <span className="text-slate-400 text-sm font-medium">On Track</span>
+                        <span className="text-xs font-medium text-ink-soft">On Track</span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-indigo-50 text-indigo-700">
-                        {p.tig_req} ft
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-blue-50 text-blue-700">
-                        {p.mig_req} ft
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700">
-                        {p.grind_req} ft
-                      </span>
-                    </td>
-                  </tr>
+                    </Td>
+                    <Td numeric>{p.tig_req} ft</Td>
+                    <Td numeric>{p.mig_req} ft</Td>
+                    <Td numeric>{p.grind_req} ft</Td>
+                  </Tr>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TBody>
+          </Table>
+        </Card>
+      </section>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mb-8">
-        <h2 className="text-xl font-bold text-slate-800 mb-6">4-Week Capacity Forecast</h2>
-        <div className="space-y-6">
-          {metrics.weekly_forecast && metrics.weekly_forecast.map((week: any) => {
-            const loadPct = week.capacity > 0 ? (week.demand / week.capacity) * 100 : 0;
-            const isOverCapacity = loadPct > 100;
-            return (
-              <div key={week.id} className="relative">
-                <div className="flex justify-between items-end mb-2">
-                  <span className="font-bold text-slate-700">{week.name}</span>
-                  <div className="text-sm font-medium">
-                    <span className={isOverCapacity ? "text-red-600" : "text-slate-600"}>{week.demand} ft Demand</span>
-                    <span className="text-slate-400 mx-2">/</span>
-                    <span className="text-slate-500">{week.capacity} ft Capacity</span>
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
+          4-Week Capacity Forecast
+        </h2>
+        <Card className="flex flex-col gap-5 p-6">
+          {metrics.weekly_forecast &&
+            metrics.weekly_forecast.map((week) => {
+              const loadPct = week.capacity > 0 ? (week.demand / week.capacity) * 100 : 0;
+              const isOverCapacity = loadPct > 100;
+              return (
+                <div key={week.id}>
+                  <div className="mb-1 flex items-end justify-between">
+                    <span className="text-sm font-bold text-ink">{week.name}</span>
+                    <span className="font-data tabular-nums text-sm">
+                      <span className={isOverCapacity ? "text-critical" : "text-ink-soft"}>{week.demand} ft demand</span>
+                      <span className="mx-2 text-ink-soft">/</span>
+                      <span className="text-ink-soft">{week.capacity} ft capacity</span>
+                    </span>
                   </div>
+                  <ProgressBar
+                    label={week.name}
+                    showLabel={false}
+                    percent={Math.min(loadPct, 100)}
+                    tone={isOverCapacity ? "critical" : "success"}
+                  />
+                  {isOverCapacity && (
+                    <p className="mt-1 text-right text-xs font-semibold text-critical">
+                      Over capacity by {Math.round(week.demand - week.capacity)} ft (requires overtime or shift
+                      extension)
+                    </p>
+                  )}
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-3">
-                  <div 
-                    className={`h-3 rounded-full ${isOverCapacity ? 'bg-red-500' : 'bg-emerald-500'}`} 
-                    style={{ width: `${Math.min(loadPct, 100)}%` }}
-                  ></div>
-                </div>
-                {isOverCapacity && (
-                  <div className="mt-1 text-xs font-semibold text-red-500 text-right">
-                    Over capacity by {Math.round(week.demand - week.capacity)} ft (Requires Overtime or Shift Extension)
-                  </div>
+              );
+            })}
+
+          {metrics.unscheduled_demand > 0 && (
+            <Alert tone="warning" title="Unscheduled Backlog">
+              There is currently <strong>{metrics.unscheduled_demand} ft</strong> of required work from projects
+              that do not have a target date set. Assign deadlines to factor them into the capacity forecast.
+            </Alert>
+          )}
+        </Card>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">Master Schedule</h2>
+        <Card>
+          {loading ? (
+            <div className="p-6">
+              <Spinner label="Loading schedule…" />
+            </div>
+          ) : (
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Project Code</Th>
+                  <Th>Project Name</Th>
+                  <Th>Deadline</Th>
+                  <Th>Priority</Th>
+                  <Th>Status</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {projects.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={5} className="text-center text-ink-soft">
+                      No scheduled projects.
+                    </Td>
+                  </Tr>
+                ) : (
+                  projects.map((p) => (
+                    <Tr key={p.id}>
+                      <Td className="font-bold text-brand-deep">{p.quotation_no}</Td>
+                      <Td className="font-medium text-ink">{p.project_name || "-"}</Td>
+                      <Td>
+                        {p.target_date ? (
+                          new Date(p.target_date).toLocaleDateString("en-GB")
+                        ) : (
+                          <span className="text-xs text-warning">Unscheduled</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <Badge tone={priorityTone(p.priority)}>{p.priority}</Badge>
+                      </Td>
+                      <Td className="font-medium text-ink-soft">{p.status}</Td>
+                    </Tr>
+                  ))
                 )}
-              </div>
-            );
-          })}
-        </div>
-        
-        {metrics.unscheduled_demand > 0 && (
-          <div className="mt-6 p-4 bg-orange-50 border border-orange-100 rounded-xl">
-             <h3 className="text-sm font-bold text-orange-800 mb-1">Unscheduled Backlog</h3>
-             <p className="text-sm text-orange-700">There is currently <strong>{metrics.unscheduled_demand} ft</strong> of required work from projects that do not have a Target Date set. Assign deadlines to them to factor them into the capacity forecast.</p>
-          </div>
-        )}
-      </div>
-<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h2 className="text-lg font-bold text-slate-800">Master Schedule</h2>
-        </div>
-        
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-white">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project Code</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Project Name</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Deadline</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Priority</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
-              {projects.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">No scheduled projects.</td>
-                </tr>
-              ) : (
-                projects.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap font-bold text-blue-700">{p.quotation_no}</td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-700">{p.project_name || "-"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-800 font-medium">{p.target_date ? new Date(p.target_date).toLocaleDateString('en-GB') : <span className="text-orange-500 text-xs">Unscheduled</span>}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        p.priority === 'P1' ? 'bg-red-100 text-red-700' : p.priority === 'P2' ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {p.priority}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">{p.status}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      </section>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 export { default as Button } from "./Button";
 export { Card, CardHeader, CardBody } from "./Card";
 export { default as MetricCard } from "./MetricCard";
+export { default as ProgressBar } from "./ProgressBar";
 export { default as Badge } from "./Badge";
 export { Table, THead, TBody, Tr, Th, Td } from "./Table";
 export { default as Alert } from "./Alert";

@@ -2,9 +2,38 @@
 import { apiFetch } from "@/lib/api";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardBody,
+  Badge,
+  Table,
+  THead,
+  TBody,
+  Tr,
+  Th,
+  Td,
+  Alert,
+  EmptyState,
+  Spinner,
+  Input,
+  Label,
+  useToast,
+} from "@/components/ui";
+
+type Tab = "welding" | "workforce" | "pool";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "welding", label: "Welding Workload Engine" },
+  { key: "workforce", label: "Workforce Master" },
+  { key: "pool", label: "Company Resource Pool" },
+];
+
 export default function MasterData() {
+  const { showToast, toasts } = useToast();
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("welding");
+  const [activeTab, setActiveTab] = useState<Tab>("welding");
   const [data, setData] = useState<any[]>([]);
   const [workforce, setWorkforce] = useState<any[]>([]);
   const [pool, setPool] = useState<any>({ total_tig_welders: 0, total_mig_welders: 0, total_grinders: 0 });
@@ -14,16 +43,16 @@ export default function MasterData() {
   const [syncingAll, setSyncingAll] = useState(false);
   const [uploadingEJ, setUploadingEJ] = useState(false);
   const [uploadingDJ, setUploadingDJ] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ tone: "success" | "critical"; text: string } | null>(null);
   const ejFileInputRef = useRef<HTMLInputElement>(null);
   const djFileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = () => {
     setLoading(true);
     Promise.all([
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/welding`).then(r => r.json()),
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/workforce`).then(r => r.json()),
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/pool`).then(r => r.json())
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/welding`).then((r) => r.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/workforce`).then((r) => r.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/pool`).then((r) => r.json()),
     ]).then(([weldingRes, workforceRes, poolRes]) => {
       setData(weldingRes.data || []);
       setWorkforce(workforceRes.data || []);
@@ -39,15 +68,15 @@ export default function MasterData() {
 
   const handleSyncEJ = async () => {
     setSyncingEJ(true);
-    setMessage("");
+    setMessage(null);
     try {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/sync/ej`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
-      setMessage("EJ " + json.message);
+      setMessage({ tone: "success", text: "EJ " + json.message });
       fetchData();
     } catch (err: any) {
-      setMessage("Error syncing EJ: " + err.message);
+      setMessage({ tone: "critical", text: "Error syncing EJ: " + err.message });
     } finally {
       setSyncingEJ(false);
     }
@@ -55,15 +84,15 @@ export default function MasterData() {
 
   const handleSyncDJ = async () => {
     setSyncingDJ(true);
-    setMessage("");
+    setMessage(null);
     try {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/sync/dj`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
-      setMessage("DJ " + json.message);
+      setMessage({ tone: "success", text: "DJ " + json.message });
       fetchData();
     } catch (err: any) {
-      setMessage("Error syncing DJ: " + err.message);
+      setMessage({ tone: "critical", text: "Error syncing DJ: " + err.message });
     } finally {
       setSyncingDJ(false);
     }
@@ -71,15 +100,15 @@ export default function MasterData() {
 
   const handleSyncAll = async () => {
     setSyncingAll(true);
-    setMessage("");
+    setMessage(null);
     try {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/sync/all`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail);
-      setMessage(json.message);
+      setMessage({ tone: "success", text: json.message });
       fetchData();
     } catch (err: any) {
-      setMessage("Error syncing all data: " + err.message);
+      setMessage({ tone: "critical", text: "Error syncing all data: " + err.message });
     } finally {
       setSyncingAll(false);
     }
@@ -92,7 +121,7 @@ export default function MasterData() {
     setUploading: (v: boolean) => void
   ) => {
     setUploading(true);
-    setMessage("");
+    setMessage(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -102,10 +131,10 @@ export default function MasterData() {
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || "Upload failed");
-      setMessage(`${label} ` + json.message);
+      setMessage({ tone: "success", text: `${label} ` + json.message });
       fetchData();
     } catch (err: any) {
-      setMessage(`Error uploading ${label} file: ` + err.message);
+      setMessage({ tone: "critical", text: `Error uploading ${label} file: ` + err.message });
     } finally {
       setUploading(false);
     }
@@ -127,9 +156,9 @@ export default function MasterData() {
     await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/workforce/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productivity })
+      body: JSON.stringify({ productivity }),
     });
-    alert("Workforce productivity updated");
+    showToast("Workforce productivity updated", "success");
     fetchData();
   };
 
@@ -138,275 +167,270 @@ export default function MasterData() {
     await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/pool`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(pool)
+      body: JSON.stringify(pool),
     });
-    alert("Company resource pool updated");
+    showToast("Company resource pool updated", "success");
     fetchData();
   };
 
-  if (loading) return <div className="text-slate-500">Loading master data...</div>;
+  const canViewMaster = userRole === "Developer" || userRole === "GM";
+
+  if (loading) {
+    return (
+      <div className="p-10">
+        <Spinner label="Loading master data…" />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold text-slate-900 mb-2">Production & Capacity Master</h1>
-      <p className="text-slate-500 mb-8">Manage the algorithm's base constants, master data, and total company resources.</p>
-
-      <div className="flex space-x-4 mb-6 border-b border-slate-200">
-        <button onClick={() => setActiveTab('welding')} className={`pb-2 px-1 font-medium ${activeTab === 'welding' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Welding Workload Engine</button>
-        <button onClick={() => setActiveTab('workforce')} className={`pb-2 px-1 font-medium ${activeTab === 'workforce' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Workforce Master</button>
-        <button onClick={() => setActiveTab('pool')} className={`pb-2 px-1 font-medium ${activeTab === 'pool' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Company Resource Pool</button>
+    <div>
+      <div>
+        <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">
+          Production &amp; Capacity Master
+        </h1>
+        <p className="text-ink-soft">Manage the algorithm&apos;s base constants, master data, and total company resources.</p>
       </div>
 
-      {activeTab === 'welding' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">Welding Master Data</h2>
-              <p className="text-sm text-slate-500">Base configuration for expansion joint sizes.</p>
-              <p className="text-xs text-slate-400 mt-1">
-                &quot;Sync&quot; re-reads the file already on the server. &quot;Upload&quot; replaces it with a new Excel file you pick now.
-              </p>
-            </div>
-            {(userRole === "Developer" || userRole === "GM") && (
-              <div className="flex flex-wrap gap-2 justify-end">
-                <button
-                  onClick={handleSyncAll}
-                  disabled={syncingEJ || syncingDJ || syncingAll}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
-                >
-                  {syncingAll ? "Syncing Both..." : "Sync All Data"}
-                </button>
-                <button
-                  onClick={handleSyncEJ}
-                  disabled={syncingEJ || syncingDJ || syncingAll}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
-                >
-                  {syncingEJ ? "Syncing EJ..." : "Sync EJ Data"}
-                </button>
-                <button
-                  onClick={handleSyncDJ}
-                  disabled={syncingEJ || syncingDJ || syncingAll}
-                  className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
-                >
-                  {syncingDJ ? "Syncing DJ..." : "Sync DJ Data"}
-                </button>
+      <div className="mt-6 flex gap-2 border-b border-line">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`-mb-px border-b-2 px-1 pb-2.5 text-sm font-semibold transition-colors ${
+              activeTab === tab.key
+                ? "border-brand text-brand-deep"
+                : "border-transparent text-ink-soft hover:text-ink"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-                <input
-                  ref={ejFileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={handleEJFileSelected}
-                />
-                <button
-                  onClick={() => ejFileInputRef.current?.click()}
-                  disabled={uploadingEJ || uploadingDJ}
-                  className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-300 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
-                >
-                  {uploadingEJ ? "Uploading EJ..." : "Upload EJ Excel"}
-                </button>
+      {activeTab === "welding" && (
+        <Card className="mt-6">
+          <CardHeader
+            title="Welding Master Data"
+            action={
+              canViewMaster && (
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="secondary" onClick={handleSyncAll} disabled={syncingEJ || syncingDJ || syncingAll}>
+                    {syncingAll ? "Syncing Both…" : "Sync All Data"}
+                  </Button>
+                  <Button variant="secondary" onClick={handleSyncEJ} disabled={syncingEJ || syncingDJ || syncingAll}>
+                    {syncingEJ ? "Syncing EJ…" : "Sync EJ Data"}
+                  </Button>
+                  <Button variant="secondary" onClick={handleSyncDJ} disabled={syncingEJ || syncingDJ || syncingAll}>
+                    {syncingDJ ? "Syncing DJ…" : "Sync DJ Data"}
+                  </Button>
 
-                <input
-                  ref={djFileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={handleDJFileSelected}
-                />
-                <button
-                  onClick={() => djFileInputRef.current?.click()}
-                  disabled={uploadingEJ || uploadingDJ}
-                  className="bg-teal-100 hover:bg-teal-200 text-teal-700 border border-teal-300 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
-                >
-                  {uploadingDJ ? "Uploading DJ..." : "Upload DJ Excel"}
-                </button>
-              </div>
-            )}
-          </div>
-          
-          {message && (
-            <div className={`mb-6 p-4 rounded-lg border ${message.startsWith('Error') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
-              {message}
-            </div>
-          )}
+                  <input ref={ejFileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleEJFileSelected} />
+                  <Button variant="ghost" onClick={() => ejFileInputRef.current?.click()} disabled={uploadingEJ || uploadingDJ}>
+                    {uploadingEJ ? "Uploading EJ…" : "Upload EJ Excel"}
+                  </Button>
 
-          {(userRole === "Developer" || userRole === "GM") ? (
-            <div className="space-y-8">
-              
-              {/* Expansion Joints Table */}
-              <div>
-                <h3 className="text-md font-bold text-slate-800 mb-3 border-l-4 border-indigo-600 pl-2">Expansion Joints</h3>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">TIG (ft)</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">MIG (ft)</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-slate-200">
-                      {data.filter(r => r.type === 'EJ').map((row) => (
-                        <tr key={`EJ-${row.size}`} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.tig_feet}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.grinding_feet}</td>
-                        </tr>
-                      ))}
-                      {data.filter(r => r.type === 'EJ').length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center text-slate-500 text-sm">
+                  <input ref={djFileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleDJFileSelected} />
+                  <Button variant="ghost" onClick={() => djFileInputRef.current?.click()} disabled={uploadingEJ || uploadingDJ}>
+                    {uploadingDJ ? "Uploading DJ…" : "Upload DJ Excel"}
+                  </Button>
+                </div>
+              )
+            }
+          />
+          <CardBody className="p-5">
+            <p className="-mt-1 text-[13px] text-ink-soft">
+              &quot;Sync&quot; re-reads the file already on the server. &quot;Upload&quot; replaces it with a new Excel file you pick now.
+            </p>
+
+            {message && <Alert tone={message.tone} title={message.tone === "success" ? "Success" : "Error"}>{message.text}</Alert>}
+
+            {canViewMaster ? (
+              <div className="flex flex-col gap-8">
+                <div>
+                  <h3 className="mb-3 border-l-4 border-brand pl-2 font-display text-sm font-bold uppercase tracking-wide text-ink">
+                    Expansion Joints
+                  </h3>
+                  <Table>
+                    <THead>
+                      <Tr>
+                        <Th>Size (NB)</Th>
+                        <Th numeric>TIG (ft)</Th>
+                        <Th numeric>MIG (ft)</Th>
+                        <Th numeric>Grinding (sq ft)</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {data
+                        .filter((r) => r.type === "EJ")
+                        .map((row) => (
+                          <Tr key={`EJ-${row.size}`}>
+                            <Td className="font-bold text-ink">{row.size}</Td>
+                            <Td numeric>{row.tig_feet}</Td>
+                            <Td numeric>{row.mig_feet}</Td>
+                            <Td numeric>{row.grinding_feet}</Td>
+                          </Tr>
+                        ))}
+                      {data.filter((r) => r.type === "EJ").length === 0 && (
+                        <Tr>
+                          <Td colSpan={4} className="text-center text-ink-soft">
                             No Expansion Joint records found. Please sync data.
-                          </td>
-                        </tr>
+                          </Td>
+                        </Tr>
                       )}
-                    </tbody>
-                  </table>
+                    </TBody>
+                  </Table>
                 </div>
-              </div>
 
-              {/* Dismantling Joints Table */}
-              <div>
-                <h3 className="text-md font-bold text-slate-800 mb-3 border-l-4 border-teal-600 pl-2">Dismantling Joints</h3>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-slate-200 border border-slate-200">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Size (NB)</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Welding Feet</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grinding (sq ft)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-slate-200">
-                      {data.filter(r => r.type === 'DJ').map((row) => (
-                        <tr key={`DJ-${row.size}`} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 text-sm font-medium text-slate-900">{row.size}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.mig_feet || row.tig_feet}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.grinding_feet}</td>
-                        </tr>
-                      ))}
-                      {data.filter(r => r.type === 'DJ').length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="px-4 py-8 text-center text-slate-500 text-sm">
+                <div>
+                  <h3 className="mb-3 border-l-4 border-brand-deep pl-2 font-display text-sm font-bold uppercase tracking-wide text-ink">
+                    Dismantling Joints
+                  </h3>
+                  <Table>
+                    <THead>
+                      <Tr>
+                        <Th>Size (NB)</Th>
+                        <Th numeric>Welding Feet</Th>
+                        <Th numeric>Grinding (sq ft)</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {data
+                        .filter((r) => r.type === "DJ")
+                        .map((row) => (
+                          <Tr key={`DJ-${row.size}`}>
+                            <Td className="font-bold text-ink">{row.size}</Td>
+                            <Td numeric>{row.mig_feet || row.tig_feet}</Td>
+                            <Td numeric>{row.grinding_feet}</Td>
+                          </Tr>
+                        ))}
+                      {data.filter((r) => r.type === "DJ").length === 0 && (
+                        <Tr>
+                          <Td colSpan={3} className="text-center text-ink-soft">
                             No Dismantling Joint records found. Please sync data.
-                          </td>
-                        </tr>
+                          </Td>
+                        </Tr>
                       )}
-                    </tbody>
-                  </table>
+                    </TBody>
+                  </Table>
                 </div>
               </div>
-
-            </div>
-          ) : (
-            <div className="p-8 text-center bg-slate-50 rounded-lg border border-slate-200">
-              <svg className="mx-auto h-12 w-12 text-slate-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <h3 className="text-lg font-medium text-slate-900">Access Restricted</h3>
-              <p className="mt-2 text-sm text-slate-500">You do not have permission to view the raw welding master data. Sync operations are permitted if authorized.</p>
-            </div>
-          )}
-        </div>
+            ) : (
+              <EmptyState
+                title="Access Restricted"
+                description="You do not have permission to view the raw welding master data. Sync operations are permitted if authorized."
+              />
+            )}
+          </CardBody>
+        </Card>
       )}
 
-      {activeTab === 'workforce' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">Base Productivity (ft/hour)</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {workforce.map(w => (
-              <div key={w.id} className="border border-slate-200 p-4 rounded-lg">
-                <label className="block text-sm font-medium text-slate-700 mb-2">{w.resource_type}</label>
-                <div className="flex gap-2">
-                  <input
+      {activeTab === "workforce" && (
+        <Card className="mt-6">
+          <CardHeader title="Base Productivity (ft/hour)" />
+          <CardBody className="p-5">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              {workforce.map((w) => (
+                <div key={w.id} className="rounded-md border border-line p-4">
+                  <Label>{w.resource_type}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={w.productivity}
+                      onChange={(e) => {
+                        const newWf = [...workforce];
+                        const idx = newWf.findIndex((x) => x.id === w.id);
+                        newWf[idx].productivity = parseFloat(e.target.value) || 0;
+                        setWorkforce(newWf);
+                      }}
+                    />
+                    <Button onClick={() => updateWorkforce(w.id, w.productivity)}>Save</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {activeTab === "pool" && (
+        <Card className="mt-6">
+          <CardHeader title="Company Resource Pool" />
+          <form onSubmit={updatePool}>
+            <CardBody className="p-5">
+              {pool.required && (
+                <div className="rounded-md border border-line bg-paper p-4">
+                  <h3 className="mb-3 text-[12.5px] font-semibold text-ink-soft">Live Requirements (Active Projects)</h3>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="flex items-center justify-between rounded border border-line bg-paper-raised p-2">
+                      <span className="text-sm text-ink-soft">
+                        TIG Required: <strong className="text-ink">{pool.required.tig}</strong>
+                      </span>
+                      <Badge tone={pool.total_tig_welders - pool.required.tig < 0 ? "critical" : "success"}>
+                        Deficit: {pool.total_tig_welders - pool.required.tig}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between rounded border border-line bg-paper-raised p-2">
+                      <span className="text-sm text-ink-soft">
+                        MIG Required: <strong className="text-ink">{pool.required.mig}</strong>
+                      </span>
+                      <Badge tone={pool.total_mig_welders - pool.required.mig < 0 ? "critical" : "success"}>
+                        Deficit: {pool.total_mig_welders - pool.required.mig}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between rounded border border-line bg-paper-raised p-2">
+                      <span className="text-sm text-ink-soft">
+                        Grinders Required: <strong className="text-ink">{pool.required.grinders}</strong>
+                      </span>
+                      <Badge tone={pool.total_grinders - pool.required.grinders < 0 ? "critical" : "success"}>
+                        Deficit: {pool.total_grinders - pool.required.grinders}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div>
+                  <Label>Total TIG Welders</Label>
+                  <Input
                     type="number"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-black bg-white"
-                    value={w.productivity}
-                    onChange={(e) => {
-                      const newWf = [...workforce];
-                      const idx = newWf.findIndex(x => x.id === w.id);
-                      newWf[idx].productivity = parseFloat(e.target.value) || 0;
-                      setWorkforce(newWf);
-                    }}
+                    min="0"
+                    required
+                    value={pool.total_tig_welders}
+                    onChange={(e) => setPool({ ...pool, total_tig_welders: parseInt(e.target.value) || 0 })}
                   />
-                  <button onClick={() => updateWorkforce(w.id, w.productivity)} className="bg-indigo-600 text-white px-4 py-2 rounded-md font-medium text-sm">Save</button>
+                </div>
+                <div>
+                  <Label>Total MIG Welders</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    required
+                    value={pool.total_mig_welders}
+                    onChange={(e) => setPool({ ...pool, total_mig_welders: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <Label>Total Grinders</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    required
+                    value={pool.total_grinders}
+                    onChange={(e) => setPool({ ...pool, total_grinders: parseInt(e.target.value) || 0 })}
+                  />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+              <Button type="submit" className="w-fit justify-center">
+                Save Pool Settings
+              </Button>
+            </CardBody>
+          </form>
+        </Card>
       )}
 
-      {activeTab === 'pool' && (
-        <form onSubmit={updatePool} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">Company Resource Pool</h2>
-
-          {pool.required && (
-            <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-              <h3 className="text-sm font-semibold text-slate-700 mb-3">Live Requirements (Active Projects)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex justify-between items-center p-2 bg-white border border-slate-100 rounded">
-                  <span className="text-sm text-slate-600">TIG Required: <strong>{pool.required.tig}</strong></span>
-                  <span className={`text-sm font-bold ${pool.total_tig_welders - pool.required.tig < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    Deficit: {pool.total_tig_welders - pool.required.tig}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-white border border-slate-100 rounded">
-                  <span className="text-sm text-slate-600">MIG Required: <strong>{pool.required.mig}</strong></span>
-                  <span className={`text-sm font-bold ${pool.total_mig_welders - pool.required.mig < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    Deficit: {pool.total_mig_welders - pool.required.mig}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-white border border-slate-100 rounded">
-                  <span className="text-sm text-slate-600">Grinders Required: <strong>{pool.required.grinders}</strong></span>
-                  <span className={`text-sm font-bold ${pool.total_grinders - pool.required.grinders < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    Deficit: {pool.total_grinders - pool.required.grinders}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Total TIG Welders</label>
-              <input
-                type="number"
-                min="0"
-                required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg text-black bg-white"
-                value={pool.total_tig_welders}
-                onChange={(e) => setPool({...pool, total_tig_welders: parseInt(e.target.value) || 0})}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Total MIG Welders</label>
-              <input
-                type="number"
-                min="0"
-                required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg text-black bg-white"
-                value={pool.total_mig_welders}
-                onChange={(e) => setPool({...pool, total_mig_welders: parseInt(e.target.value) || 0})}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Total Grinders</label>
-              <input
-                type="number"
-                min="0"
-                required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg text-black bg-white"
-                value={pool.total_grinders}
-                onChange={(e) => setPool({...pool, total_grinders: parseInt(e.target.value) || 0})}
-              />
-            </div>
-          </div>
-          <button type="submit" className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium">Save Pool Settings</button>
-        </form>
-      )}
+      {toasts}
     </div>
   );
 }

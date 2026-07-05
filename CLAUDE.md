@@ -33,8 +33,8 @@ This file lists the command-line patterns, development constraints, database req
 - 🚀 **Railway Tracking**: Railway deploys automatically from the `main` branch. Never push experimental or unverified changes directly to `main`.
 
 ### 4. Progress Tracking
-- 📝 **Update projectprogress.md**: At the end of every development session, document the work in `projectprogress.md` in the workspace root.
-- **Content**: Detail what was done, what problems were faced, how they were solved, what is pending, and what needs to be done in the next session.
+- 📝 **Read `projectprogress.md` at the START of every session**, before doing anything else, to pick up decisions made, work completed, and what's pending from prior sessions — don't rely on the user to re-explain status that's already written down.
+- 📝 **Update `projectprogress.md` at the END of every development session**, documenting what was decided, what was done, what problems were faced, how they were solved, what is pending, and what needs to be done next session.
 
 ### 5. Mistakes Log
 - Refer to `mistakes.md` in the workspace root for past deployment logs, branch configuration errors, and dependency resolution details to avoid repeat issues.

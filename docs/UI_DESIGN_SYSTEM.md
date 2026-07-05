@@ -51,12 +51,10 @@ Import from the barrel: `import { Button, Card, ... } from "@/components/ui";`
 
 ## Migration status (as of 2026-07-05)
 
-Migrated: Progress/Executive/Planning/WIP/Hold dashboards, Projects
+All pages migrated: Progress/Executive/Planning/WIP/Hold dashboards, Projects
 List/Add/Edit, Shop Floor Entry, Visual Tracking, Workforce Intelligence,
-Daily Scheduler, plus the Sidebar and root layout/tokens.
-
-**Not yet migrated** (still on the old hand-rolled Tailwind, no shared
-components): Master Data (`/master`), Inventory (`/inventory`), Operators
-(`/operators`), Audit (`/audit`), the root Login page (`/`), and the
-Dispatch/Inspection placeholder pages. `/master` and `/operators` still have
-`alert()`/`confirm()` calls to replace when migrated.
+Daily Scheduler, Master Data, Inventory, Operators, Audit, the root Login
+page, and the Dispatch/Inspection placeholder pages (now proper `EmptyState`
+"coming soon" screens) — plus the Sidebar and root layout/tokens. No more
+`alert()`/`confirm()`/`prompt()` calls remain anywhere in the app; all
+destructive/informational dialogs go through `useConfirm`/`useToast`.

@@ -136,31 +136,11 @@ def auto_assign_tasks(
     from backend.services.mes_service import MESService
     from backend.services.db_service import ProjectResourceAssignment
     
+    from backend.services.production_service import aggregate_line_feet
+
     for p in projects:
-        total_tig = 0
-        total_mig = 0
-        total_grind = 0
-        
-        for line in p.production_lines:
-            jtype = getattr(line, 'joint_type', None) or 'EJ'
-            if jtype == 'DJ':
-                if (line.tig_feet or 0) > 0:
-                    # DJ has no TIG process - sync_project_production_lines should
-                    # always store tig_feet=0 for DJ lines. Non-zero here means the
-                    # line was edited outside that path; fold it into MIG so no
-                    # footage is silently dropped, but surface it as a data issue.
-                    logger.warning(
-                        "DJ production line %s (project %s) has non-zero tig_feet=%.2f; "
-                        "folding into MIG requirement. This indicates the line was not "
-                        "written via sync_project_production_lines.",
-                        line.id, p.id, line.tig_feet
-                    )
-                total_mig += (line.mig_feet or 0) + (line.tig_feet or 0)
-            else:
-                total_tig += (line.tig_feet or 0)
-                total_mig += (line.mig_feet or 0)
-            total_grind += (line.grinding_feet or 0)
-            
+        total_tig, total_mig, total_grind = aggregate_line_feet(p.production_lines)
+
         total_feet = total_tig + total_mig + total_grind
         if total_feet == 0:
             continue

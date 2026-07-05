@@ -32,32 +32,29 @@ class AttendanceResponse(BaseModel):
 
 @router.post("/attendance", response_model=AttendanceResponse)
 def submit_attendance(
-    attendance: AttendanceCreate, 
-    db: Session = Depends(get_db), 
+    attendance: AttendanceCreate,
+    db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"]))
 ):
-    existing = db.query(AttendanceLog).filter(
-        AttendanceLog.user_id == attendance.user_id,
-        AttendanceLog.date == attendance.date
-    ).first()
+    # Upsert on the (user_id, date) unique constraint instead of check-then-insert,
+    # which raced under concurrent submits (two requests could both pass the
+    # "does it exist" check and both insert, producing duplicate attendance rows).
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    if existing:
-        existing.status = attendance.status
-        existing.hours = attendance.hours
-        db.commit()
-        db.refresh(existing)
-        return existing
-    
-    new_log = AttendanceLog(
+    stmt = pg_insert(AttendanceLog).values(
         user_id=attendance.user_id,
         date=attendance.date,
         status=attendance.status,
         hours=attendance.hours
-    )
-    db.add(new_log)
+    ).on_conflict_do_update(
+        index_elements=[AttendanceLog.user_id, AttendanceLog.date],
+        set_={"status": attendance.status, "hours": attendance.hours}
+    ).returning(AttendanceLog.id)
+
+    result = db.execute(stmt)
     db.commit()
-    db.refresh(new_log)
-    return new_log
+    new_id = result.scalar_one()
+    return db.query(AttendanceLog).filter(AttendanceLog.id == new_id).first()
 
 @router.get("/attendance", response_model=List[AttendanceResponse])
 def get_attendance(

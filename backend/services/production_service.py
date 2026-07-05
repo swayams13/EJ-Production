@@ -59,6 +59,39 @@ def compute_master_feet(master, joint_type, qty):
     return tig, mig, grind
 
 
+def aggregate_line_feet(lines):
+    """
+    Sum TIG/MIG/Grinding feet across a list of ProjectProductionLine rows.
+    Single source of truth for this aggregation, used by duration/requirement
+    calculations, the scheduler, and the planning dashboard.
+
+    DJ lines should already have tig_feet=0 and their footage folded into
+    mig_feet by compute_master_feet() at sync time. If a DJ line is ever
+    found with non-zero tig_feet (written outside that path - e.g. a manual
+    DB edit or a future bug), it is folded into MIG here too so no footage
+    is silently dropped, and a warning is logged since it indicates the
+    tig_feet==0-for-DJ invariant was broken.
+    """
+    tot_tig, tot_mig, tot_grind = 0.0, 0.0, 0.0
+    for line in lines:
+        jtype = getattr(line, 'joint_type', None) or 'EJ'
+        line_tig = line.tig_feet or 0
+        line_mig = line.mig_feet or 0
+        if jtype == 'DJ':
+            if line_tig > 0:
+                logger.warning(
+                    "DJ production line %s has non-zero tig_feet=%.2f; folding into MIG. "
+                    "This indicates the line was not written via sync_project_production_lines.",
+                    getattr(line, 'id', '?'), line_tig
+                )
+            tot_mig += line_mig + line_tig
+        else:
+            tot_tig += line_tig
+            tot_mig += line_mig
+        tot_grind += (line.grinding_feet or 0)
+    return tot_tig, tot_mig, tot_grind
+
+
 def _import_ej_master_dataframe(df):
     """
     Shared EJ import logic: takes a raw EJ welding-feet DataFrame (as read from
@@ -332,10 +365,8 @@ def calculate_project_duration(project_id, tig_welders, mig_welders, grinders):
     session = SessionLocal()
     try:
         lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-        tot_tig = sum((l.tig_feet or 0) for l in lines)
-        tot_mig = sum((l.mig_feet or 0) for l in lines)
-        tot_grind = sum((l.grinding_feet or 0) for l in lines)
-        
+        tot_tig, tot_mig, tot_grind = aggregate_line_feet(lines)
+
         from backend.services.db_service import WeldingLog
         line_ids = [l.id for l in lines]
         if line_ids:
@@ -373,10 +404,8 @@ def calculate_required_resources_for_deadline(project_id, target_days):
     session = SessionLocal()
     try:
         lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-        tot_tig = sum((l.tig_feet or 0) for l in lines)
-        tot_mig = sum((l.mig_feet or 0) for l in lines)
-        tot_grind = sum((l.grinding_feet or 0) for l in lines)
-        
+        tot_tig, tot_mig, tot_grind = aggregate_line_feet(lines)
+
         from backend.services.db_service import WeldingLog
         line_ids = [l.id for l in lines]
         if line_ids:

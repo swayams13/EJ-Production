@@ -5,7 +5,7 @@ from datetime import datetime
 import io
 
 from backend.services.db_service import get_db, Project, ProjectProductionLine
-from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel
+from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel, aggregate_line_feet
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
@@ -25,31 +25,65 @@ def export_dashboard():
         headers={"Content-Disposition": "attachment; filename=Master_Production_Register.xlsx"}
     )
 
+# Keyword -> shop mapping for MES part names (see backend/services/templates.py).
+# Checked in order; first substring match wins. Anything unmatched falls back
+# to "Fabrication Shop" (cutting/bending/forming/welding of raw sub-parts).
+_PART_SHOP_KEYWORDS = [
+    ("assembly", "Assembly Shop"),
+    ("flange", "Machining Shop"),
+    ("bellows", "Bellows Shop"),
+    ("collar", "Bellows Shop"),
+]
+
+
+def _shop_for_part(part_name: str) -> str:
+    name = (part_name or "").lower()
+    for keyword, shop in _PART_SHOP_KEYWORDS:
+        if keyword in name:
+            return shop
+    return "Fabrication Shop"
+
+
+def _part_completion_pct(part, line_qty: int) -> float:
+    if not part.processes or not line_qty:
+        return 0.0
+    total = sum(min(1.0, (proc.completed_qty or 0) / line_qty) for proc in part.processes)
+    return total / len(part.processes)
+
+
 def get_wip_dashboard(db: Session):
-    from backend.services.mes_service import MESService
+    from sqlalchemy.orm import selectinload
+    from backend.services.db_service import Part
+
     active_projects = db.query(Project).filter(Project.status != "Completed").all()
-    
+
     wip_data = {
         "Fabrication Shop": {"required": 0, "completed": 0},
         "Assembly Shop": {"required": 0, "completed": 0},
         "Bellows Shop": {"required": 0, "completed": 0},
         "Machining Shop": {"required": 0, "completed": 0}
     }
-    
+
     for p in active_projects:
-        lines = db.query(ProjectProductionLine).filter_by(project_id=p.id).all()
+        lines = db.query(ProjectProductionLine).options(
+            selectinload(ProjectProductionLine.parts).selectinload(Part.processes)
+        ).filter_by(project_id=p.id).all()
+
         for line in lines:
-            wip_data["Bellows Shop"]["required"] += line.quantity
-            
-        progress = MESService.calculate_project_progress(db, p.id)
-        if progress > 0:
-            for line in lines:
-                wip_data["Bellows Shop"]["completed"] += (line.quantity * (progress / 100))
-                
+            line_qty = line.quantity or 0
+            if line_qty == 0:
+                continue
+            for part in line.parts:
+                shop = _shop_for_part(part.name)
+                required_units = line_qty * ((part.weight_percentage or 0.0) / 100.0)
+                completed_units = required_units * _part_completion_pct(part, line_qty)
+                wip_data[shop]["required"] += required_units
+                wip_data[shop]["completed"] += completed_units
+
     for shop in wip_data:
         wip_data[shop]["required"] = round(wip_data[shop]["required"], 1)
         wip_data[shop]["completed"] = round(wip_data[shop]["completed"], 1)
-        
+
     return wip_data
 
 @router.get("/wip")
@@ -134,19 +168,8 @@ def get_planning_dashboard(db: Session = Depends(get_db)):
             late_projects += 1
             
         # Forecasting metrics
-        total_tig = 0
-        total_mig = 0
-        total_grind = 0
-        
-        for line in p.production_lines:
-            jtype = getattr(line, 'joint_type', None) or 'EJ'
-            if jtype == 'DJ':
-                total_mig += (line.mig_feet or 0) + (line.tig_feet or 0)
-            else:
-                total_tig += (line.tig_feet or 0)
-                total_mig += (line.mig_feet or 0)
-            total_grind += (line.grinding_feet or 0)
-            
+        total_tig, total_mig, total_grind = aggregate_line_feet(p.production_lines)
+
         total_feet = total_tig + total_mig + total_grind
         progress_pct = MESService.calculate_project_progress(db, p.id)
         remaining_feet = total_feet * (1 - (progress_pct / 100))

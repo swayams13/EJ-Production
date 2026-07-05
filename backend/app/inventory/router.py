@@ -61,16 +61,21 @@ def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
 
 @router.get("/shortages", response_model=List[ShortageResponse])
 def get_material_shortages(db: Session = Depends(get_db)):
-    active_projects = db.query(Project).filter(Project.status == "Active").all()
+    # Include Active, Hold, and Planning projects - only Completed projects have
+    # no material demand left. Previously this only checked status == "Active",
+    # so Hold/Planning projects' material needs never surfaced as shortages.
+    relevant_projects = db.query(Project).filter(
+        (Project.status != "Completed") | (Project.status == None)
+    ).all()
     inventory = db.query(RawMaterialInventory).all()
-    
+
     stock_map = {}
     for inv in inventory:
         stock_map[(inv.material_name.lower(), inv.size, inv.joint_type)] = inv.current_stock
-        
+
     shortages = []
-    
-    for project in active_projects:
+
+    for project in relevant_projects:
         for line in project.production_lines:
             req_qty = line.quantity
             current_stock = stock_map.get(("bellows", line.size, line.joint_type), 0)

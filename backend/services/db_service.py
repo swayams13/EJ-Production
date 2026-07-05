@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, date
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 
@@ -37,13 +37,16 @@ class User(Base):
 
 class AttendanceLog(Base):
     __tablename__ = "attendance_logs"
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_attendance_user_date"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     date = Column(Date, default=date.today, nullable=False)
     status = Column(String, nullable=False) # Present, Absent, Leave, Overtime
     hours = Column(Float, nullable=True) # Used for overtime tracking
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     user = relationship("User")
 
 class Project(Base):

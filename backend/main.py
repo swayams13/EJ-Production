@@ -1,4 +1,5 @@
 import os
+import logging
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -7,6 +8,9 @@ from datetime import datetime, date
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session
 from backend.services.db_service import (
@@ -50,81 +54,86 @@ app.add_middleware(
 # Init DB
 init_db()
 
+def _run_startup_migration(label, statements):
+    """
+    Run a list of raw-SQL statements as a best-effort startup migration.
+    Each statement is expected to be self-guarding (idempotent) - e.g. an
+    ALTER TABLE ADD COLUMN that fails harmlessly if the column already
+    exists, or an UPDATE whose WHERE clause only matches un-migrated rows.
+    Failures are logged (not silently swallowed) so a genuine DB error is
+    visible in the server logs instead of looking identical to the expected
+    "already applied" case.
+    """
+    from backend.services.db_service import engine
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+            conn.commit()
+    except Exception as e:
+        logger.warning("Startup migration '%s' skipped/failed (likely already applied): %s", label, e)
+
+
 # Auto-migrate new columns
-try:
-    from backend.services.db_service import engine
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("ALTER TABLE projects ADD COLUMN status_note TEXT"))
-        conn.execute(text("ALTER TABLE projects ADD COLUMN hold_until_date DATE"))
-        conn.commit()
-except Exception:
-    pass # Columns already exist
+_run_startup_migration("projects.status_note/hold_until_date", [
+    "ALTER TABLE projects ADD COLUMN status_note TEXT",
+    "ALTER TABLE projects ADD COLUMN hold_until_date DATE",
+])
 
-try:
-    from backend.services.db_service import engine
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("ALTER TABLE projects ADD COLUMN hold_type TEXT"))
-        conn.commit()
-except Exception:
-    pass
+_run_startup_migration("projects.hold_type", [
+    "ALTER TABLE projects ADD COLUMN hold_type TEXT",
+])
 
-try:
-    from backend.services.db_service import engine
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("ALTER TABLE projects ADD COLUMN payroll TEXT DEFAULT 'Company'"))
-        conn.commit()
-except Exception:
-    pass
+_run_startup_migration("projects.payroll", [
+    "ALTER TABLE projects ADD COLUMN payroll TEXT DEFAULT 'Company'",
+])
 
-try:
-    from backend.services.db_service import engine
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("ALTER TABLE project_production_lines ADD COLUMN pn_rating TEXT"))
-        conn.commit()
-except Exception:
-    pass
+_run_startup_migration("project_production_lines.pn_rating", [
+    "ALTER TABLE project_production_lines ADD COLUMN pn_rating TEXT",
+])
 
 # Migrate DJ feet from TIG to MIG
-try:
-    from backend.services.db_service import engine
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        # Move feet in production lines
-        conn.execute(text("UPDATE project_production_lines SET mig_feet = COALESCE(mig_feet, 0) + COALESCE(tig_feet, 0), tig_feet = 0 WHERE joint_type = 'DJ' AND tig_feet > 0"))
-        
-        # Update process type in welding logs
-        conn.execute(text("""
-            UPDATE welding_logs 
-            SET process_type = 'MIG' 
-            WHERE process_type = 'TIG' 
-            AND production_line_id IN (SELECT id FROM project_production_lines WHERE joint_type = 'DJ')
-        """))
-        
-        # Migrate welders for DJ-only projects
-        conn.execute(text("""
-            UPDATE project_resource_assignments
-            SET assigned_mig_welders = COALESCE(assigned_mig_welders, 0) + COALESCE(assigned_tig_welders, 0),
-                assigned_tig_welders = 0
-            WHERE assigned_tig_welders > 0
-            AND project_id IN (
-                SELECT project_id 
-                FROM project_production_lines 
-                WHERE joint_type = 'DJ'
-            ) 
-            AND project_id NOT IN (
-                SELECT project_id 
-                FROM project_production_lines 
-                WHERE joint_type != 'DJ' OR joint_type IS NULL
-            )
-        """))
-        
-        conn.commit()
-except Exception:
-    pass
+_run_startup_migration("DJ feet TIG->MIG", [
+    "UPDATE project_production_lines SET mig_feet = COALESCE(mig_feet, 0) + COALESCE(tig_feet, 0), tig_feet = 0 WHERE joint_type = 'DJ' AND tig_feet > 0",
+    """
+    UPDATE welding_logs
+    SET process_type = 'MIG'
+    WHERE process_type = 'TIG'
+    AND production_line_id IN (SELECT id FROM project_production_lines WHERE joint_type = 'DJ')
+    """,
+    """
+    UPDATE project_resource_assignments
+    SET assigned_mig_welders = COALESCE(assigned_mig_welders, 0) + COALESCE(assigned_tig_welders, 0),
+        assigned_tig_welders = 0
+    WHERE assigned_tig_welders > 0
+    AND project_id IN (
+        SELECT project_id
+        FROM project_production_lines
+        WHERE joint_type = 'DJ'
+    )
+    AND project_id NOT IN (
+        SELECT project_id
+        FROM project_production_lines
+        WHERE joint_type != 'DJ' OR joint_type IS NULL
+    )
+    """,
+])
+
+# De-duplicate any attendance rows created by the pre-fix race condition
+# (check-then-insert with no DB constraint), then enforce one row per
+# worker per day going forward. Two separate migrations so a failure
+# adding the constraint doesn't obscure whether the dedupe itself ran.
+_run_startup_migration("attendance_logs dedupe", [
+    """
+    DELETE FROM attendance_logs a USING attendance_logs b
+    WHERE a.user_id = b.user_id AND a.date = b.date AND a.id < b.id
+    """,
+])
+
+_run_startup_migration("attendance_logs unique constraint", [
+    "ALTER TABLE attendance_logs ADD CONSTRAINT uq_attendance_user_date UNIQUE (user_id, date)",
+])
 # Dependency
 
 # Models

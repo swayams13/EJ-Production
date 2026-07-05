@@ -102,17 +102,29 @@ def get_welding_summary(req_id: int, db: Session = Depends(get_db), current_user
         "completed": completed
     }}
 
+VALID_WELDING_PROCESS_TYPES = ("TIG", "MIG", "Grinding")
+
 @router.post("/requirements/{req_id}/welding_logs")
 def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
     line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Requirement not found")
-        
+
+    if tx.process_type not in VALID_WELDING_PROCESS_TYPES:
+        raise HTTPException(status_code=400, detail=f"process_type must be one of {VALID_WELDING_PROCESS_TYPES}")
+
+    joint_type = getattr(line, 'joint_type', None) or 'EJ'
+    if joint_type == 'DJ' and tx.process_type == 'TIG':
+        raise HTTPException(
+            status_code=400,
+            detail="Dismantling Joint (DJ) lines have no TIG process; log this welding as MIG instead."
+        )
+
     if tx.operator_id is not None:
         user = db.query(User).filter_by(id=tx.operator_id).first()
         if not user:
             raise HTTPException(status_code=400, detail="Invalid operator")
-        
+
     log = WeldingLog(
         production_line_id=req_id,
         operator_id=tx.operator_id,

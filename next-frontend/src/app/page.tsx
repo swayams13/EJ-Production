@@ -41,8 +41,8 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper p-4">
-      <Card className="w-full max-w-md shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-brand-deep p-4">
+      <Card className="w-full max-w-md shadow-xl">
         <CardBody className="gap-6 p-8">
           <div className="text-center">
             <h1 className="font-display text-4xl font-extrabold uppercase tracking-wide text-brand-deep">EJ Tracker</h1>

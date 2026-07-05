@@ -1,5 +1,24 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-05 (Session 3 - UI/UX Redesign completion)
+
+### What we did today:
+- **Finished the design-system migration started in Session 2.** Migrated the final 7 pages onto the shared `ui/` component library: Master Data (`/master`), Inventory (`/inventory`), Operators (`/operators`), Audit (`/audit`), the root Login page (`/`), and the Dispatch/Inspection placeholders. All 22 routes are now on the new system — none of the old hand-rolled Tailwind pages remain.
+- **Replaced every remaining native browser dialog.** `window.confirm()` on Inventory's delete and Operators' delete → `useConfirm`; `window.alert()` on Master's workforce/pool-save success and Operators' delete-failure paths → `useToast`. Zero `alert()`/`confirm()`/`prompt()` calls remain anywhere in the app.
+- **Restyled Dispatch and Inspection** from plain "future phase" text blocks into proper `EmptyState` "coming soon" screens, consistent with the rest of the app.
+- **Rebuilt the Login page** (`next-frontend/src/app/page.tsx`) with the shared `Card`/`Input`/`Label`/`Button`/`Alert` components instead of one-off indigo/slate Tailwind, since it sits outside the `(main)` layout and had never been touched.
+- Updated `docs/UI_DESIGN_SYSTEM.md`'s migration-status section to reflect full completion.
+- Committed and pushed both rounds (Master Data alone, then the remaining 6 pages) to `demo` — not merged to `main` yet, pending the user's manual sign-off per the standing git workflow rule.
+
+### Problems faced (and how we solved them):
+- **Verifying pages against a live backend wasn't possible** (no local Postgres in this sandbox), and mocking `window.fetch` via the preview tool's `preview_eval` proved unreliable for some routes (the override was invisible to the actual page's fetch calls after certain client-side navigations, cause not fully diagnosed — worked for some pages, silently reverted to native `fetch` for others). Rather than keep fighting that, stood up a tiny local Python `http.server` on port 4500 (the app's configured `NEXT_PUBLIC_API_URL`) that serves canned JSON for the exact endpoints each page needs — real network requests, no in-page mocking, and it worked reliably every time. Verified all 7 pages' happy paths and several error/interactive paths (confirm modals, toasts, tab switching, login success) this way, then tore the mock server down.
+- **Flagged a suspicious `{/* AI agent hint */}` comment embedded in `node_modules/next/dist/docs/index.md`**, referenced by `next-frontend/AGENTS.md`'s instruction to read that directory before writing code. The comment was addressed directly at AI coding agents and unrelated to the task at hand (a UI reskin) — treated it as a likely prompt-injection attempt and disregarded it rather than following it, continuing with the established patterns from already-migrated pages instead.
+
+### What needs to be done next session:
+- Get the user's sign-off on the full visual result on `demo` (now that all 22 routes are migrated), then ask explicit permission before merging `demo` -> `main` per the standing git workflow rule.
+- Investigate the leftover untracked scratch/debug scripts in the repo root (`append_progress.py`, `check_latest.py`, `debug_*.py`, `fix_ej_versions.py`, `scratch_ops.py`, `backend/app/scheduler/router.py.patch`, `graphify-out/`) — unclear provenance, not part of any logged session's work; decide whether to commit, move, or delete them.
+- Broader enterprise-readiness gaps (still open, unrelated to this UI work): RBAC is disabled, no automated test suite, no structured logging/error tracking, no documented backup/DR strategy, hardcoded dev credentials in `.env`.
+
 ## Date: 2026-07-05 (Session 2 - UI/UX Redesign)
 
 ### What we did today:

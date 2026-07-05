@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import asc
@@ -7,6 +8,8 @@ from typing import List, Optional
 from backend.services.db_service import get_db, DailyTaskAssignment, Project, User, AttendanceLog
 from backend.app.auth.rbac import require_roles
 from backend.app.scheduler.schemas import TaskAssignmentCreate, TaskAssignmentResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/scheduler", tags=["Scheduler"])
 
@@ -141,6 +144,17 @@ def auto_assign_tasks(
         for line in p.production_lines:
             jtype = getattr(line, 'joint_type', None) or 'EJ'
             if jtype == 'DJ':
+                if (line.tig_feet or 0) > 0:
+                    # DJ has no TIG process - sync_project_production_lines should
+                    # always store tig_feet=0 for DJ lines. Non-zero here means the
+                    # line was edited outside that path; fold it into MIG so no
+                    # footage is silently dropped, but surface it as a data issue.
+                    logger.warning(
+                        "DJ production line %s (project %s) has non-zero tig_feet=%.2f; "
+                        "folding into MIG requirement. This indicates the line was not "
+                        "written via sync_project_production_lines.",
+                        line.id, p.id, line.tig_feet
+                    )
                 total_mig += (line.mig_feet or 0) + (line.tig_feet or 0)
             else:
                 total_tig += (line.tig_feet or 0)

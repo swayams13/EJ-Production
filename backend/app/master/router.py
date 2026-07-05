@@ -1,10 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from backend.services.production_service import get_welding_master_latest, import_welding_master_from_disk, import_dismantling_joint_master
+from backend.services.production_service import (
+    get_welding_master_latest,
+    import_welding_master_from_disk,
+    import_dismantling_joint_master,
+    import_welding_master_from_upload,
+    import_dismantling_joint_master_from_upload,
+)
 from backend.services.db_service import get_db
 from backend.app.master.schemas import WorkforceUpdate, PoolUpdate, WeldingSizeCreate
+from backend.app.auth.rbac import require_roles
 
 router = APIRouter(prefix="/api/v1/master", tags=["Master"])
+
+ALLOWED_MASTER_EXTENSIONS = (".xlsx", ".xls")
+
+
+def _read_upload_or_400(file: UploadFile):
+    if not file.filename.lower().endswith(ALLOWED_MASTER_EXTENSIONS):
+        raise HTTPException(status_code=400, detail="Only .xlsx/.xls files are accepted")
+    return file.file.read()
 
 @router.get("/welding")
 def get_welding_master_api():
@@ -126,34 +141,26 @@ def backfill_grinding_feet():
 
 def auto_sync_all_projects_with_master():
     from backend.services.db_service import SessionLocal, ProjectProductionLine, Project, ProjectResourceAssignment
-    from backend.services.production_service import get_welding_master_latest, calculate_required_resources_for_deadline
+    from backend.services.production_service import get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet
     from datetime import date
-    
+
     db = SessionLocal()
     try:
         master_records = get_welding_master_latest()
         master_data = {(m.size, m.joint_type): m for m in master_records}
-        
+
         lines = db.query(ProjectProductionLine).all()
         for line in lines:
             size = line.size
             qty = line.quantity
             j_type = getattr(line, 'joint_type', 'EJ')
-            
+
             m = master_data.get((size, j_type))
             if not m and j_type == 'DJ':
                 m = master_data.get((size, 'EJ'))
-                
+
             if m:
-                if j_type == 'DJ':
-                    new_tig = 0.0
-                    new_mig = ((m.tig_feet or 0.0) + (m.mig_feet or 0.0)) * qty
-                    new_grind = (m.grinding_feet or 0.0) * qty
-                else:
-                    new_tig = (m.tig_feet or 0.0) * qty
-                    new_mig = (m.mig_feet or 0.0) * qty
-                    new_grind = (m.grinding_feet or 0.0) * qty
-                
+                new_tig, new_mig, new_grind = compute_master_feet(m, j_type, qty)
                 if line.tig_feet != new_tig or line.mig_feet != new_mig or line.grinding_feet != new_grind:
                     line.tig_feet = new_tig
                     line.mig_feet = new_mig
@@ -192,6 +199,32 @@ def sync_dj_master_api():
     success, msg = import_dismantling_joint_master()
     if not success:
         raise HTTPException(status_code=500, detail=msg)
+    auto_sync_all_projects_with_master()
+    return {"success": True, "message": msg, "data": {}}
+
+@router.post("/welding-import")
+def welding_import_api(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"]))
+):
+    """Upload a new EJ (Expansion Joint) welding-feet-per-size Excel file and sync all projects to it."""
+    contents = _read_upload_or_400(file)
+    success, msg = import_welding_master_from_upload(contents)
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    auto_sync_all_projects_with_master()
+    return {"success": True, "message": msg, "data": {}}
+
+@router.post("/dj-import")
+def dj_import_api(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"]))
+):
+    """Upload a new DJ (Dismantling Joint) welding-feet-per-size Excel file and sync all projects to it."""
+    contents = _read_upload_or_400(file)
+    success, msg = import_dismantling_joint_master_from_upload(contents)
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
     auto_sync_all_projects_with_master()
     return {"success": True, "message": msg, "data": {}}
 

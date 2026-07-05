@@ -5,8 +5,8 @@ import math
 from typing import List, Optional
 from pydantic import BaseModel
 
-from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, WorkforceMaster, ProjectHoldHistory
-from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline
+from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory
+from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet, get_productivity_rates
 from backend.app.projects.schemas import ProjectCreate, ProjectUpdate, SimulationRequest, DurationRequest, SimulateDurationRequest, BellowItem
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Projects"])
@@ -26,14 +26,7 @@ def debug_reload_feet(db: Session = Depends(get_db)):
         if not m and j_type == 'DJ':
             m = master_data.get((size, 'EJ'))
         if m:
-            if j_type == 'DJ':
-                new_tig = 0.0
-                new_mig = ((m.tig_feet or 0.0) + (m.mig_feet or 0.0)) * qty
-                new_grind = (m.grinding_feet or 0.0) * qty
-            else:
-                new_tig = (m.tig_feet or 0.0) * qty
-                new_mig = (m.mig_feet or 0.0) * qty
-                new_grind = (m.grinding_feet or 0.0) * qty
+            new_tig, new_mig, new_grind = compute_master_feet(m, j_type, qty)
             if line.tig_feet != new_tig or line.mig_feet != new_mig or line.grinding_feet != new_grind:
                 line.tig_feet = new_tig
                 line.mig_feet = new_mig
@@ -287,26 +280,18 @@ def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
     for b in req.bellows:
         b_type = getattr(b, 'type', 'EJ')
         m = master_data.get((b.size, b_type))
-        
+
         if not m and b_type == 'DJ':
             m = master_data.get((b.size, 'EJ'))
-                
-        if m:
-            if b_type == 'DJ':
-                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-            else:
-                tot_tig += (m.tig_feet or 0) * b.qty
-                tot_mig += (m.mig_feet or 0) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-            
-    workforce = db.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-    
-    tig_prod = prod.get("TIG Welder", 180.0)
-    mig_prod = prod.get("MIG Welder", 120.0)
-    grind_prod = prod.get("Grinder", 80.0)
-    
+
+        b_tig, b_mig, b_grind = compute_master_feet(m, b_type, b.qty)
+        tot_tig += b_tig
+        tot_mig += b_mig
+        tot_grind += b_grind
+
+    rates = get_productivity_rates(db)
+    tig_prod, mig_prod, grind_prod = rates["tig"], rates["mig"], rates["grind"]
+
     effective_target_days = max(1, req.target_days)
     req_tig = math.ceil(tot_tig / (effective_target_days * tig_prod)) if tig_prod > 0 else 0
     req_mig = math.ceil(tot_mig / (effective_target_days * mig_prod)) if mig_prod > 0 else 0
@@ -348,25 +333,18 @@ def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db
     for b in req.bellows:
         b_type = getattr(b, 'type', 'EJ')
         m = master_data.get((b.size, b_type))
-        
+
         if not m and b_type == 'DJ':
             m = master_data.get((b.size, 'EJ'))
-                
-        if m:
-            if b_type == 'DJ':
-                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-            else:
-                tot_tig += (m.tig_feet or 0) * b.qty
-                tot_mig += (m.mig_feet or 0) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-            
-    workforce = db.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-    tig_prod = prod.get("TIG Welder", 180.0)
-    mig_prod = prod.get("MIG Welder", 120.0)
-    grind_prod = prod.get("Grinder", 80.0)
-    
+
+        b_tig, b_mig, b_grind = compute_master_feet(m, b_type, b.qty)
+        tot_tig += b_tig
+        tot_mig += b_mig
+        tot_grind += b_grind
+
+    rates = get_productivity_rates(db)
+    tig_prod, mig_prod, grind_prod = rates["tig"], rates["mig"], rates["grind"]
+
     days_tig = (tot_tig / (req.assigned_tig * tig_prod)) if req.assigned_tig > 0 and tig_prod > 0 else (tot_tig / tig_prod if tig_prod > 0 else 0)
     days_mig = (tot_mig / (req.assigned_mig * mig_prod)) if req.assigned_mig > 0 and mig_prod > 0 else (tot_mig / mig_prod if mig_prod > 0 else 0)
     days_grind = (tot_grind / (req.assigned_grinders * grind_prod)) if req.assigned_grinders > 0 and grind_prod > 0 else (tot_grind / grind_prod if grind_prod > 0 else 0)
@@ -390,25 +368,18 @@ def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_
     for b in req.bellows:
         b_type = getattr(b, 'type', 'EJ')
         m = master_data.get((b.size, b_type))
-        
+
         if not m and b_type == 'DJ':
             m = master_data.get((b.size, 'EJ'))
-                
-        if m:
-            if b_type == 'DJ':
-                tot_mig += ((m.tig_feet or 0) + (m.mig_feet or 0)) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-            else:
-                tot_tig += (m.tig_feet or 0) * b.qty
-                tot_mig += (m.mig_feet or 0) * b.qty
-                tot_grind += (m.grinding_feet or 0) * b.qty
-            
-    workforce = db.query(WorkforceMaster).all()
-    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-    tig_prod = prod.get("TIG Welder", 180.0)
-    mig_prod = prod.get("MIG Welder", 120.0)
-    grind_prod = prod.get("Grinder", 80.0)
-    
+
+        b_tig, b_mig, b_grind = compute_master_feet(m, b_type, b.qty)
+        tot_tig += b_tig
+        tot_mig += b_mig
+        tot_grind += b_grind
+
+    rates = get_productivity_rates(db)
+    tig_prod, mig_prod, grind_prod = rates["tig"], rates["mig"], rates["grind"]
+
     target_days = 15
     if req.target_date:
         days_away = (req.target_date - date.today()).days

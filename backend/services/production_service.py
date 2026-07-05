@@ -1,130 +1,234 @@
 import pandas as pd
 import io
+import logging
 from backend.services.db_service import SessionLocal, WeldingMaster, ProjectProductionLine, Project, WorkforceMaster, ProjectResourceAssignment, CompanyResourcePool
 import math
 import datetime
 
+logger = logging.getLogger(__name__)
+
+
+def get_productivity_rates(session):
+    """
+    Single source of truth for TIG/MIG/Grinder ft-per-day productivity.
+    Reads from WorkforceMaster; falls back to defaults only if a resource_type
+    row is missing (e.g. table not yet seeded).
+    """
+    workforce = session.query(WorkforceMaster).all()
+    prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
+    return {
+        "tig": prod.get("TIG Welder", 180.0),
+        "mig": prod.get("MIG Welder", 120.0),
+        "grind": prod.get("Grinder", 80.0),
+    }
+
+
+def compute_master_feet(master, joint_type, qty):
+    """
+    Given a WeldingMaster row, joint type, and quantity, return (tig_feet, mig_feet, grinding_feet)
+    for that many units.
+
+    EJ (Expansion Joint): TIG, MIG, and Grinding are each tracked and returned as-is.
+
+    DJ (Dismantling Joint): there is no TIG process - all welding footage is MIG.
+    tig_feet is always returned as 0. If the given master record still carries a
+    non-zero tig_feet (this happens only when no DJ-specific master data exists for
+    a size and an EJ record is used as a same-size fallback), that footage is folded
+    into MIG rather than silently discarded, and a warning is logged so the fallback
+    is visible instead of silently changing the numbers.
+    """
+    if not master:
+        return 0.0, 0.0, 0.0
+
+    if joint_type == 'DJ':
+        if (master.tig_feet or 0) > 0:
+            logger.warning(
+                "DJ feet computed using a master record with non-zero tig_feet=%.2f "
+                "(size=%s, master.joint_type=%s). Expected only when falling back to "
+                "an EJ record for a size with no DJ master data.",
+                master.tig_feet, master.size, master.joint_type
+            )
+        tig = 0.0
+        mig = ((master.tig_feet or 0) + (master.mig_feet or 0)) * qty
+        grind = (master.grinding_feet or 0) * qty
+    else:
+        tig = (master.tig_feet or 0) * qty
+        mig = (master.mig_feet or 0) * qty
+        grind = (master.grinding_feet or 0) * qty
+
+    return tig, mig, grind
+
+
+def _import_ej_master_dataframe(df):
+    """
+    Shared EJ import logic: takes a raw EJ welding-feet DataFrame (as read from
+    either the on-disk file or an uploaded file) and inserts it as a new
+    WeldingMaster version. Used by both import_welding_master_from_disk and
+    import_welding_master_from_upload so the two paths can never drift apart.
+    """
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+
+    session = SessionLocal()
+    try:
+        # Determine new version
+        latest = session.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
+        new_version = (latest.version + 1) if latest else 1
+
+        # Identify columns using substring matching
+        col_size = next((c for c in df.columns if 'size' in c), None)
+        col_tig_in = next((c for c in df.columns if 'tig' in c and 'inch' in c), None)
+        col_tig_ft = next((c for c in df.columns if 'tig' in c and 'feet' in c), None)
+        col_mig_in = next((c for c in df.columns if 'mig' in c and 'inch' in c), None)
+        col_mig_ft = next((c for c in df.columns if 'mig' in c and 'feet' in c), None)
+        col_tot_in = next((c for c in df.columns if 'total' in c and 'inch' in c), None)
+        col_tot_ft = next((c for c in df.columns if 'total' in c and 'feet' in c), None)
+        col_grind = next((c for c in df.columns if 'grinding' in c), None)
+
+        if not col_size:
+            return False, "Could not find Size column"
+
+        inserted_count = 0
+        # Prevent duplicates in the same version by keeping track of sizes
+        seen_sizes = set()
+
+        for _, row in df.iterrows():
+            try:
+                size = int(float(row[col_size]))
+            except (ValueError, TypeError):
+                continue
+
+            if size in seen_sizes:
+                continue
+            seen_sizes.add(size)
+
+            tig_in = round(float(row.get(col_tig_in, 0)), 2) if pd.notna(row.get(col_tig_in)) else 0.0
+            tig_ft = round(float(row.get(col_tig_ft, 0)), 2) if pd.notna(row.get(col_tig_ft)) else 0.0
+            mig_in = round(float(row.get(col_mig_in, 0)), 2) if pd.notna(row.get(col_mig_in)) else 0.0
+            mig_ft = round(float(row.get(col_mig_ft, 0)), 2) if pd.notna(row.get(col_mig_ft)) else 0.0
+            tot_in = round(float(row.get(col_tot_in, 0)), 2) if pd.notna(row.get(col_tot_in)) else 0.0
+            tot_ft = round(float(row.get(col_tot_ft, 0)), 2) if pd.notna(row.get(col_tot_ft)) else 0.0
+            grind = round(float(row.get(col_grind, 0)), 2) if pd.notna(row.get(col_grind)) else 0.0
+
+            wm = WeldingMaster(
+                size=size,
+                tig_inches=tig_in,
+                tig_feet=tig_ft,
+                mig_inches=mig_in,
+                mig_feet=mig_ft,
+                total_welding_inches=tot_in,
+                total_welding_feet=tot_ft,
+                grinding_feet=grind,
+                joint_type="EJ",
+                version=new_version
+            )
+            session.add(wm)
+            inserted_count += 1
+
+        if inserted_count == 0:
+            session.rollback()
+            return False, "No valid EJ rows found in the file (check Size/TIG/MIG/Grinding columns)"
+
+        session.commit()
+        return True, f"Successfully imported {inserted_count} records. Version: {new_version}"
+    except Exception as e:
+        session.rollback()
+        return False, f"Database error: {e}"
+    finally:
+        session.close()
+
+
 def import_welding_master_from_disk():
     try:
         file_path = "BELLOWS WELDING FEETS PER SIZE - 20.6.2026.xlsx"
-        df = pd.read_excel(file_path, header=2) # The real headers are on row index 2
-        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
-        
-        session = SessionLocal()
-        try:
-            # Determine new version
-            latest = session.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
-            new_version = (latest.version + 1) if latest else 1
-            
-            # Identify columns using substring matching
-            col_size = next((c for c in df.columns if 'size' in c), None)
-            col_tig_in = next((c for c in df.columns if 'tig' in c and 'inch' in c), None)
-            col_tig_ft = next((c for c in df.columns if 'tig' in c and 'feet' in c), None)
-            col_mig_in = next((c for c in df.columns if 'mig' in c and 'inch' in c), None)
-            col_mig_ft = next((c for c in df.columns if 'mig' in c and 'feet' in c), None)
-            col_tot_in = next((c for c in df.columns if 'total' in c and 'inch' in c), None)
-            col_tot_ft = next((c for c in df.columns if 'total' in c and 'feet' in c), None)
-            col_grind = next((c for c in df.columns if 'grinding' in c), None)
-            
-            if not col_size:
-                return False, "Could not find Size column"
-                
-            inserted_count = 0
-            # Prevent duplicates in the same version by keeping track of sizes
-            seen_sizes = set()
-            
-            for _, row in df.iterrows():
-                try:
-                    size = int(float(row[col_size]))
-                except (ValueError, TypeError):
-                    continue
-                    
-                if size in seen_sizes:
-                    continue
-                seen_sizes.add(size)
-                
-                tig_in = round(float(row.get(col_tig_in, 0)), 2) if pd.notna(row.get(col_tig_in)) else 0.0
-                tig_ft = round(float(row.get(col_tig_ft, 0)), 2) if pd.notna(row.get(col_tig_ft)) else 0.0
-                mig_in = round(float(row.get(col_mig_in, 0)), 2) if pd.notna(row.get(col_mig_in)) else 0.0
-                mig_ft = round(float(row.get(col_mig_ft, 0)), 2) if pd.notna(row.get(col_mig_ft)) else 0.0
-                tot_in = round(float(row.get(col_tot_in, 0)), 2) if pd.notna(row.get(col_tot_in)) else 0.0
-                tot_ft = round(float(row.get(col_tot_ft, 0)), 2) if pd.notna(row.get(col_tot_ft)) else 0.0
-                grind = round(float(row.get(col_grind, 0)), 2) if pd.notna(row.get(col_grind)) else 0.0
-                
-                wm = WeldingMaster(
-                    size=size,
-                    tig_inches=tig_in,
-                    tig_feet=tig_ft,
-                    mig_inches=mig_in,
-                    mig_feet=mig_ft,
-                    total_welding_inches=tot_in,
-                    total_welding_feet=tot_ft,
-                    grinding_feet=grind,
-                    joint_type="EJ",
-                    version=new_version
-                )
-                session.add(wm)
-                inserted_count += 1
-                
-            session.commit()
-            return True, f"Successfully imported {inserted_count} records. Version: {new_version}"
-        except Exception as e:
-            session.rollback()
-            return False, f"Database error: {e}"
-        finally:
-            session.close()
+        df = pd.read_excel(file_path, header=2)  # The real headers are on row index 2
     except Exception as e:
         return False, f"Error parsing Excel file: {e}"
+    return _import_ej_master_dataframe(df)
+
+
+def import_welding_master_from_upload(file_bytes):
+    """Import EJ welding master data from an uploaded Excel file's raw bytes."""
+    try:
+        df = pd.read_excel(io.BytesIO(file_bytes), header=2)
+    except Exception as e:
+        return False, f"Error parsing uploaded Excel file: {e}"
+    return _import_ej_master_dataframe(df)
+
+
+def _import_dj_master_dataframe(df):
+    """
+    Shared DJ import logic: takes a raw DJ welding-feet DataFrame (as read from
+    either the on-disk file or an uploaded file) and inserts it as a new
+    WeldingMaster version. Used by both import_dismantling_joint_master and
+    import_dismantling_joint_master_from_upload so the two paths can never drift apart.
+
+    DJ has no TIG process, so tig_feet is always stored as 0 and the feet
+    column from the sheet is stored entirely as mig_feet.
+    """
+    session = SessionLocal()
+    try:
+        latest = session.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
+        new_version = (latest.version + 1) if latest else 1
+
+        inserted_count = 0
+        seen_sizes = set()
+
+        for _, row in df.iterrows():
+            try:
+                size = int(float(row.iloc[1]))
+                feet = float(row.iloc[2]) if pd.notna(row.iloc[2]) else 0.0
+                grind_feet = float(row.iloc[3]) if len(row) > 3 and pd.notna(row.iloc[3]) else 0.0
+            except (ValueError, TypeError, IndexError):
+                continue
+
+            if size in seen_sizes:
+                continue
+            seen_sizes.add(size)
+
+            wm = WeldingMaster(
+                size=size,
+                tig_inches=0.0,
+                tig_feet=0.0,
+                mig_inches=0.0,
+                mig_feet=feet,
+                total_welding_inches=0.0,
+                total_welding_feet=feet,
+                grinding_feet=grind_feet,
+                joint_type="DJ",
+                version=new_version
+            )
+            session.add(wm)
+            inserted_count += 1
+
+        if inserted_count == 0:
+            session.rollback()
+            return False, "No valid DJ rows found in the file (check the size/feet/grinding columns)"
+
+        session.commit()
+        return True, f"Successfully imported {inserted_count} DJ records. Version: {new_version}"
+    except Exception as e:
+        session.rollback()
+        return False, f"Database error: {e}"
+    finally:
+        session.close()
+
 
 def import_dismantling_joint_master():
     try:
         file_path = "ANALYSIS DISMANTLING JOINT WELDING FEETS PER SIZE 27.06.2026.xlsx"
         df = pd.read_excel(file_path)
-        
-        session = SessionLocal()
-        try:
-            latest = session.query(WeldingMaster).order_by(WeldingMaster.version.desc()).first()
-            new_version = (latest.version + 1) if latest else 1
-            
-            inserted_count = 0
-            seen_sizes = set()
-            
-            for _, row in df.iterrows():
-                try:
-                    size = int(float(row.iloc[1])) 
-                    feet = float(row.iloc[2]) if pd.notna(row.iloc[2]) else 0.0
-                    grind_feet = float(row.iloc[3]) if len(row) > 3 and pd.notna(row.iloc[3]) else 0.0
-                except (ValueError, TypeError, IndexError):
-                    continue
-                    
-                if size in seen_sizes:
-                    continue
-                seen_sizes.add(size)
-                
-                wm = WeldingMaster(
-                    size=size,
-                    tig_inches=0.0,
-                    tig_feet=0.0,
-                    mig_inches=0.0,
-                    mig_feet=feet,
-                    total_welding_inches=0.0,
-                    total_welding_feet=feet,
-                    grinding_feet=grind_feet,
-                    joint_type="DJ",
-                    version=new_version
-                )
-                session.add(wm)
-                inserted_count += 1
-                
-            session.commit()
-            return True, f"Successfully imported {inserted_count} DJ records. Version: {new_version}"
-        except Exception as e:
-            session.rollback()
-            return False, f"Database error: {e}"
-        finally:
-            session.close()
     except Exception as e:
         return False, f"Error parsing Excel file: {e}"
+    return _import_dj_master_dataframe(df)
+
+
+def import_dismantling_joint_master_from_upload(file_bytes):
+    """Import DJ welding master data from an uploaded Excel file's raw bytes."""
+    try:
+        df = pd.read_excel(io.BytesIO(file_bytes))
+    except Exception as e:
+        return False, f"Error parsing uploaded Excel file: {e}"
+    return _import_dj_master_dataframe(df)
 
 def get_welding_master_latest():
     session = SessionLocal()
@@ -175,26 +279,18 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
             qty = item['qty']
             j_type = item.get('type', 'EJ')
             m = master_data.get((size, j_type))
-            
-            tig = 0
-            mig = 0
-            grind = 0
-            
+
             if not m and j_type == 'DJ':
                 m_ej = master_data.get((size, 'EJ'))
                 if m_ej:
+                    logger.warning(
+                        "No DJ master data for size=%s; falling back to EJ master record.",
+                        size
+                    )
                     m = m_ej
-                    
-            if m:
-                if j_type == 'DJ':
-                    tig = 0
-                    mig = ((m.tig_feet or 0) + (m.mig_feet or 0)) * qty
-                    grind = (m.grinding_feet or 0) * qty
-                else:
-                    tig = (m.tig_feet or 0) * qty
-                    mig = (m.mig_feet or 0) * qty
-                    grind = (m.grinding_feet or 0) * qty
-            
+
+            tig, mig, grind = compute_master_feet(m, j_type, qty)
+
             pn_rating = item.get('pn_rating')
             
             key = (size, j_type)
@@ -248,13 +344,9 @@ def calculate_project_duration(project_id, tig_welders, mig_welders, grinders):
             tot_mig = max(0, tot_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
             tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
-        workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-        
-        tig_prod = prod.get("TIG Welder", 180.0)
-        mig_prod = prod.get("MIG Welder", 120.0)
-        grind_prod = prod.get("Grinder", 80.0)
-        
+        rates = get_productivity_rates(session)
+        tig_prod, mig_prod, grind_prod = rates["tig"], rates["mig"], rates["grind"]
+
         tig_days = math.ceil(tot_tig / (tig_welders * tig_prod)) if tig_welders > 0 and tig_prod > 0 else (math.ceil(tot_tig) if tot_tig > 0 else 0)
         mig_days = math.ceil(tot_mig / (mig_welders * mig_prod)) if mig_welders > 0 and mig_prod > 0 else (math.ceil(tot_mig) if tot_mig > 0 else 0)
         grind_days = math.ceil(tot_grind / (grinders * grind_prod)) if grinders > 0 and grind_prod > 0 else (math.ceil(tot_grind) if tot_grind > 0 else 0)
@@ -293,13 +385,9 @@ def calculate_required_resources_for_deadline(project_id, target_days):
             tot_mig = max(0, tot_mig - sum(l.feet_done for l in logs if l.process_type == "MIG"))
             tot_grind = max(0, tot_grind - sum(l.feet_done for l in logs if l.process_type == "Grinding"))
         
-        workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-        
-        tig_prod = prod.get("TIG Welder", 180.0)
-        mig_prod = prod.get("MIG Welder", 120.0)
-        grind_prod = prod.get("Grinder", 80.0)
-        
+        rates = get_productivity_rates(session)
+        tig_prod, mig_prod, grind_prod = rates["tig"], rates["mig"], rates["grind"]
+
         effective_target_days = max(1, target_days)
         req_tig = math.ceil(tot_tig / (effective_target_days * tig_prod)) if tig_prod > 0 else 0
         req_mig = math.ceil(tot_mig / (effective_target_days * mig_prod)) if mig_prod > 0 else 0
@@ -353,12 +441,9 @@ def get_company_capacity_status(target_days=15):
         active_projects_count = 0
         
         # Get Productivity (now treated as ft/day)
-        workforce = session.query(WorkforceMaster).all()
-        prod = {w.resource_type: w.avg_productivity_per_day for w in workforce}
-        tig_prod = prod.get("TIG Welder", 180.0)
-        mig_prod = prod.get("MIG Welder", 120.0)
-        grind_prod = prod.get("Grinder", 80.0)
-        
+        rates = get_productivity_rates(session)
+        tig_prod, mig_prod, grind_prod = rates["tig"], rates["mig"], rates["grind"]
+
         req_tig_welders = 0
         req_mig_welders = 0
         req_grind_welders = 0

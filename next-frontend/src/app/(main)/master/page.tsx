@@ -1,7 +1,7 @@
 "use client";
 import { apiFetch } from "@/lib/api";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 export default function MasterData() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("welding");
@@ -12,7 +12,11 @@ export default function MasterData() {
   const [syncingEJ, setSyncingEJ] = useState(false);
   const [syncingDJ, setSyncingDJ] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [uploadingEJ, setUploadingEJ] = useState(false);
+  const [uploadingDJ, setUploadingDJ] = useState(false);
   const [message, setMessage] = useState("");
+  const ejFileInputRef = useRef<HTMLInputElement>(null);
+  const djFileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = () => {
     setLoading(true);
@@ -81,6 +85,44 @@ export default function MasterData() {
     }
   };
 
+  const uploadMasterFile = async (
+    file: File,
+    endpoint: string,
+    label: string,
+    setUploading: (v: boolean) => void
+  ) => {
+    setUploading(true);
+    setMessage("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await apiFetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/${endpoint}`,
+        { method: "POST", body: formData }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || "Upload failed");
+      setMessage(`${label} ` + json.message);
+      fetchData();
+    } catch (err: any) {
+      setMessage(`Error uploading ${label} file: ` + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleEJFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file next time
+    if (file) uploadMasterFile(file, "welding-import", "EJ", setUploadingEJ);
+  };
+
+  const handleDJFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) uploadMasterFile(file, "dj-import", "DJ", setUploadingDJ);
+  };
+
   const updateWorkforce = async (id: number, productivity: number) => {
     await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/workforce/${id}`, {
       method: "PUT",
@@ -121,9 +163,12 @@ export default function MasterData() {
             <div>
               <h2 className="text-lg font-semibold text-slate-800">Welding Master Data</h2>
               <p className="text-sm text-slate-500">Base configuration for expansion joint sizes.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                &quot;Sync&quot; re-reads the file already on the server. &quot;Upload&quot; replaces it with a new Excel file you pick now.
+              </p>
             </div>
             {(userRole === "Developer" || userRole === "GM") && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-end">
                 <button
                   onClick={handleSyncAll}
                   disabled={syncingEJ || syncingDJ || syncingAll}
@@ -144,6 +189,36 @@ export default function MasterData() {
                   className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
                 >
                   {syncingDJ ? "Syncing DJ..." : "Sync DJ Data"}
+                </button>
+
+                <input
+                  ref={ejFileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleEJFileSelected}
+                />
+                <button
+                  onClick={() => ejFileInputRef.current?.click()}
+                  disabled={uploadingEJ || uploadingDJ}
+                  className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-300 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {uploadingEJ ? "Uploading EJ..." : "Upload EJ Excel"}
+                </button>
+
+                <input
+                  ref={djFileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleDJFileSelected}
+                />
+                <button
+                  onClick={() => djFileInputRef.current?.click()}
+                  disabled={uploadingEJ || uploadingDJ}
+                  className="bg-teal-100 hover:bg-teal-200 text-teal-700 border border-teal-300 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {uploadingDJ ? "Uploading DJ..." : "Upload DJ Excel"}
                 </button>
               </div>
             )}

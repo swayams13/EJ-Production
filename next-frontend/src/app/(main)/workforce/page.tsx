@@ -1,9 +1,22 @@
 "use client";
 import { apiFetch } from "@/lib/api";
 import { useState, useEffect } from "react";
+import { Card, CardHeader, CardBody, Select, Label, Button, Badge, Spinner, useToast, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
+
+interface WorkerMetric {
+  user_id: number;
+  name: string;
+  department?: string;
+  skill?: string;
+  attendance_score: number;
+  efficiency_score: number;
+  quality_score: number;
+  reliability_score: number;
+}
 
 export default function WorkforceDashboard() {
-  const [metrics, setMetrics] = useState<any[]>([]);
+  const { showToast, toasts } = useToast();
+  const [metrics, setMetrics] = useState<WorkerMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [attendanceStatus, setAttendanceStatus] = useState("Present");
@@ -12,12 +25,12 @@ export default function WorkforceDashboard() {
   const fetchMetrics = () => {
     setLoading(true);
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/workforce/metrics`)
-      .then(res => res.json())
-      .then(resData => {
+      .then((res) => res.json())
+      .then((resData) => {
         setMetrics(resData.data || []);
         setLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error(err);
         setLoading(false);
       });
@@ -34,127 +47,122 @@ export default function WorkforceDashboard() {
 
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/workforce/attendance`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         user_id: selectedUser,
-        date: new Date().toISOString().split('T')[0],
-        status: attendanceStatus
+        date: new Date().toISOString().split("T")[0],
+        status: attendanceStatus,
+      }),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        setSubmitting(false);
+        showToast("Attendance recorded successfully!", "success");
+        fetchMetrics();
       })
-    })
-    .then(res => res.json())
-    .then(() => {
-      setSubmitting(false);
-      alert("Attendance recorded successfully!");
-      fetchMetrics();
-    })
-    .catch(err => {
-      console.error(err);
-      setSubmitting(false);
-      alert("Failed to record attendance.");
-    });
+      .catch((err) => {
+        console.error(err);
+        setSubmitting(false);
+        showToast("Failed to record attendance.", "critical");
+      });
   };
 
   return (
     <div>
-      <div className="bg-slate-900 p-8 text-white rounded-b-3xl shadow-lg mb-8 mx-[-2rem] mt-[-2rem]">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">Workforce Intelligence</h1>
-        <p className="text-slate-300 text-lg font-medium">Worker metrics, efficiency rankings, and attendance tracking.</p>
+      <div>
+        <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">
+          Workforce Intelligence
+        </h1>
+        <p className="text-ink-soft">Worker metrics, efficiency rankings, and attendance tracking.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Attendance Tracker */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:col-span-1">
-          <h2 className="text-lg font-bold text-slate-800 uppercase tracking-wide mb-6">Mark Daily Attendance</h2>
-          <form onSubmit={handleAttendanceSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Select Worker</label>
-              <select 
-                value={selectedUser || ""} 
-                onChange={e => setSelectedUser(Number(e.target.value))}
-                className="w-full border border-slate-300 rounded-lg p-2 text-slate-800"
-                required
-              >
-                <option value="" disabled>Select a worker...</option>
-                {metrics.map(user => (
-                  <option key={user.user_id} value={user.user_id}>{user.name} ({user.department || user.skill || 'Unknown'})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Status (Today)</label>
-              <select 
-                value={attendanceStatus}
-                onChange={e => setAttendanceStatus(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2 text-slate-800"
-              >
-                <option value="Present">Present</option>
-                <option value="Absent">Absent</option>
-                <option value="Leave">Leave</option>
-                <option value="Overtime">Overtime</option>
-              </select>
-            </div>
-            <button 
-              type="submit" 
-              disabled={submitting}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-            >
-              {submitting ? "Saving..." : "Record Attendance"}
-            </button>
-          </form>
-        </div>
+      <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
+          <CardHeader title="Mark Daily Attendance" />
+          <CardBody className="p-5">
+            <form onSubmit={handleAttendanceSubmit} className="flex flex-col gap-4">
+              <div>
+                <Label>Select Worker</Label>
+                <Select value={selectedUser || ""} onChange={(e) => setSelectedUser(Number(e.target.value))} required>
+                  <option value="" disabled>
+                    Select a worker...
+                  </option>
+                  {metrics.map((user) => (
+                    <option key={user.user_id} value={user.user_id}>
+                      {user.name} ({user.department || user.skill || "Unknown"})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Status (Today)</Label>
+                <Select value={attendanceStatus} onChange={(e) => setAttendanceStatus(e.target.value)}>
+                  <option value="Present">Present</option>
+                  <option value="Absent">Absent</option>
+                  <option value="Leave">Leave</option>
+                  <option value="Overtime">Overtime</option>
+                </Select>
+              </div>
+              <Button type="submit" variant="primary" className="w-full justify-center" disabled={submitting}>
+                {submitting ? "Saving…" : "Record Attendance"}
+              </Button>
+            </form>
+          </CardBody>
+        </Card>
 
-        {/* Worker Rankings */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:col-span-2">
-          <h2 className="text-lg font-bold text-slate-800 uppercase tracking-wide mb-6">Worker Performance Metrics</h2>
+        <Card className="lg:col-span-2">
+          <CardHeader title="Worker Performance Metrics" />
           {loading ? (
-            <div className="flex justify-center py-10">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="p-6">
+              <Spinner label="Loading metrics…" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Name</th>
-                    <th className="py-3 px-4">Dept / Skill</th>
-                    <th className="py-3 px-4">Attendance</th>
-                    <th className="py-3 px-4">Efficiency</th>
-                    <th className="py-3 px-4">Quality</th>
-                    <th className="py-3 px-4">Reliability</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {metrics.map(user => (
-                    <tr key={user.user_id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-4 font-bold text-slate-800">{user.name}</td>
-                      <td className="py-3 px-4 text-slate-600">
-                        {user.department || user.skill || 'N/A'} {user.department && user.skill ? `/ ${user.skill}` : ''}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${user.attendance_score >= 80 ? 'bg-green-100 text-green-800' : 'bg-rose-100 text-rose-800'}`}>
-                          {user.attendance_score}%
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-blue-600 font-semibold">{user.efficiency_score}%</span>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">{user.quality_score}%</td>
-                      <td className="py-3 px-4 font-semibold text-purple-700">{user.reliability_score}%</td>
-                    </tr>
-                  ))}
-                  {metrics.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-6 text-center text-slate-500">No workforce data available.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Name</Th>
+                  <Th>Dept / Skill</Th>
+                  <Th numeric>Attendance</Th>
+                  <Th numeric>Efficiency</Th>
+                  <Th numeric>Quality</Th>
+                  <Th numeric>Reliability</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {metrics.map((user) => (
+                  <Tr key={user.user_id}>
+                    <Td className="font-bold text-ink">{user.name}</Td>
+                    <Td className="text-ink-soft">
+                      {user.department || user.skill || "N/A"} {user.department && user.skill ? `/ ${user.skill}` : ""}
+                    </Td>
+                    <Td numeric>
+                      <Badge tone={user.attendance_score >= 80 ? "success" : "critical"}>{user.attendance_score}%</Badge>
+                    </Td>
+                    <Td numeric className="font-semibold text-brand-deep">
+                      {user.efficiency_score}%
+                    </Td>
+                    <Td numeric className="font-semibold text-ink">
+                      {user.quality_score}%
+                    </Td>
+                    <Td numeric className="font-semibold text-ink">
+                      {user.reliability_score}%
+                    </Td>
+                  </Tr>
+                ))}
+                {metrics.length === 0 && (
+                  <Tr>
+                    <Td colSpan={6} className="text-center text-ink-soft">
+                      No workforce data available.
+                    </Td>
+                  </Tr>
+                )}
+              </TBody>
+            </Table>
           )}
-        </div>
+        </Card>
       </div>
+
+      {toasts}
     </div>
   );
 }

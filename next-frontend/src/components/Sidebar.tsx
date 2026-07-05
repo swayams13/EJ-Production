@@ -4,6 +4,63 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+interface NavItem {
+  name: string;
+  href: string;
+  hideForRoles?: string[];
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Dashboards",
+    items: [
+      { name: "Progress", href: "/dashboard" },
+      { name: "Executive", href: "/dashboard/executive" },
+      { name: "Planning", href: "/dashboard/planning" },
+      { name: "WIP Tracking", href: "/dashboard/wip" },
+    ],
+  },
+  {
+    label: "Projects & Scheduling",
+    items: [
+      { name: "All Projects", href: "/projects" },
+      { name: "Add Project", href: "/projects/add" },
+      { name: "Edit Project", href: "/projects/edit" },
+      { name: "Daily Scheduler", href: "/scheduler" },
+      { name: "Hold Center", href: "/dashboard/holds" },
+    ],
+  },
+  {
+    label: "Production",
+    items: [
+      { name: "Shop Floor Entry", href: "/production/entry" },
+      { name: "Visual Tracking", href: "/production/kanban" },
+      { name: "QC Inspection", href: "/inspection" },
+      { name: "Dispatch Log", href: "/dispatch" },
+    ],
+  },
+  {
+    label: "Workforce",
+    items: [
+      { name: "Workforce Intelligence", href: "/workforce" },
+      { name: "User Management", href: "/operators" },
+    ],
+  },
+  {
+    label: "Master Data & Admin",
+    items: [
+      { name: "Production & Capacity Master", href: "/master" },
+      { name: "Material Intelligence", href: "/inventory" },
+      { name: "System Audit Logs", href: "/audit", hideForRoles: ["Production Manager", "GM"] },
+    ],
+  },
+];
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -18,99 +75,62 @@ export default function Sidebar() {
     }
   }, [router]);
 
-  const navLinks = [
-    { name: "Progress Dashboard", href: "/dashboard" },
-    { name: "Executive Dashboard", href: "/dashboard/executive" },
-    { name: "Projects List", href: "/projects" },
-    { name: "Add Projects", href: "/projects/add" },
-    { name: "Edit Projects", href: "/projects/edit" },
-    { name: "Production & Capacity Master", href: "/master" },
-  ];
-
   const handleLogout = () => {
     localStorage.removeItem("user_role");
     router.push("/");
   };
 
   return (
-    <div className="w-64 h-screen bg-slate-900 text-slate-300 flex flex-col shadow-xl fixed left-0 top-0">
-      <div className="p-6 border-b border-slate-800">
-        <h2 className="text-2xl font-bold text-white tracking-tight">EJ Tracker</h2>
+    <div className="fixed left-0 top-0 flex h-screen w-64 flex-col bg-ink text-[#d7e3e0] shadow-xl">
+      <div className="border-b border-white/10 p-6">
+        <h2 className="font-display uppercase tracking-wide text-xl font-extrabold text-white">
+          EJ Tracker
+        </h2>
         {role && (
-          <div className="mt-2 text-xs font-medium px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded border border-indigo-500/30 inline-block">
+          <div className="mt-2 inline-block rounded border border-brand/40 bg-brand/20 px-2 py-1 text-xs font-medium text-[#9fd6d0]">
             {role}
           </div>
         )}
       </div>
-      
-      <div className="flex-1 overflow-y-auto py-6">
-        <nav className="space-y-1 px-3">
-          <Link href="/dashboard" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>Progress Dashboard</span>
-          </Link>
-          <Link href="/dashboard/wip" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>WIP Tracking Center</span>
-          </Link>
-          <Link href="/dashboard/executive" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>Executive Dashboard</span>
-          </Link>
-          <Link href="/dashboard/planning" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>Planning Dashboard</span>
-          </Link>
-          <Link href="/dashboard/holds" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>Hold Center</span>
-          </Link>
-          <Link href="/workforce" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-            <span>Workforce Intelligence</span>
-          </Link>
-          <Link href="/scheduler" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-            <span>Daily Scheduler</span>
-          </Link>
-          <Link href="/projects" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-            <span>Projects</span>
-          </Link>
-          <Link href="/projects/edit" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-            <span>Edit Projects</span>
-          </Link>
-          <Link href="/production/entry" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
-            <span>Shop Floor Input</span>
-          </Link>
-          <Link href="/dispatch" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>Dispatch Log</span>
-          </Link>
-          <Link href="/inspection" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>QC Inspection</span>
-          </Link>
-          <Link href="/master" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>Production & Capacity Master</span>
-          </Link>
-          
-          {role !== 'Production Manager' && role !== 'GM' && (
-            <Link href="/audit" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-amber-400 hover:bg-slate-800 transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-              <span className="font-bold">System Audit Logs</span>
-            </Link>
-          )}
-          
-          <Link href="/inventory" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-emerald-400 hover:bg-slate-800 transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-            <span className="font-bold">Material Intelligence</span>
-          </Link>
-          <Link href="/operators" className="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <span>User Management</span>
-          </Link>
-        </nav>
-      </div>
 
-      <div className="p-4 border-t border-slate-800">
+      <nav className="flex-1 overflow-y-auto py-3">
+        {NAV_GROUPS.map((group) => {
+          const visibleItems = group.items.filter((item) => !item.hideForRoles?.includes(role || ""));
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={group.label} className="mb-1">
+              <div className="font-data px-4 pb-1 pt-3 text-[10px] uppercase tracking-widest text-[#8fa39e]">
+                {group.label}
+              </div>
+              {visibleItems.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-2.5 border-l-2 px-4 py-2 text-[13px] transition-colors ${
+                      active
+                        ? "border-brand bg-white/5 font-semibold text-white"
+                        : "border-transparent text-[#d7e3e0] hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 flex-none rounded-full ${active ? "bg-brand" : "bg-[#5c6e69]"}`}
+                    />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          );
+        })}
+      </nav>
+
+      <div className="border-t border-white/10 p-4">
         <button
           onClick={handleLogout}
-          className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 bg-slate-800 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 transition-all"
+          className="w-full rounded-md border border-transparent bg-white/5 px-4 py-2 text-sm font-medium text-[#d7e3e0] transition-colors hover:border-critical/30 hover:bg-critical/10 hover:text-[#e8a99b]"
         >
           Sign Out
         </button>

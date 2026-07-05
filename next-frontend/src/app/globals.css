@@ -1,26 +1,41 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* Neutrals - warm charcoal / soft paper, not pure black/white (reduces glare over a full shift) */
+  --color-ink: #2e3735;
+  --color-ink-soft: #5c6864;
+  --color-paper: #f5f7f6;
+  --color-paper-raised: #fbfcfb;
+  --color-line: #dce3e0;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Brand - muted petrol teal */
+  --color-brand: #3e7c77;
+  --color-brand-deep: #2e5f5b;
+  --color-brand-tint: #e7f1ef;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Semantic status - desaturated so routine badges don't read as alarms */
+  --color-success: #5c8a6c;
+  --color-success-tint: #eaf2ec;
+  --color-warning: #bd8a52;
+  --color-warning-tint: #f6eee1;
+  --color-critical: #b2594a;
+  --color-critical-tint: #f5e9e5;
+
+  /* Type */
+  --font-display: "Archivo Narrow", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-data: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+
+  /* Radius - tighter scale than the old rounded-lg/xl/2xl overuse */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }

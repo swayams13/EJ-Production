@@ -2,25 +2,55 @@
 import { apiFetch } from "@/lib/api";
 
 import { useState, useEffect } from "react";
+import { Card, Select, Label, Badge, EmptyState, Spinner, ProgressBar } from "@/components/ui";
+
+interface ProjectOption {
+  id: number;
+  quotation_no: string;
+  project_name?: string;
+}
+
+interface RequirementOption {
+  id: number;
+  type: string;
+  size: string;
+  total_qty: number;
+}
+
+interface ProcessRow {
+  id: string;
+  process_name: string;
+  completed_qty: number;
+}
+
+interface PartRow {
+  id: string;
+  name: string;
+  weight_percentage: number;
+  processes: ProcessRow[];
+}
+
+interface ProgressData {
+  total_qty: number;
+  parts: PartRow[];
+}
 
 export default function VisualTracking() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [projectId, setProjectId] = useState("");
-  
-  const [requirements, setRequirements] = useState<any[]>([]);
+
+  const [requirements, setRequirements] = useState<RequirementOption[]>([]);
   const [requirementId, setRequirementId] = useState("");
-  
-  const [progressData, setProgressData] = useState<any>(null);
+
+  const [progressData, setProgressData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Initial load
   useEffect(() => {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
-      .then(res => res.json())
-      .then(resData => setProjects(resData.data || []));
+      .then((res) => res.json())
+      .then((resData) => setProjects(resData.data || []));
   }, []);
 
-  // When project changes, fetch requirements
   useEffect(() => {
     if (!projectId) {
       setRequirements([]);
@@ -28,136 +58,127 @@ export default function VisualTracking() {
       return;
     }
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${projectId}`)
-      .then(res => res.json())
-      .then(resData => setRequirements(resData.data || []));
+      .then((res) => res.json())
+      .then((resData) => setRequirements(resData.data || []));
   }, [projectId]);
 
-  // When requirement changes, fetch progress
   useEffect(() => {
     if (!requirementId) {
       setProgressData(null);
       return;
     }
     setLoading(true);
-    
+
     const fetchProgress = () => {
       apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
-        .then(res => res.json())
-        .then(resData => {
-          if(resData.success && resData.data) {
-             setProgressData(resData.data);
+        .then((res) => res.json())
+        .then((resData) => {
+          if (resData.success && resData.data) {
+            setProgressData(resData.data);
           } else {
-             setProgressData(null);
+            setProgressData(null);
           }
           setLoading(false);
         });
     };
-    
+
     fetchProgress();
-    const interval = setInterval(fetchProgress, 3000); // 3 seconds live refresh
-    
+    const interval = setInterval(fetchProgress, 3000);
+
     return () => clearInterval(interval);
   }, [requirementId]);
 
+  const currentReqType = requirements.find((r) => r.id.toString() === requirementId)?.type;
+
   return (
-    <div className="max-w-7xl mx-auto mb-20 px-4">
-      <div className="bg-slate-900 p-8 text-white rounded-b-3xl shadow-lg mb-8 mx-[-2rem] mt-[-2rem]">
-        <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Visual Tracking</h1>
-        <p className="text-slate-300 text-lg font-medium">Live Stage-by-Stage Progression for Requirements</p>
+    <div className="mx-auto mb-20 max-w-7xl">
+      <div>
+        <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">Visual Tracking</h1>
+        <p className="text-ink-soft">Live stage-by-stage progression for requirements.</p>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <Card className="mt-6 flex flex-col gap-4 p-5 md:flex-row">
         <div className="flex-1">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Select Project</label>
-          <select 
-            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-slate-800 font-bold shadow-sm focus:ring-2 focus:ring-blue-500"
-            value={projectId} onChange={(e) => setProjectId(e.target.value)}
-          >
+          <Label>Select Project</Label>
+          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
             <option value="">-- Choose Project --</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.project_code} ({p.customer_name})</option>)}
-          </select>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.project_name || p.quotation_no}
+              </option>
+            ))}
+          </Select>
         </div>
-        
+
         <div className="flex-1">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Select Requirement</label>
-          <select 
-            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 text-slate-800 font-bold shadow-sm disabled:bg-slate-100 disabled:opacity-50 focus:ring-2 focus:ring-blue-500"
-            value={requirementId} onChange={(e) => setRequirementId(e.target.value)}
-            disabled={!projectId}
-          >
+          <Label>Select Requirement</Label>
+          <Select value={requirementId} onChange={(e) => setRequirementId(e.target.value)} disabled={!projectId}>
             <option value="">-- Choose Requirement --</option>
-            {requirements.map(r => <option key={r.id} value={r.id}>{r.type} - {r.size} (Qty: {r.total_qty})</option>)}
-          </select>
+            {requirements.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.type} - {r.size} (Qty: {r.total_qty})
+              </option>
+            ))}
+          </Select>
         </div>
-      </div>
+      </Card>
 
       {!requirementId && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-16 text-center text-slate-500">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          <p className="text-xl font-bold text-slate-600 mb-2">No Requirement Selected</p>
-          <p>Select a project and requirement above to view its live progress board.</p>
-        </div>
+        <Card className="mt-6 p-16">
+          <EmptyState
+            title="No Requirement Selected"
+            description="Select a project and requirement above to view its live progress board."
+          />
+        </Card>
       )}
 
       {loading && requirementId && (
-        <div className="flex justify-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
+        <div className="mt-6">
+          <Spinner label="Loading progress…" />
         </div>
       )}
 
       {progressData && !loading && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-          <div className="flex items-center justify-between mb-8 pb-6 border-b border-slate-100">
+        <Card className="mt-6 p-8">
+          <div className="mb-8 flex items-center justify-between border-b border-line pb-6">
             <div>
-              <span className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-3 inline-block">Requirement Breakdown</span>
-              <h2 className="text-3xl font-black text-slate-800">
-                {requirements.find(r => r.id.toString() === requirementId)?.type === "DJ" ? "Dismantling Joint" : "Expansion Joint"}
+              <Badge tone="brand">Requirement Breakdown</Badge>
+              <h2 className="mt-3 text-2xl font-extrabold text-ink">
+                {currentReqType === "DJ" ? "Dismantling Joint" : "Expansion Joint"}
               </h2>
             </div>
-            <div className="text-right bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">Target Qty</p>
-              <p className="text-4xl font-black text-blue-600">{progressData.total_qty}</p>
+            <div className="rounded-lg border border-line bg-paper p-4 text-right">
+              <p className="text-xs font-bold uppercase tracking-wide text-ink-soft">Target Qty</p>
+              <p className="font-data tabular-nums text-3xl font-bold text-brand-deep">{progressData.total_qty}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {progressData.parts.map((part: any) => (
-              <div key={part.id} className="bg-slate-50 rounded-xl border border-slate-200 p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold text-slate-800">{part.name}</h3>
-                  <span className="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded">Weight: {part.weight_percentage}%</span>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            {progressData.parts.map((part) => (
+              <div key={part.id} className="rounded-lg border border-line bg-paper p-6">
+                <div className="mb-6 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-ink">{part.name}</h3>
+                  <Badge tone="neutral">Weight: {part.weight_percentage}%</Badge>
                 </div>
-                
-                <div className="space-y-5">
-                  {part.processes.map((proc: any) => {
+
+                <div className="flex flex-col gap-5">
+                  {part.processes.map((proc) => {
                     const pct = Math.min(100, Math.round((proc.completed_qty / progressData.total_qty) * 100)) || 0;
-                    
+
                     return (
-                      <div key={proc.id} className="flex flex-col group">
-                        <div className="flex justify-between items-end mb-1">
-                          <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">
-                            {proc.process_name}
+                      <div key={proc.id}>
+                        <div className="mb-1 flex items-end justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wide text-ink">{proc.process_name}</span>
+                          <span className="font-data tabular-nums text-xs text-ink-soft">
+                            {proc.completed_qty} / {progressData.total_qty} done
                           </span>
-                          <div className="text-right">
-                            <span className="text-xs font-bold text-slate-400 uppercase mr-3">{proc.completed_qty} / {progressData.total_qty} done</span>
-                            <span className={`text-lg font-black ${pct === 100 ? 'text-emerald-500' : 'text-slate-700'}`}>
-                              {pct}%
-                            </span>
-                          </div>
                         </div>
-                        
-                        <div className="w-full bg-slate-200 rounded-full h-3 relative overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                              pct === 100 ? 'bg-emerald-500' : 
-                              pct > 0 ? 'bg-blue-500' : 
-                              'bg-transparent'
-                            }`}
-                            style={{ width: `${pct}%` }}
-                          ></div>
-                        </div>
+                        <ProgressBar
+                          label={proc.process_name}
+                          showLabel={false}
+                          percent={pct}
+                          tone={pct === 100 ? "success" : "brand"}
+                        />
                       </div>
                     );
                   })}
@@ -165,7 +186,7 @@ export default function VisualTracking() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

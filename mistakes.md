@@ -39,3 +39,22 @@ When centralizing the EJ/DJ welding-feet-splitting rule (which had been copy-pas
 **The Rectification:**
 - Grepped the whole repository for the pattern's distinctive substring (the exact `if joint_type == 'DJ':` / `tig_feet + mig_feet` fold logic) instead of relying on memory of "the places already checked."
 - **Future Rule:** When centralizing duplicated logic, search the entire repo by the pattern's literal substring before declaring the refactor complete — don't rely on having found "all the callers" from context alone. Re-check after any related bug-hunt, since new duplicate sites tend to surface exactly when least expected.
+
+## 5. Dynamic Tailwind Class Names Are Silently Dropped From Production Builds
+
+**The Mistake:**
+The original Executive Dashboard built CSS class names at runtime via string interpolation — `` bg-${kpi.color}-500 ``, `` text-${dept.color}-600 `` — using color names sent from the backend (`"orange"`, `"emerald"`, `"blue"`, `"purple"`, `"rose"`, `"amber"`). This looks correct in development because Tailwind's dev-mode JIT can pick up classes that happen to exist elsewhere in the codebase as literal strings, but Tailwind's production build only includes classes it can find as complete, literal strings in the source — it cannot execute JavaScript to discover `` `bg-${x}-500` `` at build time. In a from-scratch build these interpolated classes are silently absent from the generated CSS, so the styling would have quietly broken in production with no error anywhere.
+
+**The Rectification:**
+- Replaced the dynamic interpolation with a literal `Record<string, Tone>` lookup object mapping each known color-name string to one of a small, fixed set of tone variants, and passed the resolved tone into shared components (`MetricCard`, `ProgressBar`) that themselves only ever reference complete literal class strings.
+- **Future Rule:** Never build a Tailwind class name by interpolating a runtime value into the class string (`` className={`bg-${x}-500`} ``). Always map the runtime value to one of a fixed set of complete, literal class strings via a lookup object or switch, even if it means writing out every case by hand. This applies to any Tailwind project, not just this one.
+
+## 6. Native Browser Dialogs (alert/confirm/prompt) as an Enterprise-UI Anti-Pattern
+
+**The Mistake:**
+Across the frontend, destructive or state-changing actions used native browser dialogs: `window.confirm()` for re-running the scheduler's auto-assign, `window.prompt()` requiring the user to type "DELETE" before removing a project, and `window.alert()` for success/failure feedback on attendance recording, custom master-data sizes, and pool/workforce updates. These are jarring, unstyled, block the whole page, and were one of the clearest "generic/unfinished" tells found during the UI audit.
+
+**The Rectification:**
+- Built two small reusable primitives instead of reaching for a heavier modal/toast library: `useConfirm()` (a hook returning a `confirm()` promise plus a `<Modal>` to render) and `useToast()` (a hook returning a `showToast()` function plus a portal-rendered toast stack), both under `next-frontend/src/components/ui/`.
+- Preserved the exact same safety guarantees where they mattered — e.g. the project-deletion flow still requires typing "DELETE" before the button un-disables, just via a styled `Modal` + `Input` instead of `window.prompt()`.
+- **Future Rule:** Treat `alert()`/`confirm()`/`prompt()` as a code smell in any UI meant to look and feel like a real product. Build (or adopt) a themed replacement early, before they spread across many files — retrofitting them one page at a time, as happened here, is strictly more work than doing it once at the start.

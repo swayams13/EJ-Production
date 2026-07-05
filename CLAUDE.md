@@ -41,3 +41,6 @@ This file lists the command-line patterns, development constraints, database req
 
 ### 6. Domain Logic Reference
 - 📚 **Read `docs/EJ_DJ_CALCULATION_LOGIC.md` before touching welding-feet, resource-count, or scheduler calculations.** It documents the EJ (TIG+MIG+Grinding) vs DJ (MIG+Grinding only, no TIG) business rule, the full data flow from Excel import to per-project feet, the two centralized helper functions (`compute_master_feet`, `aggregate_line_feet`) that must not be re-duplicated, and known/deliberate limitations. This logic was fixed after being independently reimplemented in 7 different files — don't add an 8th.
+
+### 7. Frontend Design System Reference
+- 🎨 **Read `docs/UI_DESIGN_SYSTEM.md` before adding or editing any frontend page.** It documents the design tokens (colors/type/spacing in `next-frontend/src/app/globals.css`), the shared component library (`next-frontend/src/components/ui/`), and hard rules (never interpolate Tailwind class names at runtime, never use `alert()`/`confirm()`/`prompt()`, keep `Th`/`Td` `numeric` props in sync). Lists which pages are already migrated and which still use the old hand-rolled styling.

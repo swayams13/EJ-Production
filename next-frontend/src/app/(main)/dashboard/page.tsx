@@ -160,9 +160,9 @@ export default function Dashboard() {
             <THead>
               <Tr>
                 <Th>Metric</Th>
-                <Th>TIG Welders</Th>
-                <Th>MIG &amp; DJ Welders</Th>
-                <Th>Grinders</Th>
+                <Th numeric>TIG Welders</Th>
+                <Th numeric>MIG &amp; DJ Welders</Th>
+                <Th numeric>Grinders</Th>
               </Tr>
             </THead>
             <TBody>
@@ -198,13 +198,13 @@ export default function Dashboard() {
             <THead>
               <Tr>
                 <Th>Month</Th>
-                <Th>TIG (ft)</Th>
-                <Th>DJ (ft)</Th>
-                <Th>MIG (ft)</Th>
-                <Th>Grind (ft)</Th>
-                <Th>Req. TIG</Th>
-                <Th>Req. MIG/DJ</Th>
-                <Th>Req. Grind</Th>
+                <Th numeric>TIG (ft)</Th>
+                <Th numeric>DJ (ft)</Th>
+                <Th numeric>MIG (ft)</Th>
+                <Th numeric>Grind (ft)</Th>
+                <Th numeric>Req. TIG</Th>
+                <Th numeric>Req. MIG/DJ</Th>
+                <Th numeric>Req. Grind</Th>
               </Tr>
             </THead>
             <TBody>

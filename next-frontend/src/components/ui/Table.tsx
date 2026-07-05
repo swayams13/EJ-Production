@@ -20,10 +20,17 @@ export function Tr({ children, className = "" }: { children: ReactNode; classNam
   return <tr className={`even:bg-paper ${className}`}>{children}</tr>;
 }
 
-export function Th({ children, className = "", ...rest }: ThHTMLAttributes<HTMLTableCellElement> & { className?: string }) {
+export function Th({
+  children,
+  className = "",
+  numeric = false,
+  ...rest
+}: ThHTMLAttributes<HTMLTableCellElement> & { className?: string; numeric?: boolean }) {
   return (
     <th
-      className={`border-b-[1.5px] border-ink-soft px-2.5 py-2.5 text-left font-data text-[10.5px] font-medium uppercase tracking-wide text-ink-soft ${className}`}
+      className={`border-b-[1.5px] border-ink-soft px-2.5 py-2.5 font-data text-[10.5px] font-medium uppercase tracking-wide text-ink-soft ${
+        numeric ? "text-center" : "text-left"
+      } ${className}`}
       {...rest}
     >
       {children}
@@ -34,7 +41,7 @@ export function Th({ children, className = "", ...rest }: ThHTMLAttributes<HTMLT
 export function Td({ children, className = "", numeric = false, ...rest }: TdHTMLAttributes<HTMLTableCellElement> & { className?: string; numeric?: boolean }) {
   return (
     <td
-      className={`border-b border-line px-2.5 py-2.5 ${numeric ? "font-data tabular-nums text-right" : ""} ${className}`}
+      className={`border-b border-line px-2.5 py-2.5 ${numeric ? "font-data tabular-nums text-center" : ""} ${className}`}
       {...rest}
     >
       {children}

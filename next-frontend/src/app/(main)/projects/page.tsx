@@ -3,9 +3,35 @@ import { apiFetch } from "@/lib/api";
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { Card, MetricCard, Badge, Button, ProgressBar, Spinner, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
+
+interface Bellow {
+  type: string;
+  size: number;
+  quantity: number;
+  tig_feet: number;
+  mig_feet: number;
+  grinding_feet: number;
+}
+
+interface ProjectRow {
+  id: number;
+  quotation_no: string;
+  progress_percentage?: number;
+  target_date?: string;
+  assigned_tig: number;
+  assigned_mig: number;
+  assigned_grinders: number;
+  payroll?: string;
+  estimated_duration_days: number;
+  status?: string;
+  bellows: Bellow[];
+}
+
+const TABLE_COLS = 7;
 
 export default function ProjectsList() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -18,165 +44,171 @@ export default function ProjectsList() {
       });
   }, []);
 
-  if (loading) return <div className="text-slate-500">Loading projects...</div>;
+  if (loading) return <Spinner label="Loading projects…" />;
+
+  const sumBellows = (key: keyof Bellow) =>
+    projects.reduce((sum, p) => sum + p.bellows.reduce((s, b) => s + (Number(b[key]) || 0), 0), 0);
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-8">
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Projects</h1>
-          <p className="text-slate-500">Manage all active and completed projects.</p>
+          <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">Projects</h1>
+          <p className="text-ink-soft">Manage all active and completed projects.</p>
         </div>
-        <div>
-          <Link href="/projects/add" className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-sm transition-colors">
-            + Schedule New Project
-          </Link>
-        </div>
+        <Link href="/projects/add">
+          <Button variant="primary">+ Schedule New Project</Button>
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total TIG (ft)</p>
-          <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.tig_feet, 0), 0).toFixed(2)}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total MIG (ft)</p>
-          <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.mig_feet, 0), 0).toFixed(2)}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total Grinding (sq ft)</p>
-          <p className="text-3xl font-bold text-indigo-600">{projects.reduce((sum, p) => sum + p.bellows.reduce((s: number, b: any) => s + b.grinding_feet, 0), 0).toFixed(2)}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow">
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total Est. Days</p>
-          <p className="text-3xl font-bold text-emerald-600">{projects.reduce((sum, p) => sum + (p.estimated_duration_days || 0), 0)} <span className="text-lg font-medium text-slate-500">days</span></p>
-        </div>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <MetricCard label="Total TIG (ft)" value={sumBellows("tig_feet").toFixed(2)} />
+        <MetricCard label="Total MIG (ft)" value={sumBellows("mig_feet").toFixed(2)} />
+        <MetricCard label="Total Grinding (sq ft)" value={sumBellows("grinding_feet").toFixed(2)} />
+        <MetricCard
+          label="Total Est. Days"
+          value={`${projects.reduce((sum, p) => sum + (p.estimated_duration_days || 0), 0)} days`}
+          tone="success"
+        />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Project Code</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Progress</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Target Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned Resources</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Payroll</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Est. Days</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-slate-200">
-            {projects.map((p: any) => (
+      <Card>
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Project Code</Th>
+              <Th>Progress</Th>
+              <Th>Target Date</Th>
+              <Th>Assigned Resources</Th>
+              <Th>Payroll</Th>
+              <Th>Est. Days</Th>
+              <Th>Status</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {projects.map((p) => (
               <React.Fragment key={p.id}>
-                <tr 
-                  className="hover:bg-slate-50 transition-colors cursor-pointer"
-                  onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">
+                <Tr className="cursor-pointer hover:bg-brand-tint/40" >
+                  <Td className="font-medium text-brand-deep" onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
                     <div className="flex items-center gap-2">
-                      <svg className={`w-4 h-4 transition-transform ${expandedId === p.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                      <svg
+                        className={`h-4 w-4 transition-transform ${expandedId === p.id ? "rotate-90" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                      </svg>
                       {p.quotation_no}
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  </Td>
+                  <Td onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
                     <div className="flex items-center gap-2">
-                      <div className="w-24 bg-slate-200 rounded-full h-2.5">
-                        <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${p.progress_percentage || 0}%` }}></div>
+                      <div className="w-24">
+                        <ProgressBar
+                          label=""
+                          showLabel={false}
+                          percent={p.progress_percentage || 0}
+                          tone="success"
+                        />
                       </div>
-                      <span className="text-xs font-medium text-slate-600">{p.progress_percentage || 0}%</span>
+                      <span className="font-data tabular-nums text-xs text-ink-soft">
+                        {p.progress_percentage || 0}%
+                      </span>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                    {p.target_date ? new Date(p.target_date).toLocaleDateString('en-GB') : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                    <div className="flex gap-2 text-xs font-medium">
-                      <span className="bg-slate-100 px-2 py-1 rounded">TIG: {p.assigned_tig}</span>
-                      <span className="bg-slate-100 px-2 py-1 rounded">MIG: {p.assigned_mig}</span>
-                      <span className="bg-slate-100 px-2 py-1 rounded">Grind: {p.assigned_grinders}</span>
+                  </Td>
+                  <Td className="text-ink-soft" onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
+                    {p.target_date ? new Date(p.target_date).toLocaleDateString("en-GB") : "N/A"}
+                  </Td>
+                  <Td onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge tone="neutral">TIG: {p.assigned_tig}</Badge>
+                      <Badge tone="neutral">MIG: {p.assigned_mig}</Badge>
+                      <Badge tone="neutral">Grind: {p.assigned_grinders}</Badge>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-md ${
-                      p.payroll === 'Company' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'
-                    }`}>
-                      {p.payroll || 'Company'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                  </Td>
+                  <Td onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
+                    <Badge tone={p.payroll === "Contractor" ? "warning" : "brand"}>{p.payroll || "Company"}</Badge>
+                  </Td>
+                  <Td onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
                     {p.estimated_duration_days > 0 ? (
-                      <span className="text-indigo-600 font-semibold">{p.estimated_duration_days} days</span>
+                      <span className="font-data tabular-nums font-semibold text-brand-deep">
+                        {p.estimated_duration_days} days
+                      </span>
                     ) : (
-                      <span className="text-slate-400 italic">N/A</span>
+                      <span className="italic text-ink-soft">N/A</span>
                     )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      p.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {p.status || 'Active'}
-                    </span>
-                  </td>
-                </tr>
+                  </Td>
+                  <Td onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
+                    <Badge tone={p.status === "Completed" ? "success" : "brand"}>{p.status || "Active"}</Badge>
+                  </Td>
+                </Tr>
                 {expandedId === p.id && (
-                  <tr className="bg-slate-50">
-                    <td colSpan={5} className="px-12 py-4">
+                  <Tr className="bg-paper">
+                    <Td colSpan={TABLE_COLS} className="p-6">
                       {p.bellows && p.bellows.length > 0 ? (
-                        <table className="min-w-full divide-y divide-slate-200 bg-white border border-slate-200 rounded-lg overflow-hidden">
-                          <thead className="bg-slate-100">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Type</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Size (NB)</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Quantity</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">TIG / Welding (ft)</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Total MIG (ft)</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Grinding (sq ft)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {p.bellows.map((b: any, idx: number) => (
-                              <tr key={idx}>
-                                <td className="px-4 py-2 text-sm text-slate-900">
-                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${b.type === 'DJ' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
-                                    {b.type === 'DJ' ? 'Dismantling Joint' : 'Expansion Joint'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2 text-sm text-slate-900">{b.size}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.quantity}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.type === 'DJ' ? '-' : b.tig_feet}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.mig_feet}</td>
-                                <td className="px-4 py-2 text-sm text-slate-600">{b.type === 'DJ' ? '-' : b.grinding_feet}</td>
-                              </tr>
-                            ))}
-                            <tr className="bg-slate-50 font-semibold">
-                              <td className="px-4 py-2 text-sm text-slate-900">Total</td>
-                              <td className="px-4 py-2 text-sm text-slate-900"></td>
-                              <td className="px-4 py-2 text-sm text-slate-900">{p.bellows.reduce((sum: number, b: any) => sum + b.quantity, 0)}</td>
-                              <td className="px-4 py-2 text-sm text-indigo-600">{p.bellows.reduce((sum: number, b: any) => sum + b.tig_feet, 0).toFixed(2)}</td>
-                              <td className="px-4 py-2 text-sm text-indigo-600">{p.bellows.reduce((sum: number, b: any) => sum + b.mig_feet, 0).toFixed(2)}</td>
-                              <td className="px-4 py-2 text-sm text-indigo-600">{p.bellows.reduce((sum: number, b: any) => sum + b.grinding_feet, 0).toFixed(2)}</td>
-                            </tr>
-                          </tbody>
-                        </table>
+                        <Card>
+                          <Table>
+                            <THead>
+                              <Tr>
+                                <Th>Type</Th>
+                                <Th>Size (NB)</Th>
+                                <Th numeric>Quantity</Th>
+                                <Th numeric>TIG / Welding (ft)</Th>
+                                <Th numeric>Total MIG (ft)</Th>
+                                <Th numeric>Grinding (sq ft)</Th>
+                              </Tr>
+                            </THead>
+                            <TBody>
+                              {p.bellows.map((b, idx) => (
+                                <Tr key={idx}>
+                                  <Td>
+                                    <Badge tone={b.type === "DJ" ? "warning" : "brand"}>
+                                      {b.type === "DJ" ? "Dismantling Joint" : "Expansion Joint"}
+                                    </Badge>
+                                  </Td>
+                                  <Td className="text-ink">{b.size}</Td>
+                                  <Td numeric>{b.quantity}</Td>
+                                  <Td numeric>{b.type === "DJ" ? "-" : b.tig_feet}</Td>
+                                  <Td numeric>{b.mig_feet}</Td>
+                                  <Td numeric>{b.type === "DJ" ? "-" : b.grinding_feet}</Td>
+                                </Tr>
+                              ))}
+                              <Tr className="bg-paper font-semibold">
+                                <Td className="text-ink">Total</Td>
+                                <Td />
+                                <Td numeric>{p.bellows.reduce((sum, b) => sum + b.quantity, 0)}</Td>
+                                <Td numeric className="text-brand-deep">
+                                  {p.bellows.reduce((sum, b) => sum + b.tig_feet, 0).toFixed(2)}
+                                </Td>
+                                <Td numeric className="text-brand-deep">
+                                  {p.bellows.reduce((sum, b) => sum + b.mig_feet, 0).toFixed(2)}
+                                </Td>
+                                <Td numeric className="text-brand-deep">
+                                  {p.bellows.reduce((sum, b) => sum + b.grinding_feet, 0).toFixed(2)}
+                                </Td>
+                              </Tr>
+                            </TBody>
+                          </Table>
+                        </Card>
                       ) : (
-                        <p className="text-sm text-slate-500 italic">No expansion joints assigned to this project.</p>
+                        <p className="text-sm italic text-ink-soft">No expansion joints assigned to this project.</p>
                       )}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 )}
               </React.Fragment>
             ))}
             {projects.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-sm text-slate-500">
+              <Tr>
+                <Td colSpan={TABLE_COLS} className="text-center text-ink-soft">
                   No projects found.
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             )}
-          </tbody>
-        </table>
-      </div>
+          </TBody>
+        </Table>
+      </Card>
     </div>
   );
 }

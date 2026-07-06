@@ -109,7 +109,7 @@ export default function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-2.5 border-l-2 px-4 py-2 text-[13px] transition-colors ${
+                    className={`flex items-center gap-2.5 border-l-2 px-4 py-2 text-sm transition-colors ${
                       active
                         ? "border-brand bg-white/5 font-semibold text-white"
                         : "border-transparent text-[#d7e3e0] hover:bg-white/5 hover:text-white"

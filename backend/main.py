@@ -142,6 +142,28 @@ _run_startup_migration("part_processes.itemwise fields", [
     "ALTER TABLE part_processes ADD COLUMN po_number VARCHAR",
 ])
 
+_run_startup_migration("job_final_checks table", [
+    """
+    CREATE TABLE IF NOT EXISTS job_final_checks (
+        id SERIAL PRIMARY KEY,
+        production_line_id INTEGER NOT NULL REFERENCES project_production_lines(id),
+        check_type VARCHAR NOT NULL,
+        is_required BOOLEAN DEFAULT TRUE,
+        test_method VARCHAR,
+        paint_spec TEXT,
+        weight_kgs DOUBLE PRECISION,
+        marking_type VARCHAR,
+        status VARCHAR DEFAULT 'pending',
+        date_ready DATE,
+        date_pending DATE,
+        notes TEXT,
+        updated_by INTEGER REFERENCES users(id),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT uq_final_check_line_type UNIQUE (production_line_id, check_type)
+    )
+    """,
+])
+
 # Dependency
 
 # Models

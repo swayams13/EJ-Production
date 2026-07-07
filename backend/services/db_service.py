@@ -138,6 +138,27 @@ class ProductionLog(Base):
     part_process = relationship("PartProcess", back_populates="production_logs")
     operator = relationship("User")
 
+class JobFinalCheck(Base):
+    __tablename__ = "job_final_checks"
+    id = Column(Integer, primary_key=True, index=True)
+    production_line_id = Column(Integer, ForeignKey("project_production_lines.id"), nullable=False)
+    check_type = Column(String, nullable=False)   # testing | painting | weight | marking
+    is_required = Column(Boolean, default=True)
+
+    test_method = Column(String, nullable=True)   # 'Hydro/Pneumatic'
+    paint_spec = Column(Text, nullable=True)
+    weight_kgs = Column(Float, nullable=True)
+    marking_type = Column(String, nullable=True)  # 'Hard Punch'
+
+    status = Column(String, default="pending")    # pending | required | in_process | ready
+    date_ready = Column(Date, nullable=True)
+    date_pending = Column(Date, nullable=True)
+    notes = Column(Text, nullable=True)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("production_line_id", "check_type", name="uq_final_check_line_type"),)
+
 class WeldingLog(Base):
     __tablename__ = "welding_logs"
     id = Column(Integer, primary_key=True, index=True)

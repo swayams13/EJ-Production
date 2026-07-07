@@ -42,8 +42,9 @@ class MESService:
         ready = sum(1 for c in required if c.status == "ready")
         if ready == len(required):
             return 1.0
-        # Cap the line: allow up to 95% until all required checks are done.
-        return 0.95 * (ready / len(required))
+        # ponytail: flat 95% cap until all required checks pass — scaling to 0 when 0 checks done
+        # would wipe out all fab+weld progress on first deploy (every new line has 0 checks done).
+        return 0.95
 
     @staticmethod
     def create_parts_for_production_line(db: Session, line_id: int, req_type: str = "EJ"):

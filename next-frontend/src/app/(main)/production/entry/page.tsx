@@ -22,6 +22,25 @@ interface ProcessRow {
   id: string;
   process_name: string;
   completed_qty: number;
+  qty_pending?: number;
+  status?: string;
+  date_ready?: string | null;
+  date_pending?: string | null;
+  po_number?: string | null;
+}
+
+interface FinalCheck {
+  id: number;
+  check_type: string;
+  is_required: boolean;
+  test_method?: string | null;
+  paint_spec?: string | null;
+  weight_kgs?: number | null;
+  marking_type?: string | null;
+  status: string;
+  date_ready?: string | null;
+  date_pending?: string | null;
+  notes?: string | null;
 }
 
 interface PartRow {
@@ -53,6 +72,7 @@ export default function OperatorEntry() {
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
+  const [finalChecks, setFinalChecks] = useState<FinalCheck[]>([]);
   const [activeTab, setActiveTab] = useState("Fabrication");
 
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
@@ -87,6 +107,7 @@ export default function OperatorEntry() {
         if (resData.success && resData.data) {
           setTotalQty(resData.data.total_qty);
           setParts(resData.data.parts);
+          setFinalChecks(resData.data.final_checks || []);
         }
       });
 
@@ -124,7 +145,11 @@ export default function OperatorEntry() {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/processes/${processId}/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity_completed: qty, feet_completed: feet > 0 ? feet : null }),
+        body: JSON.stringify({
+          quantity_completed: qty,
+          feet_completed: feet > 0 ? feet : null,
+          po_number: qtyInputs[`po_${processId}`] || null,
+        }),
       });
 
       if (!res.ok) {
@@ -146,6 +171,23 @@ export default function OperatorEntry() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleUpdateCheck = async (checkId: number, patch: Partial<FinalCheck>) => {
+    setSubmitting(true); setErrorMsg("");
+    try {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/final-checks/${checkId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Update failed"); }
+      setSuccessMsg("Final check updated");
+      const reqId = requirementId; setRequirementId(""); setTimeout(() => setRequirementId(reqId), 50);
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    } finally { setSubmitting(false); }
   };
 
   const handleGlobalWeldingSubmit = async (processType: string) => {
@@ -299,14 +341,23 @@ export default function OperatorEntry() {
                                   <span className={`font-bold ${isComplete ? "text-success" : "text-ink"}`}>
                                     {proc.process_name}
                                   </span>
-                                  <div className="flex gap-2">
+                                  <div className="flex flex-wrap gap-2">
                                     <Badge tone="success">Done: {proc.completed_qty}</Badge>
-                                    <Badge tone="critical">Pend: {Math.max(0, pending)}</Badge>
+                                    <Badge tone="critical">Pend: {proc.qty_pending ?? Math.max(0, pending)}</Badge>
+                                    {proc.status && <Badge tone="neutral">{proc.status}</Badge>}
+                                    {proc.po_number && <Badge tone="neutral">PO: {proc.po_number}</Badge>}
                                   </div>
                                 </div>
 
                                 {!isComplete && (
                                   <div className="mt-2 flex flex-col gap-2">
+                                    {/PO|Material Received/i.test(proc.process_name) && (
+                                      <Input
+                                        placeholder="PO Number (optional)"
+                                        value={qtyInputs[`po_${proc.id}`] || ""}
+                                        onChange={(e) => setQtyInputs({ ...qtyInputs, [`po_${proc.id}`]: e.target.value })}
+                                      />
+                                    )}
                                     <Input
                                       type="number"
                                       min="1"
@@ -418,6 +469,48 @@ export default function OperatorEntry() {
                     </Card>
                   );
                 })}
+              </div>
+            )}
+
+            {finalChecks.length > 0 && (
+              <div className="border-t border-line pt-6">
+                <h2 className="mb-4 text-xl font-bold text-ink">Final Checks</h2>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {finalChecks.map((c) => (
+                    <Card key={c.id} className="p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="font-bold capitalize text-ink">{c.check_type}</h3>
+                        <Badge tone={c.status === "ready" ? "success" : "neutral"}>{c.status}</Badge>
+                      </div>
+                      {c.test_method && <p className="text-sm text-ink-soft">Method: {c.test_method}</p>}
+                      {c.marking_type && <p className="text-sm text-ink-soft">Marking: {c.marking_type}</p>}
+                      {c.check_type === "weight" && (
+                        <Input
+                          type="number" step="0.1" placeholder="Weight (kgs)"
+                          defaultValue={c.weight_kgs ?? ""}
+                          onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { weight_kgs: parseFloat(e.target.value) })}
+                          className="mt-2"
+                        />
+                      )}
+                      {c.check_type === "painting" && (
+                        <Input
+                          placeholder="Paint spec"
+                          defaultValue={c.paint_spec ?? ""}
+                          onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { paint_spec: e.target.value })}
+                          className="mt-2"
+                        />
+                      )}
+                      <Button
+                        variant={c.status === "ready" ? "secondary" : "primary"}
+                        className="mt-3 w-full justify-center"
+                        disabled={submitting}
+                        onClick={() => handleUpdateCheck(c.id, { status: c.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
+                      >
+                        {c.status === "ready" ? "Mark Pending" : "Mark Ready"}
+                      </Button>
+                    </Card>
+                  ))}
+                </div>
               </div>
             )}
           </div>

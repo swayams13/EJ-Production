@@ -164,6 +164,10 @@ _run_startup_migration("job_final_checks table", [
     """,
 ])
 
+from backend.services.db_service import SessionLocal
+from backend.services.itemwise_backfill import backfill_itemwise
+backfill_itemwise(SessionLocal)
+
 # Dependency
 
 # Models

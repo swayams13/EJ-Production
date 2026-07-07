@@ -30,6 +30,22 @@ class MESService:
             db.add(JobFinalCheck(**row))
 
     @staticmethod
+    def final_check_gate(checks):
+        """
+        Gates project progress on required final checks.
+        Returns 1.0 if all required checks are ready or none are required.
+        Returns < 1.0 if any required check is outstanding.
+        """
+        required = [c for c in checks if getattr(c, "is_required", True)]
+        if not required:
+            return 1.0
+        ready = sum(1 for c in required if c.status == "ready")
+        if ready == len(required):
+            return 1.0
+        # Cap the line: allow up to 95% until all required checks are done.
+        return 0.95 * (ready / len(required))
+
+    @staticmethod
     def create_parts_for_production_line(db: Session, line_id: int, req_type: str = "EJ"):
         """
         Creates all parts and processes based on the template for a given project production line.
@@ -117,10 +133,14 @@ class MESService:
             target_weld = (line.tig_feet or 0) + (line.mig_feet or 0) + (line.grinding_feet or 0)
             
             welding_pct = min(1.0, completed_weld / target_weld) if target_weld > 0 else 1.0
-            
+
             # Blend: 70% Fabrication, 30% Welding
             line_completion = (line_fabrication_completion * 0.7) + (welding_pct * 30.0)
-                
+
+            # Gate on required final checks
+            line_checks = db.query(JobFinalCheck).filter_by(production_line_id=line.id).all()
+            line_completion *= MESService.final_check_gate(line_checks)
+
             total_line_completion += line_completion
             
         # Average over all production lines

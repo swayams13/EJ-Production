@@ -134,6 +134,14 @@ _run_startup_migration("attendance_logs dedupe", [
 _run_startup_migration("attendance_logs unique constraint", [
     "ALTER TABLE attendance_logs ADD CONSTRAINT uq_attendance_user_date UNIQUE (user_id, date)",
 ])
+
+_run_startup_migration("part_processes.itemwise fields", [
+    "ALTER TABLE part_processes ADD COLUMN status VARCHAR DEFAULT 'pending'",
+    "ALTER TABLE part_processes ADD COLUMN date_ready DATE",
+    "ALTER TABLE part_processes ADD COLUMN date_pending DATE",
+    "ALTER TABLE part_processes ADD COLUMN po_number VARCHAR",
+])
+
 # Dependency
 
 # Models

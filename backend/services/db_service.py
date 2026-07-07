@@ -117,7 +117,11 @@ class PartProcess(Base):
     part_id = Column(Integer, ForeignKey("parts.id"), nullable=False)
     process_name = Column(String, nullable=False) # e.g. "Cutting", "Welding"
     completed_qty = Column(Integer, nullable=False, default=0)
-    
+    status = Column(String, default="pending")      # pending | in_process | ready
+    date_ready = Column(Date, nullable=True)
+    date_pending = Column(Date, nullable=True)
+    po_number = Column(String, nullable=True)
+
     part = relationship("Part", back_populates="processes")
     production_logs = relationship("ProductionLog", back_populates="part_process", cascade="all, delete-orphan")
 

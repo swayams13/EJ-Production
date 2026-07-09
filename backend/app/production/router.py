@@ -21,7 +21,7 @@ def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_us
     parts_data = []
     for part in line.parts:
         proc_data = []
-        for proc in part.processes:
+        for proc in sorted(part.processes, key=lambda p: p.id):
             proc_data.append({
                 "id": proc.id,
                 "process_name": proc.process_name,

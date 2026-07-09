@@ -73,7 +73,7 @@ export default function OperatorEntry() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const [finalChecks, setFinalChecks] = useState<FinalCheck[]>([]);
-  const [activeTab, setActiveTab] = useState("Material");
+  const [activeTab, setActiveTab] = useState<"Material" | "Fabrication" | "Welding" | "FinalChecks">("Material");
 
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
   const isMaterialProcess = (name: string) => /^(PO|Material Received|Inward Insp)$/i.test(name);
@@ -296,31 +296,25 @@ export default function OperatorEntry() {
           <div className="flex flex-col gap-6">
             <div className="border-b border-line pb-4">
               <h2 className="mb-4 text-xl font-bold text-ink">Track Production</h2>
-              <div className="flex w-full max-w-2xl rounded-lg bg-paper p-1">
-                <button
-                  onClick={() => setActiveTab("Material")}
-                  className={`flex-1 rounded-md px-4 py-2 text-sm font-bold transition-all ${
-                    activeTab === "Material" ? "bg-paper-raised text-brand-deep shadow-sm" : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  Material Status
-                </button>
-                <button
-                  onClick={() => setActiveTab("Fabrication")}
-                  className={`flex-1 rounded-md px-4 py-2 text-sm font-bold transition-all ${
-                    activeTab === "Fabrication" ? "bg-paper-raised text-brand-deep shadow-sm" : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  Fabrication &amp; Assembly
-                </button>
-                <button
-                  onClick={() => setActiveTab("Welding")}
-                  className={`flex-1 rounded-md px-4 py-2 text-sm font-bold transition-all ${
-                    activeTab === "Welding" ? "bg-paper-raised text-brand-deep shadow-sm" : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  {currentReqType === "DJ" ? "Welding" : "Welding & Grinding"}
-                </button>
+              <div className="flex w-full flex-wrap gap-1 rounded-lg bg-paper p-1">
+                {(["Material", "Fabrication", "Welding", "FinalChecks"] as const).map((tab) => {
+                  const label =
+                    tab === "Material" ? "Material Status" :
+                    tab === "Fabrication" ? "Fabrication & Assembly" :
+                    tab === "Welding" ? (currentReqType === "DJ" ? "Welding" : "Welding & Grinding") :
+                    "Final Checks";
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`flex-1 rounded-md px-4 py-2 text-sm font-bold transition-all ${
+                        activeTab === tab ? "bg-paper-raised text-brand-deep shadow-sm" : "text-ink-soft hover:text-ink"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -559,50 +553,51 @@ export default function OperatorEntry() {
               </div>
             )}
 
-          </div>
-        )}
+            {activeTab === "FinalChecks" && (
+              finalChecks.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {finalChecks.map((c) => (
+                    <Card key={c.id} className="p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="font-bold capitalize text-ink">{c.check_type}</h3>
+                        <Badge tone={c.status === "ready" ? "success" : "neutral"}>{c.status}</Badge>
+                      </div>
+                      {c.test_method && <p className="text-sm text-ink-soft">Method: {c.test_method}</p>}
+                      {c.marking_type && <p className="text-sm text-ink-soft">Marking: {c.marking_type}</p>}
+                      {c.check_type === "weight" && (
+                        <Input
+                          type="number" step="0.1" placeholder="Weight (kgs)"
+                          defaultValue={c.weight_kgs ?? ""}
+                          onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { weight_kgs: parseFloat(e.target.value) })}
+                          className="mt-2"
+                        />
+                      )}
+                      {c.check_type === "painting" && (
+                        <Input
+                          placeholder="Paint spec"
+                          defaultValue={c.paint_spec ?? ""}
+                          onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { paint_spec: e.target.value })}
+                          className="mt-2"
+                        />
+                      )}
+                      <Button
+                        variant={c.status === "ready" ? "secondary" : "primary"}
+                        className="mt-3 w-full justify-center"
+                        disabled={submitting}
+                        onClick={() => handleUpdateCheck(c.id, { status: c.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
+                      >
+                        {c.status === "ready" ? "Mark Pending" : "Mark Ready"}
+                      </Button>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-line py-12 text-center">
+                  <p className="text-ink-soft">No final checks for this requirement.</p>
+                </div>
+              )
+            )}
 
-        {requirementId && finalChecks.length > 0 && (
-          <div className="mt-2">
-            <div className="border-b border-line pb-4">
-              <h2 className="text-xl font-bold text-ink">Final Checks</h2>
-            </div>
-            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {finalChecks.map((c) => (
-                <Card key={c.id} className="p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="font-bold capitalize text-ink">{c.check_type}</h3>
-                    <Badge tone={c.status === "ready" ? "success" : "neutral"}>{c.status}</Badge>
-                  </div>
-                  {c.test_method && <p className="text-sm text-ink-soft">Method: {c.test_method}</p>}
-                  {c.marking_type && <p className="text-sm text-ink-soft">Marking: {c.marking_type}</p>}
-                  {c.check_type === "weight" && (
-                    <Input
-                      type="number" step="0.1" placeholder="Weight (kgs)"
-                      defaultValue={c.weight_kgs ?? ""}
-                      onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { weight_kgs: parseFloat(e.target.value) })}
-                      className="mt-2"
-                    />
-                  )}
-                  {c.check_type === "painting" && (
-                    <Input
-                      placeholder="Paint spec"
-                      defaultValue={c.paint_spec ?? ""}
-                      onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { paint_spec: e.target.value })}
-                      className="mt-2"
-                    />
-                  )}
-                  <Button
-                    variant={c.status === "ready" ? "secondary" : "primary"}
-                    className="mt-3 w-full justify-center"
-                    disabled={submitting}
-                    onClick={() => handleUpdateCheck(c.id, { status: c.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
-                  >
-                    {c.status === "ready" ? "Mark Pending" : "Mark Ready"}
-                  </Button>
-                </Card>
-              ))}
-            </div>
           </div>
         )}
       </div>

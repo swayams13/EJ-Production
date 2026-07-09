@@ -1,5 +1,43 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-09 (Session 6 - Shop Floor Entry Tabs + Graphify Update)
+
+### What we did today:
+- **Logged Task 12** to the pending queue: auto-recalculate pending feet & assigned welders/grinders after every shop floor welding log submission (~10-line backend addition in `production/router.py`).
+- **Updated Graphify knowledge graph** (incremental rebuild): graph now has 635 nodes, 1695 edges, 56 communities. God nodes: `ProjectProductionLine` (degree 62), `Project` (56), `ProjectResourceAssignment` (49), `User` (45), `MESService` (34), `apiFetch()` (33). Graph is scoped to EJ Production Tracker only (not full workspace). Cache restored after `.graphify_python` was missing.
+- **Restructured Shop Floor Entry (`/production/entry`)** into 4 tabs + fixed several bugs:
+  - **Material Status tab** (new, default): shows PO / Material Received / Inward Insp steps per part. PO step shows "(Optional)" label and PO number input.
+  - **Fabrication & Assembly tab**: now excludes material steps — only Cutting, Bending, DP test, M/c, Drilling, Ready, Assembly, etc.
+  - **Welding & Grinding tab**: unchanged.
+  - **Final Checks tab** (new): shows Testing, Painting, Weight, Marking cards only — welding/grinding check types filtered out. Fully isolated from other tabs.
+  - **Fixed duplicate "pending" badge**: status badge now suppressed when `status === "pending"` since the Pend qty badge already communicates that.
+  - **Fixed process step reordering bug**: backend `get_requirement_parts` now sorts `part.processes` by `proc.id` before returning — previously PostgreSQL returned rows in non-deterministic order after an update, causing completed steps to jump positions.
+- **Pushed 5 commits to `demo` branch** (7c41061 → d6aa1c4). Not merged to main — demo verification still pending.
+
+### ⚠️ OPEN FLAGS (unchanged from last session):
+- **DJ CF flag**: Companion Flanges (CF) placement in DJ assembly sequence not confirmed. Working assumption: Main Assembly (after A+B+C Final Assembly). Must resolve before Task 10 DJ template split and Task 11 gating logic.
+- **Demo verification**: itemwise feature (Session 5) still needs manual walkthrough on Railway demo before merging to main.
+
+### What needs to be done next session:
+- Verify demo deployment (itemwise + tab restructure), then get permission to merge demo → main
+- Resolve DJ CF flag
+- **Task 11 gating logic** (remaining): material gate (fab steps disabled if Material Received qty = 0), sequential gate (step N+1 limited to step N qty), sub-assembly gate (assembly qty limited to min of input part Ready qtys). UI-only, no backend enforcement.
+- Task 9: WIP dashboard "current stage" column
+- Task 10: Add missing parts to templates (EJ: Box Packing; DJ: FP1, FP2, FS, Studs, O Rings, Box Packing — blocked on CF flag)
+- Task 12: Auto-recalculate resources on welding log submission
+
+### Pending tasks queued:
+- **Task 9**: WIP dashboard "current stage" column — earliest non-ready step per line, backend query + WIP page column
+- **Task 10**: Add missing parts to templates — EJ: Box Packing; DJ: Job Flanges FP1, Job Flanges FP2, Stopper Flanges FS, Studs, O Rings, Box Packing. Current DJ "Compensator Flanges (F)" needs splitting into FP1 + FP2. ⚠️ Do not touch DJ assembly dependency until CF flag resolved.
+- **Task 11**: Gating logic for Shop Floor Entry tabs — material gate, sequential gate, sub-assembly gate (UI-only). Tab restructure itself is done.
+- **Task 12**: Auto-recalculate pending feet & resources on shop floor submission — after every `POST /requirements/{req_id}/welding_logs`, look up `line.project_id`, compute `target_days` from `project.target_date - today` (fallback 15 days if no deadline), call `calculate_required_resources_for_deadline`, update `ProjectResourceAssignment`. ~10-line addition in `production/router.py`.
+
+### Problems faced:
+- Graphify graph refused to overwrite existing `graph.json` (old graph had 852 nodes, new extraction yielded 635 — shrink guard triggered). Bypassed with `force=True` since the old graph included scratch/debug files from a prior session that are no longer being tracked.
+- `{false && (` left dangling in JSX during a mid-edit — caught and fixed before commit.
+
+---
+
 ## Date: 2026-07-08 (Session 5 - Itemwise Progress Tracking)
 
 ### What we did today:

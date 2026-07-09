@@ -73,9 +73,10 @@ export default function OperatorEntry() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const [finalChecks, setFinalChecks] = useState<FinalCheck[]>([]);
-  const [activeTab, setActiveTab] = useState("Fabrication");
+  const [activeTab, setActiveTab] = useState("Material");
 
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
+  const isMaterialProcess = (name: string) => /^(PO|Material Received|Inward Insp)$/i.test(name);
 
   useEffect(() => {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
@@ -295,7 +296,15 @@ export default function OperatorEntry() {
           <div className="flex flex-col gap-6">
             <div className="border-b border-line pb-4">
               <h2 className="mb-4 text-xl font-bold text-ink">Track Production</h2>
-              <div className="flex w-full max-w-md rounded-lg bg-paper p-1">
+              <div className="flex w-full max-w-2xl rounded-lg bg-paper p-1">
+                <button
+                  onClick={() => setActiveTab("Material")}
+                  className={`flex-1 rounded-md px-4 py-2 text-sm font-bold transition-all ${
+                    activeTab === "Material" ? "bg-paper-raised text-brand-deep shadow-sm" : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  Material Status
+                </button>
                 <button
                   onClick={() => setActiveTab("Fabrication")}
                   className={`flex-1 rounded-md px-4 py-2 text-sm font-bold transition-all ${
@@ -315,7 +324,92 @@ export default function OperatorEntry() {
               </div>
             </div>
 
-            {activeTab === "Fabrication" ? (
+            {activeTab === "Material" ? (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                {parts
+                  .filter((p) => !partId || p.id.toString() === partId)
+                  .filter((p) => p.processes.some((proc) => isMaterialProcess(proc.process_name)))
+                  .map((part) => (
+                    <Card key={part.id}>
+                      <div className="flex items-center justify-between bg-ink px-4 py-3 text-white">
+                        <h3 className="truncate pr-2 font-bold" title={part.name}>
+                          {part.name}
+                        </h3>
+                        <Badge tone="neutral">Target: {totalQty}</Badge>
+                      </div>
+
+                      <div className="divide-y divide-line">
+                        {part.processes
+                          .filter((proc) => isMaterialProcess(proc.process_name))
+                          .map((proc) => {
+                            const pending = totalQty - proc.completed_qty;
+                            const isComplete = pending <= 0;
+
+                            return (
+                              <div key={proc.id} className={`flex flex-col gap-3 p-4 ${isComplete ? "bg-success-tint/40" : ""}`}>
+                                <div className="flex items-center justify-between">
+                                  <span className={`font-bold ${isComplete ? "text-success" : "text-ink"}`}>
+                                    {proc.process_name}
+                                    {/^PO$/i.test(proc.process_name) && (
+                                      <span className="ml-2 text-xs font-normal text-ink-soft">(Optional)</span>
+                                    )}
+                                  </span>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Badge tone="success">Done: {proc.completed_qty}</Badge>
+                                    <Badge tone="critical">Pend: {proc.qty_pending ?? Math.max(0, pending)}</Badge>
+                                    {proc.status && <Badge tone="neutral">{proc.status}</Badge>}
+                                    {proc.po_number && <Badge tone="neutral">PO: {proc.po_number}</Badge>}
+                                  </div>
+                                </div>
+
+                                {!isComplete && (
+                                  <div className="mt-2 flex flex-col gap-2">
+                                    {/^PO$/i.test(proc.process_name) && (
+                                      <Input
+                                        placeholder="PO Number (optional)"
+                                        value={qtyInputs[`po_${proc.id}`] || ""}
+                                        onChange={(e) => setQtyInputs({ ...qtyInputs, [`po_${proc.id}`]: e.target.value })}
+                                      />
+                                    )}
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      max={pending}
+                                      placeholder="Today's Qty"
+                                      value={qtyInputs[proc.id] || ""}
+                                      onChange={(e) => handleQtyChange(proc.id, e.target.value)}
+                                    />
+                                    <Button
+                                      variant="primary"
+                                      className="w-full justify-center"
+                                      disabled={submitting || !qtyInputs[proc.id]}
+                                      onClick={() => handleSubmitProcess(proc.id, proc.process_name)}
+                                    >
+                                      Save
+                                    </Button>
+                                  </div>
+                                )}
+                                {isComplete && (
+                                  <div className="mt-1 flex items-center gap-1 text-sm font-bold text-success">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                    Fully Completed
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </Card>
+                  ))}
+                {parts.filter((p) => !partId || p.id.toString() === partId).filter((p) => p.processes.some((proc) => isMaterialProcess(proc.process_name))).length === 0 && (
+                  <div className="col-span-full rounded-lg border border-dashed border-line py-12 text-center">
+                    <p className="text-ink-soft">No material steps for this requirement.</p>
+                  </div>
+                )}
+              </div>
+            ) : activeTab === "Fabrication" ? (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 {parts
                   .filter((p) => !partId || p.id.toString() === partId)
@@ -330,7 +424,7 @@ export default function OperatorEntry() {
 
                       <div className="divide-y divide-line">
                         {part.processes
-                          .filter((proc) => !isWeldingProcess(proc.process_name))
+                          .filter((proc) => !isWeldingProcess(proc.process_name) && !isMaterialProcess(proc.process_name))
                           .map((proc) => {
                             const pending = totalQty - proc.completed_qty;
                             const isComplete = pending <= 0;
@@ -351,13 +445,6 @@ export default function OperatorEntry() {
 
                                 {!isComplete && (
                                   <div className="mt-2 flex flex-col gap-2">
-                                    {/PO|Material Received/i.test(proc.process_name) && (
-                                      <Input
-                                        placeholder="PO Number (optional)"
-                                        value={qtyInputs[`po_${proc.id}`] || ""}
-                                        onChange={(e) => setQtyInputs({ ...qtyInputs, [`po_${proc.id}`]: e.target.value })}
-                                      />
-                                    )}
                                     <Input
                                       type="number"
                                       min="1"
@@ -391,7 +478,7 @@ export default function OperatorEntry() {
                               </div>
                             );
                           })}
-                        {part.processes.filter((proc) => !isWeldingProcess(proc.process_name)).length === 0 && (
+                        {part.processes.filter((proc) => !isWeldingProcess(proc.process_name) && !isMaterialProcess(proc.process_name)).length === 0 && (
                           <div className="p-4 text-center text-sm italic text-ink-soft">
                             No fabrication processes for this part.
                           </div>

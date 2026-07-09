@@ -556,7 +556,7 @@ export default function OperatorEntry() {
             {activeTab === "FinalChecks" && (
               finalChecks.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  {finalChecks.map((c) => (
+                  {finalChecks.filter((c) => ["testing", "painting", "weight", "marking"].includes(c.check_type)).map((c) => (
                     <Card key={c.id} className="p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <h3 className="font-bold capitalize text-ink">{c.check_type}</h3>

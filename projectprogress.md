@@ -1,5 +1,84 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-08 (Session 5 - Itemwise Progress Tracking)
+
+### What we did today:
+- **Implemented full Itemwise Progress Tracking feature** across 7 tasks via sub-agents (all reviewed and approved):
+  - Task 1: Enriched EJ/DJ step templates to match company Excel
+  - Task 2: Added status/date/PO fields to PartProcess + `compute_process_status()` helper
+  - Task 3: Added `JobFinalCheck` table (testing/painting/weight/marking), seeded per production line
+  - Task 4: Idempotent startup backfill for existing production lines
+  - Task 5: Extended production API — itemwise fields on GET /parts, PUT /final-checks endpoint
+  - Task 6: Gated `calculate_project_progress` on required final checks (line can't hit 100% until checks pass)
+  - Task 7: Extended Shop Floor Entry UI with status/PO badges per step + Final Checks section
+- **QA caught and fixed a real bug**: `final_check_gate` was returning `0.0` on first deploy (all checks start as pending → 0/4 ready → progress wiped to 0%). Fixed to return flat `0.95` cap instead.
+- **Pushed 8 commits to `demo` branch** (07758f4 → 8580111). Railway deploying. Not merged to main — awaiting manual verification.
+- **Designed next UI restructure** (Task 11): Shop Floor Entry → 4 tabs (Material Status / Fabrication & Assembly / Welding & Grinding / Final Checks), with material gate, sequential step gating, and sub-assembly qty gating. Read company Excel to derive full assembly dependency maps for EJ and DJ.
+
+### ⚠️ OPEN FLAG — Confirm before implementing Task 11:
+**DJ Companion Flanges (CF) placement:** The JOB Itemwise Progress Report Excel lists Companion Flanges (CF) for DJ separately, without assigning them to Sub-Assembly A, B, or C. Working assumption is they go into Main Assembly (after the A+B+C Final Assembly), but this has NOT been confirmed by the user. **Ask the user about this at the start of the next session before touching DJ templates or the assembly dependency map.**
+
+### What needs to be done next session:
+- Verify itemwise feature on demo Railway deployment (server logs, DB counts, UI walkthrough)
+- Once verified, get explicit permission to merge demo → main
+- **Resolve DJ CF flag above**, then implement Task 11 (4-tab Shop Floor Entry restructure)
+- Task 9: WIP dashboard "current stage" column
+- Task 10: Add missing DJ parts to templates (FP1, FP2, FS, Studs, O Rings, Box Packing) — confirmed from Excel
+
+### Pending tasks queued (do NOT start without demo verification + user go-ahead):
+- **Task 9**: WIP dashboard "current stage" column — earliest non-ready step per line, backend query + WIP page column
+- **Task 10**: Add missing parts to templates — EJ: Box Packing; DJ: Job Flanges FP1, Job Flanges FP2, Stopper Flanges FS, Studs, O Rings, Box Packing. Current DJ "Compensator Flanges (F)" needs splitting into FP1 + FP2. ⚠️ Do not touch DJ assembly dependency until CF flag resolved.
+- **Task 11**: Restructure Shop Floor Entry into 4 tabs — full spec saved in task description. EJ fully specced; DJ Main Assembly CF slot stubbed pending confirmation.
+- **Task 12**: Auto-recalculate pending feet & resources on shop floor submission — after every `POST /requirements/{req_id}/welding_logs`, look up `line.project_id`, compute `target_days` from `project.target_date - today` (fallback 15 days if no deadline), call `calculate_required_resources_for_deadline`, and write updated counts back to `ProjectResourceAssignment`. ~10-line addition in `production/router.py` after commit. No schema or frontend changes needed — dashboards already derive pending feet dynamically from logs.
+
+### Confirmed assembly dependency maps (from JOB Itemwise Progress Report Excel, 2026-07-08):
+
+**EJ:**
+- B/C Assembly Part 'P' → Bellows (B) + Collar (C)
+- Part 'P'/W/SP Assembly Part 'Q' → Part 'P' + Weldend (W) + Spool (SP)
+- Part 'Q'/F/CF Assembly Part 'R' → Part 'Q' + Compensator Flanges (F) + Companion Flanges (CF)  ← both flanges, template name needs updating
+- Part 'R'/IS Assembly Part 'S' → Part 'R' + Internal Sleeve (IS)
+- Part 'S'/L Assembly Part 'T' → Part 'S' + Lugs (L)
+- Main Assembly → Part 'T' + Limit Rods (LR) + MAT. BOLTS NUT WASHER SET + GASKET (G) + Box Packing
+
+**DJ:**
+- Part 'P1'/F Assembly Part 'A' → PIPE-1 (P1) + Job Flanges FP1
+- Part 'P2'/F Assembly Part 'B' → PIPE-2 (P2) + Job Flanges FP2
+- Part 'S'/F Assembly Part 'C' → STOPPER (S) + Stopper Flanges FS
+- Part 'A', 'B', & 'C' FINAL ASSEMBLY → Part A + Part B + Part C + Studs + O Rings
+- Main Assembly → FINAL ASSEMBLY + GASKET (G) + Box Packing + ⚠️ Companion Flanges (CF) placement TBD
+
+### UI design decisions confirmed (for Task 11):
+- Material Status tab: card-per-component, shows Material Received / PO / Inward Insp steps, PO = Optional badge
+- Fabrication & Assembly tab: card-per-component, all other steps + Assembly steps
+- Welding & Grinding tab: unchanged
+- Final Checks: separate section below tabs (not a tab)
+- Ready step: last manual tick-off on every card
+- Gating rules:
+  - Material gate: per-component — fab steps disabled if Material Received qty = 0
+  - Sequential gate: step N+1 entry limited to step N completed qty
+  - Sub-assembly gate: assembly entry limited to min(Ready qty of all required input components)
+  - All gating is UI-only (no backend enforcement for now)
+- PO step: keep in sequence, optional visual badge, no enforcement yet
+
+### Problems faced:
+- None blocking.
+
+## Date: 2026-07-06 (Session 4 - Minor UI tweak)
+
+### What we did today:
+- **Increased sidebar nav item font size** from 13px (`text-[13px]`) to 14px (`text-sm`) in `next-frontend/src/components/Sidebar.tsx` — user request for better readability.
+- Committed to `demo`, then user approved merge to `main`. Both branches are now in sync and Railway deployed.
+
+### Problems faced:
+- None.
+
+### What needs to be done next session:
+- Investigate and clean up untracked scratch/debug scripts in the repo root (`append_progress.py`, `check_latest.py`, `debug_*.py`, `fix_ej_versions.py`, `scratch_ops.py`, `backend/app/scheduler/router.py.patch`, `graphify-out/`).
+- Broader enterprise-readiness gaps (still open): RBAC is disabled, no automated test suite, no structured logging/error tracking, no documented backup/DR strategy, hardcoded dev credentials in `.env`.
+
+---
+
 ## Date: 2026-07-05 (Session 3 - UI/UX Redesign completion)
 
 ### What we did today:

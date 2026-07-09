@@ -188,4 +188,23 @@ def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get
     db.add(audit)
     
     db.commit()
+
+    # Recalculate required resources so pending feet + welder counts stay current
+    try:
+        from backend.services.db_service import Project, ProjectResourceAssignment
+        from backend.services.production_service import calculate_required_resources_for_deadline
+        project = db.query(Project).filter_by(id=line.project_id).first()
+        if project:
+            today = date.today()
+            target_days = max(1, (project.target_date - today).days) if project.target_date and project.target_date > today else 15
+            req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(line.project_id, target_days)
+            assign = db.query(ProjectResourceAssignment).filter_by(project_id=line.project_id).first()
+            if assign:
+                assign.assigned_tig_welders = req_tig
+                assign.assigned_mig_welders = req_mig
+                assign.assigned_grinders = req_grind
+                db.commit()
+    except Exception:
+        pass  # never fail the log submission over a recalc error
+
     return {"success": True, "message": f"Added {tx.feet_done} feet to {tx.process_type}"}

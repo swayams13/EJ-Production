@@ -357,7 +357,7 @@ export default function OperatorEntry() {
                                   <div className="flex flex-wrap gap-2">
                                     <Badge tone="success">Done: {proc.completed_qty}</Badge>
                                     <Badge tone="critical">Pend: {proc.qty_pending ?? Math.max(0, pending)}</Badge>
-                                    {proc.status && <Badge tone="neutral">{proc.status}</Badge>}
+                                    {proc.status && proc.status !== "pending" && <Badge tone="neutral">{proc.status}</Badge>}
                                     {proc.po_number && <Badge tone="neutral">PO: {proc.po_number}</Badge>}
                                   </div>
                                 </div>
@@ -438,7 +438,7 @@ export default function OperatorEntry() {
                                   <div className="flex flex-wrap gap-2">
                                     <Badge tone="success">Done: {proc.completed_qty}</Badge>
                                     <Badge tone="critical">Pend: {proc.qty_pending ?? Math.max(0, pending)}</Badge>
-                                    {proc.status && <Badge tone="neutral">{proc.status}</Badge>}
+                                    {proc.status && proc.status !== "pending" && <Badge tone="neutral">{proc.status}</Badge>}
                                     {proc.po_number && <Badge tone="neutral">PO: {proc.po_number}</Badge>}
                                   </div>
                                 </div>
@@ -559,47 +559,50 @@ export default function OperatorEntry() {
               </div>
             )}
 
-            {finalChecks.length > 0 && (
-              <div className="border-t border-line pt-6">
-                <h2 className="mb-4 text-xl font-bold text-ink">Final Checks</h2>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  {finalChecks.map((c) => (
-                    <Card key={c.id} className="p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h3 className="font-bold capitalize text-ink">{c.check_type}</h3>
-                        <Badge tone={c.status === "ready" ? "success" : "neutral"}>{c.status}</Badge>
-                      </div>
-                      {c.test_method && <p className="text-sm text-ink-soft">Method: {c.test_method}</p>}
-                      {c.marking_type && <p className="text-sm text-ink-soft">Marking: {c.marking_type}</p>}
-                      {c.check_type === "weight" && (
-                        <Input
-                          type="number" step="0.1" placeholder="Weight (kgs)"
-                          defaultValue={c.weight_kgs ?? ""}
-                          onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { weight_kgs: parseFloat(e.target.value) })}
-                          className="mt-2"
-                        />
-                      )}
-                      {c.check_type === "painting" && (
-                        <Input
-                          placeholder="Paint spec"
-                          defaultValue={c.paint_spec ?? ""}
-                          onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { paint_spec: e.target.value })}
-                          className="mt-2"
-                        />
-                      )}
-                      <Button
-                        variant={c.status === "ready" ? "secondary" : "primary"}
-                        className="mt-3 w-full justify-center"
-                        disabled={submitting}
-                        onClick={() => handleUpdateCheck(c.id, { status: c.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
-                      >
-                        {c.status === "ready" ? "Mark Pending" : "Mark Ready"}
-                      </Button>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
+          </div>
+        )}
+
+        {requirementId && finalChecks.length > 0 && (
+          <div className="mt-2">
+            <div className="border-b border-line pb-4">
+              <h2 className="text-xl font-bold text-ink">Final Checks</h2>
+            </div>
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {finalChecks.map((c) => (
+                <Card key={c.id} className="p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-bold capitalize text-ink">{c.check_type}</h3>
+                    <Badge tone={c.status === "ready" ? "success" : "neutral"}>{c.status}</Badge>
+                  </div>
+                  {c.test_method && <p className="text-sm text-ink-soft">Method: {c.test_method}</p>}
+                  {c.marking_type && <p className="text-sm text-ink-soft">Marking: {c.marking_type}</p>}
+                  {c.check_type === "weight" && (
+                    <Input
+                      type="number" step="0.1" placeholder="Weight (kgs)"
+                      defaultValue={c.weight_kgs ?? ""}
+                      onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { weight_kgs: parseFloat(e.target.value) })}
+                      className="mt-2"
+                    />
+                  )}
+                  {c.check_type === "painting" && (
+                    <Input
+                      placeholder="Paint spec"
+                      defaultValue={c.paint_spec ?? ""}
+                      onBlur={(e) => e.target.value && handleUpdateCheck(c.id, { paint_spec: e.target.value })}
+                      className="mt-2"
+                    />
+                  )}
+                  <Button
+                    variant={c.status === "ready" ? "secondary" : "primary"}
+                    className="mt-3 w-full justify-center"
+                    disabled={submitting}
+                    onClick={() => handleUpdateCheck(c.id, { status: c.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
+                  >
+                    {c.status === "ready" ? "Mark Pending" : "Mark Ready"}
+                  </Button>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -343,12 +343,12 @@ export default function AddProjects() {
               const variableComponents = selectedTag?.variable_components || [];
               return (
                 <div key={index} className="flex flex-col gap-3 border-b border-line pb-4 last:border-0 last:pb-0">
-                  <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-                    <div className="w-12 text-center">
+                  <div className="flex items-end gap-4 overflow-x-auto pb-1">
+                    <div className="w-12 shrink-0 text-center">
                       <Label>Sr. No.</Label>
                       <div className="py-2 text-sm font-semibold text-ink">{index + 1}</div>
                     </div>
-                    <div className="w-44">
+                    <div className="w-44 shrink-0">
                       <Label>Joint</Label>
                       <Select
                         value={bellow.joint_category}
@@ -364,7 +364,7 @@ export default function AddProjects() {
                         ))}
                       </Select>
                     </div>
-                    <div className="w-56">
+                    <div className="w-56 shrink-0">
                       <Label>Type</Label>
                       <Select
                         value={bellow.joint_type_code}
@@ -381,7 +381,7 @@ export default function AddProjects() {
                         ))}
                       </Select>
                     </div>
-                    <div className="w-32">
+                    <div className="w-32 shrink-0">
                       <Label>PN Rating</Label>
                       <Select
                         value={bellow.pn_rating || ""}
@@ -396,7 +396,7 @@ export default function AddProjects() {
                         <option value="PN 25">PN 25</option>
                       </Select>
                     </div>
-                    <div className="min-w-[10rem] flex-1">
+                    <div className="min-w-[10rem] shrink-0 flex-1">
                       <Label>Size (NB)</Label>
                       <Select
                         value={bellow.size}
@@ -413,7 +413,7 @@ export default function AddProjects() {
                         <option value="CUSTOM">+ Add Custom Size</option>
                       </Select>
                     </div>
-                    <div className="w-32">
+                    <div className="w-32 shrink-0">
                       <Label>Quantity</Label>
                       <Input
                         type="number"
@@ -425,7 +425,7 @@ export default function AddProjects() {
                       />
                     </div>
                     {bellows.length > 1 && (
-                      <Button type="button" variant="ghost" className="text-critical hover:bg-critical-tint" onClick={() => handleRemoveBellow(index)}>
+                      <Button type="button" variant="ghost" className="shrink-0 text-critical hover:bg-critical-tint" onClick={() => handleRemoveBellow(index)}>
                         Remove
                       </Button>
                     )}

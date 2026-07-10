@@ -596,7 +596,7 @@ export default function EditProjects() {
                       const sizeWeldFamily = legacy && !bellow.recategorize ? (bellow.legacy_type || "EJ") : weldFamilyFor(bellow.joint_type_code);
                       return (
                         <div key={index} className="flex flex-col gap-3 border-b border-line pb-4 last:border-0 last:pb-0">
-                          <div className="flex items-end gap-4">
+                          <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
                             <div className="w-12 text-center">
                               <Label>Sr. No.</Label>
                               <div className="py-2 text-sm font-semibold text-ink">{index + 1}</div>
@@ -679,7 +679,7 @@ export default function EditProjects() {
                                 <option value="PN 25">PN 25</option>
                               </Select>
                             </div>
-                            <div className="flex-1">
+                            <div className="min-w-[10rem] flex-1">
                               <Label>Size (NB)</Label>
                               <Select
                                 value={bellow.size}

@@ -95,9 +95,14 @@ class ProjectProductionLine(Base):
     tig_feet = Column(Float, default=0.0)
     mig_feet = Column(Float, default=0.0)
     grinding_feet = Column(Float, default=0.0)
-    joint_type = Column(String, default="EJ")
+    joint_type = Column(String, default="EJ")   # weld_family: "EJ" | "DJ" (drives welding-feet master)
     pn_rating = Column(String, nullable=True)
-    
+    # --- joint tag system ---
+    joint_category = Column(String, nullable=True)      # SIMPLE_EJ | UNIVERSAL_EJ | DJ
+    joint_type_code = Column(String, nullable=True, index=True)  # tag no, e.g. "U-EJ-F-1MF-S-L"
+    paint_status = Column(String, default="Yet to start")  # Yet to start | Started | In progress | Completed
+    variable_qtys_json = Column(Text, nullable=True)    # JSON: {component_name: per_unit_qty} for ENTER components
+
     project = relationship("Project", back_populates="production_lines")
     parts = relationship("Part", back_populates="production_line", cascade="all, delete-orphan")
 
@@ -105,9 +110,11 @@ class Part(Base):
     __tablename__ = "parts"
     id = Column(Integer, primary_key=True, index=True)
     production_line_id = Column(Integer, ForeignKey("project_production_lines.id"), nullable=False)
-    name = Column(String, nullable=False) # e.g. "Bellows (B)", "Collar (C)"
+    name = Column(String, nullable=False) # BOM component, e.g. "Element", "Collar", "Flange"
     weight_percentage = Column(Float, nullable=False, default=0.0)
-    
+    qty_per_unit = Column(Float, nullable=False, default=1.0)  # BOM qty for ONE joint
+    total_qty = Column(Integer, nullable=False, default=0)     # qty_per_unit * line.quantity (n)
+
     production_line = relationship("ProjectProductionLine", back_populates="parts")
     processes = relationship("PartProcess", back_populates="part", cascade="all, delete-orphan")
 
@@ -295,7 +302,14 @@ def init_db():
         "ALTER TABLE welding_master ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
         "ALTER TABLE project_production_lines ADD COLUMN joint_type VARCHAR DEFAULT 'EJ';",
         "ALTER TABLE audit_logs ADD COLUMN username VARCHAR;",
-        "ALTER TABLE projects ADD COLUMN payroll VARCHAR DEFAULT 'Company';"
+        "ALTER TABLE projects ADD COLUMN payroll VARCHAR DEFAULT 'Company';",
+        # --- joint tag system ---
+        "ALTER TABLE project_production_lines ADD COLUMN joint_category VARCHAR;",
+        "ALTER TABLE project_production_lines ADD COLUMN joint_type_code VARCHAR;",
+        "ALTER TABLE project_production_lines ADD COLUMN paint_status VARCHAR DEFAULT 'Yet to start';",
+        "ALTER TABLE project_production_lines ADD COLUMN variable_qtys_json TEXT;",
+        "ALTER TABLE parts ADD COLUMN qty_per_unit DOUBLE PRECISION DEFAULT 1.0;",
+        "ALTER TABLE parts ADD COLUMN total_qty INTEGER DEFAULT 0;",
     ]
     
     for query in columns:

@@ -10,11 +10,35 @@ interface MasterSize {
   type: string;
 }
 
+interface JointComponent {
+  name: string;
+  kind: string;
+  qty: number;
+  factor: number;
+  source: string;
+}
+
+interface JointTypeOption {
+  tag_no: string;
+  description: string;
+  weld_family: string;
+  components: JointComponent[];
+  variable_components: string[];
+}
+
+interface JointCategoryGroup {
+  category: string;
+  label: string;
+  types: JointTypeOption[];
+}
+
 interface BellowRow {
+  joint_category: string;
+  joint_type_code: string;
+  pn_rating: string;
   size: string | number;
   qty: number;
-  type: string;
-  pn_rating: string;
+  variable_qtys: { [name: string]: number };
 }
 
 interface Simulation {
@@ -29,6 +53,7 @@ export default function AddProjects() {
   const router = useRouter();
   const { showToast, toasts } = useToast();
   const [masterData, setMasterData] = useState<MasterSize[]>([]);
+  const [catalog, setCatalog] = useState<JointCategoryGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -37,7 +62,9 @@ export default function AddProjects() {
   const [payroll, setPayroll] = useState("Company");
   const [startDate, setStartDate] = useState(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
   const [targetDate, setTargetDate] = useState("");
-  const [bellows, setBellows] = useState<BellowRow[]>([{ size: "", qty: 1, type: "EJ", pn_rating: "" }]);
+  const [bellows, setBellows] = useState<BellowRow[]>([
+    { joint_category: "", joint_type_code: "", pn_rating: "", size: "", qty: 1, variable_qtys: {} },
+  ]);
 
   const [assignedTig, setAssignedTig] = useState<number>(0);
   const [assignedMig, setAssignedMig] = useState<number>(0);
@@ -52,19 +79,40 @@ export default function AddProjects() {
   const [savingCustomSize, setSavingCustomSize] = useState(false);
 
   useEffect(() => {
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/welding`)
-      .then((res) => res.json())
-      .then((resData) => {
-        const data = resData.data || [];
-        setMasterData(data);
-        setLoading(false);
-      });
+    Promise.all([
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/welding`).then((res) => res.json()),
+      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/joint-types`).then((res) => res.json()),
+    ]).then(([weldingRes, jointTypesRes]) => {
+      setMasterData(weldingRes.data || []);
+      setCatalog(jointTypesRes.data || []);
+      setLoading(false);
+    });
   }, []);
+
+  const weldFamilyFor = (tagNo: string): string => {
+    for (const cat of catalog) {
+      const found = cat.types.find((t) => t.tag_no === tagNo);
+      if (found) return found.weld_family;
+    }
+    return "EJ";
+  };
+
+  const getSelectedTag = (row: BellowRow): JointTypeOption | undefined => {
+    const cat = catalog.find((c) => c.category === row.joint_category);
+    return cat?.types.find((t) => t.tag_no === row.joint_type_code);
+  };
 
   useEffect(() => {
     const validBellows = bellows
-      .filter((b) => b.size && b.qty > 0)
-      .map((b) => ({ size: Number(b.size), qty: Number(b.qty), type: b.type, pn_rating: b.pn_rating }));
+      .filter((b) => b.joint_type_code && b.size && b.qty > 0)
+      .map((b) => ({
+        size: Number(b.size),
+        qty: Number(b.qty),
+        pn_rating: b.pn_rating,
+        joint_category: b.joint_category,
+        joint_type_code: b.joint_type_code,
+        variable_qtys: b.variable_qtys,
+      }));
 
     if (validBellows.length > 0 && targetDate && startDate) {
       const start = new Date(startDate);
@@ -108,8 +156,15 @@ export default function AddProjects() {
 
   useEffect(() => {
     const validBellows = bellows
-      .filter((b) => b.size && b.qty > 0)
-      .map((b) => ({ size: Number(b.size), qty: Number(b.qty), type: b.type, pn_rating: b.pn_rating }));
+      .filter((b) => b.joint_type_code && b.size && b.qty > 0)
+      .map((b) => ({
+        size: Number(b.size),
+        qty: Number(b.qty),
+        pn_rating: b.pn_rating,
+        joint_category: b.joint_category,
+        joint_type_code: b.joint_type_code,
+        variable_qtys: b.variable_qtys,
+      }));
 
     if (validBellows.length > 0) {
       apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/simulate_resources`, {
@@ -130,22 +185,41 @@ export default function AddProjects() {
   }, [bellows, targetDate]);
 
   const handleAddBellow = () => {
-    setBellows([...bellows, { size: "", qty: 1, type: "EJ", pn_rating: "" }]);
+    setBellows([...bellows, { joint_category: "", joint_type_code: "", pn_rating: "", size: "", qty: 1, variable_qtys: {} }]);
   };
 
   const handleRemoveBellow = (index: number) => {
     setBellows(bellows.filter((_, i) => i !== index));
   };
 
-  const handleBellowChange = (index: number, field: "size" | "qty" | "type" | "pn_rating", value: string | number) => {
+  const handleCategoryChange = (index: number, value: string) => {
+    const newBellows = [...bellows];
+    newBellows[index] = { ...newBellows[index], joint_category: value, joint_type_code: "", variable_qtys: {} };
+    setBellows(newBellows);
+  };
+
+  const handleTypeChange = (index: number, value: string) => {
+    const newBellows = [...bellows];
+    newBellows[index] = { ...newBellows[index], joint_type_code: value, variable_qtys: {} };
+    setBellows(newBellows);
+  };
+
+  const handleBellowChange = (index: number, field: "size" | "qty" | "pn_rating", value: string | number) => {
     if (field === "size" && value === "CUSTOM") {
       setCustomSizeRowIndex(index);
-      setCustomSizeData({ size: "", tig_feet: "", mig_feet: "", grinding_feet: "", joint_type: bellows[index].type || "EJ" });
+      setCustomSizeData({ size: "", tig_feet: "", mig_feet: "", grinding_feet: "", joint_type: weldFamilyFor(bellows[index].joint_type_code) });
       setCustomSizeModalOpen(true);
       return;
     }
     const newBellows = [...bellows];
     newBellows[index] = { ...newBellows[index], [field]: value };
+    setBellows(newBellows);
+  };
+
+  const handleVariableQtyChange = (index: number, name: string, value: number) => {
+    const newBellows = [...bellows];
+    const row = newBellows[index];
+    newBellows[index] = { ...row, variable_qtys: { ...row.variable_qtys, [name]: value } };
     setBellows(newBellows);
   };
 
@@ -186,8 +260,15 @@ export default function AddProjects() {
     setError("");
 
     const validBellows = bellows
-      .filter((b) => b.size && b.qty > 0)
-      .map((b) => ({ size: Number(b.size), qty: Number(b.qty), type: b.type, pn_rating: b.pn_rating }));
+      .filter((b) => b.joint_type_code && b.size && b.qty > 0)
+      .map((b) => ({
+        size: Number(b.size),
+        qty: Number(b.qty),
+        pn_rating: b.pn_rating,
+        joint_category: b.joint_category,
+        joint_type_code: b.joint_type_code,
+        variable_qtys: b.variable_qtys,
+      }));
 
     try {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`, {
@@ -219,7 +300,7 @@ export default function AddProjects() {
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">Create New Project</h1>
-      <p className="mb-8 text-ink-soft">Add a new project and assign its expansion joints.</p>
+      <p className="mb-8 text-ink-soft">Add a new project and assign its joints.</p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-8">
         <Card>
@@ -257,74 +338,117 @@ export default function AddProjects() {
             }
           />
           <CardBody className="gap-4 p-5">
-            {bellows.map((bellow, index) => (
-              <div key={index} className="flex items-end gap-4">
-                <div className="w-12 text-center">
-                  <Label>Sr. No.</Label>
-                  <div className="py-2 text-sm font-semibold text-ink">{index + 1}</div>
+            {bellows.map((bellow, index) => {
+              const selectedTag = getSelectedTag(bellow);
+              const variableComponents = selectedTag?.variable_components || [];
+              return (
+                <div key={index} className="flex flex-col gap-3 border-b border-line pb-4 last:border-0 last:pb-0">
+                  <div className="flex items-end gap-4">
+                    <div className="w-12 text-center">
+                      <Label>Sr. No.</Label>
+                      <div className="py-2 text-sm font-semibold text-ink">{index + 1}</div>
+                    </div>
+                    <div className="w-44">
+                      <Label>Joint</Label>
+                      <Select
+                        value={bellow.joint_category}
+                        onChange={(e) => handleCategoryChange(index, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                        required
+                      >
+                        <option value="">Select Joint</option>
+                        {catalog.map((cat) => (
+                          <option key={cat.category} value={cat.category}>
+                            {cat.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div className="w-56">
+                      <Label>Type</Label>
+                      <Select
+                        value={bellow.joint_type_code}
+                        onChange={(e) => handleTypeChange(index, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                        disabled={!bellow.joint_category}
+                        required
+                      >
+                        <option value="">Select Type</option>
+                        {(catalog.find((cat) => cat.category === bellow.joint_category)?.types || []).map((t) => (
+                          <option key={t.tag_no} value={t.tag_no}>
+                            {t.tag_no} — {t.description}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div className="w-32">
+                      <Label>PN Rating</Label>
+                      <Select
+                        value={bellow.pn_rating || ""}
+                        onChange={(e) => handleBellowChange(index, "pn_rating", e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                      >
+                        <option value="">None</option>
+                        <option value="PN 6">PN 6</option>
+                        <option value="PN 10">PN 10</option>
+                        <option value="PN 16">PN 16</option>
+                        <option value="PN 20">PN 20</option>
+                        <option value="PN 25">PN 25</option>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      <Label>Size (NB)</Label>
+                      <Select
+                        value={bellow.size}
+                        onChange={(e) => handleBellowChange(index, "size", e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                        required
+                      >
+                        <option value="">Select Size</option>
+                        {masterData.filter((m) => m.type === weldFamilyFor(bellow.joint_type_code)).map((m) => (
+                          <option key={`${m.size}-${m.type}`} value={m.size}>
+                            {m.size} NB
+                          </option>
+                        ))}
+                        <option value="CUSTOM">+ Add Custom Size</option>
+                      </Select>
+                    </div>
+                    <div className="w-32">
+                      <Label>Quantity</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        required
+                        value={bellow.qty}
+                        onChange={(e) => handleBellowChange(index, "qty", parseInt(e.target.value) || 0)}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                      />
+                    </div>
+                    {bellows.length > 1 && (
+                      <Button type="button" variant="ghost" className="text-critical hover:bg-critical-tint" onClick={() => handleRemoveBellow(index)}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  {variableComponents.length > 0 && (
+                    <div className="ml-16 grid grid-cols-2 gap-4 rounded-md border border-line bg-paper p-3 sm:grid-cols-3 md:grid-cols-4">
+                      {variableComponents.map((name) => (
+                        <div key={name}>
+                          <Label>{name}</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={bellow.variable_qtys[name] ?? ""}
+                            onChange={(e) => handleVariableQtyChange(index, name, parseInt(e.target.value) || 0)}
+                            onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="w-48">
-                  <Label>Type</Label>
-                  <Select
-                    value={bellow.type}
-                    onChange={(e) => handleBellowChange(index, "type", e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                    required
-                  >
-                    <option value="EJ">Expansion Joint</option>
-                    <option value="DJ">Dismantling Joint</option>
-                  </Select>
-                </div>
-                <div className="w-32">
-                  <Label>PN Rating</Label>
-                  <Select
-                    value={bellow.pn_rating || ""}
-                    onChange={(e) => handleBellowChange(index, "pn_rating", e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                  >
-                    <option value="">None</option>
-                    <option value="PN 6">PN 6</option>
-                    <option value="PN 10">PN 10</option>
-                    <option value="PN 16">PN 16</option>
-                    <option value="PN 20">PN 20</option>
-                    <option value="PN 25">PN 25</option>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <Label>Size (NB)</Label>
-                  <Select
-                    value={bellow.size}
-                    onChange={(e) => handleBellowChange(index, "size", e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                    required
-                  >
-                    <option value="">Select Size</option>
-                    {masterData.filter((m) => m.type === bellow.type).map((m) => (
-                      <option key={`${m.size}-${m.type}`} value={m.size}>
-                        {m.size} NB
-                      </option>
-                    ))}
-                    <option value="CUSTOM">+ Add Custom Size</option>
-                  </Select>
-                </div>
-                <div className="w-32">
-                  <Label>Quantity</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    required
-                    value={bellow.qty}
-                    onChange={(e) => handleBellowChange(index, "qty", parseInt(e.target.value) || 0)}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                  />
-                </div>
-                {bellows.length > 1 && (
-                  <Button type="button" variant="ghost" className="text-critical hover:bg-critical-tint" onClick={() => handleRemoveBellow(index)}>
-                    Remove
-                  </Button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </CardBody>
         </Card>
 

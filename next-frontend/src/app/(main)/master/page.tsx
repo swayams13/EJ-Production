@@ -24,6 +24,28 @@ import {
 
 type Tab = "welding" | "workforce" | "pool";
 
+interface JointComponent {
+  name: string;
+  kind: "FIXED" | "ENTER" | "DERIVED" | "STATUS";
+  qty?: number | null;
+  factor?: number | null;
+  source?: string | null;
+}
+
+interface JointTypeDef {
+  tag_no: string;
+  description: string;
+  weld_family: string;
+  components: JointComponent[];
+  variable_components?: string[];
+}
+
+interface JointCategoryGroup {
+  category: string;
+  label: string;
+  types: JointTypeDef[];
+}
+
 const TABS: { key: Tab; label: string }[] = [
   { key: "welding", label: "Welding Workload Engine" },
   { key: "workforce", label: "Workforce Master" },
@@ -44,6 +66,8 @@ export default function MasterData() {
   const [uploadingEJ, setUploadingEJ] = useState(false);
   const [uploadingDJ, setUploadingDJ] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "critical"; text: string } | null>(null);
+  const [jointTypes, setJointTypes] = useState<JointCategoryGroup[]>([]);
+  const [jointTypesLoading, setJointTypesLoading] = useState(true);
   const ejFileInputRef = useRef<HTMLInputElement>(null);
   const djFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,7 +88,24 @@ export default function MasterData() {
   useEffect(() => {
     setUserRole(localStorage.getItem("user_role"));
     fetchData();
+
+    setJointTypesLoading(true);
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/joint-types`)
+      .then((r) => r.json())
+      .then((json) => {
+        setJointTypes(json.data || []);
+        setJointTypesLoading(false);
+      })
+      .catch(() => setJointTypesLoading(false));
   }, []);
+
+  const renderComponentRule = (c: JointComponent) => {
+    if (c.kind === "FIXED") return `${c.qty ?? ""}`;
+    if (c.kind === "ENTER") return "Enter (user)";
+    if (c.kind === "DERIVED") return `${c.factor ?? ""} × ${c.source ?? ""}`;
+    if (c.kind === "STATUS") return "Status";
+    return "";
+  };
 
   const handleSyncEJ = async () => {
     setSyncingEJ(true);
@@ -429,6 +470,66 @@ export default function MasterData() {
           </form>
         </Card>
       )}
+
+      <Card className="mt-6">
+        <CardHeader title="Joint Types & BOM" />
+        <CardBody className="p-5">
+          {jointTypesLoading ? (
+            <Spinner label="Loading joint types…" />
+          ) : jointTypes.length > 0 ? (
+            <div className="flex flex-col gap-8">
+              {jointTypes.map((group) => (
+                <div key={group.category}>
+                  <h3 className="mb-3 border-l-4 border-brand pl-2 font-display text-sm font-bold uppercase tracking-wide text-ink">
+                    {group.label}
+                  </h3>
+                  <div className="flex flex-col gap-5">
+                    {group.types.map((t) => (
+                      <div key={t.tag_no} className="rounded-md border border-line p-4">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <Badge tone="neutral">{t.tag_no}</Badge>
+                          <span className="font-bold text-ink">{t.description}</span>
+                          <Badge tone={t.weld_family === "EJ" ? "success" : "warning"}>{t.weld_family}</Badge>
+                        </div>
+                        <Table>
+                          <THead>
+                            <Tr>
+                              <Th>Component</Th>
+                              <Th numeric>Qty Rule</Th>
+                            </Tr>
+                          </THead>
+                          <TBody>
+                            {t.components.map((c) => (
+                              <Tr key={c.name}>
+                                <Td className="text-ink">{c.name}</Td>
+                                <Td numeric>{renderComponentRule(c)}</Td>
+                              </Tr>
+                            ))}
+                            {t.components.length === 0 && (
+                              <Tr>
+                                <Td colSpan={2} className="text-center text-ink-soft">
+                                  No components defined.
+                                </Td>
+                              </Tr>
+                            )}
+                          </TBody>
+                        </Table>
+                        {t.variable_components && t.variable_components.length > 0 && (
+                          <p className="mt-2 text-[13px] text-ink-soft">
+                            Variable components: {t.variable_components.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No joint types found" description="Joint type & BOM data has not been configured yet." />
+          )}
+        </CardBody>
+      </Card>
 
       {toasts}
     </div>

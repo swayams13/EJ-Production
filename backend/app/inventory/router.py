@@ -76,20 +76,33 @@ def get_material_shortages(db: Session = Depends(get_db)):
     shortages = []
 
     for project in relevant_projects:
-        for line in project.production_lines:
-            req_qty = line.quantity
-            current_stock = stock_map.get(("bellows", line.size, line.joint_type), 0)
-            
-            if req_qty > current_stock:
-                shortages.append(ShortageResponse(
-                    project_id=project.id,
-                    project_code=project.quotation_no,
-                    material_name="Bellows",
-                    size=line.size,
-                    joint_type=line.joint_type,
-                    required_qty=req_qty,
-                    current_stock=current_stock,
-                    deficit=req_qty - current_stock
-                ))
-                
+        try:
+            for line in project.production_lines:
+                try:
+                    for part in line.parts:
+                        required = getattr(part, 'total_qty', 0)
+                        if not required:
+                            continue
+                        key = (part.name.lower(), line.size, line.joint_type)
+                        if key not in stock_map:
+                            continue
+                        current = stock_map[key]
+                        if required > current:
+                            shortages.append(ShortageResponse(
+                                project_id=project.id,
+                                project_code=project.quotation_no,
+                                material_name=part.name,
+                                component_name=part.name,
+                                size=line.size,
+                                joint_type=line.joint_type,
+                                joint_category=getattr(line, 'joint_category', None),
+                                required_qty=required,
+                                current_stock=current,
+                                deficit=required - current
+                            ))
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
     return shortages

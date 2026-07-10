@@ -16,6 +16,9 @@ interface RequirementOption {
   type: string;
   size: string;
   total_qty: number;
+  tag_no?: string | null;
+  paint_status?: string;
+  joint_category?: string;
 }
 
 interface ProcessRow {
@@ -47,6 +50,7 @@ interface PartRow {
   id: string;
   name: string;
   processes: ProcessRow[];
+  total_qty?: number;
 }
 
 interface WeldingSummary {
@@ -65,6 +69,8 @@ export default function OperatorEntry() {
   const [totalQty, setTotalQty] = useState(0);
   const [partId, setPartId] = useState("");
   const [weldingSummary, setWeldingSummary] = useState<WeldingSummary | null>(null);
+  const [paintStatus, setPaintStatus] = useState("");
+  const [tagNo, setTagNo] = useState<string | null>(null);
 
   const [qtyInputs, setQtyInputs] = useState<{ [key: string]: string }>({});
   const [feetInputs, setFeetInputs] = useState<{ [key: string]: string }>({});
@@ -100,6 +106,8 @@ export default function OperatorEntry() {
       setParts([]);
       setPartId("");
       setTotalQty(0);
+      setPaintStatus("");
+      setTagNo(null);
       return;
     }
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
@@ -109,6 +117,8 @@ export default function OperatorEntry() {
           setTotalQty(resData.data.total_qty);
           setParts(resData.data.parts);
           setFinalChecks(resData.data.final_checks || []);
+          setPaintStatus(resData.data.paint_status || "");
+          setTagNo(resData.data.tag_no || resData.data.joint_type_code || null);
         }
       });
 
@@ -233,12 +243,43 @@ export default function OperatorEntry() {
 
   const currentReqType = requirements.find((r) => r.id.toString() === requirementId)?.type;
 
+  const PAINT_STATUS_OPTIONS = ["Yet to start", "Started", "In progress", "Completed"];
+
+  const handlePaintStatusChange = async (status: string) => {
+    const prev = paintStatus;
+    setPaintStatus(status);
+    setSubmitting(true);
+    setSuccessMsg("");
+    setErrorMsg("");
+    try {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/paint-status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to update paint status");
+      }
+      setSuccessMsg("Paint status updated");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      setPaintStatus(prev);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="mx-auto mb-20 max-w-7xl">
       <div>
-        <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">
-          Daily Progress Tracker
-        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">
+            Daily Progress Tracker
+          </h1>
+          {tagNo && <Badge tone="neutral">Tag: {tagNo}</Badge>}
+        </div>
         <p className="text-ink-soft">Record quantities and feet completed for each process today.</p>
       </div>
 
@@ -273,7 +314,7 @@ export default function OperatorEntry() {
               <option value="">-- Choose Requirement --</option>
               {requirements.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.type} - {r.size} (Qty: {r.total_qty})
+                  {r.tag_no ? `${r.tag_no} — ` : ""}{r.type} - {r.size} (Qty: {r.total_qty})
                 </option>
               ))}
             </Select>
@@ -291,6 +332,23 @@ export default function OperatorEntry() {
             </Select>
           </div>
         </Card>
+
+        {requirementId && (
+          <Card className="flex flex-col gap-2 p-5 md:max-w-xs">
+            <Label>Paint Status</Label>
+            <Select
+              value={paintStatus}
+              onChange={(e) => handlePaintStatusChange(e.target.value)}
+              disabled={submitting}
+            >
+              {PAINT_STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </Card>
+        )}
 
         {requirementId && parts.length > 0 && (
           <div className="flex flex-col gap-6">
@@ -329,14 +387,15 @@ export default function OperatorEntry() {
                         <h3 className="truncate pr-2 font-bold" title={part.name}>
                           {part.name}
                         </h3>
-                        <Badge tone="neutral">Target: {totalQty}</Badge>
+                        <Badge tone="neutral">Target: {part.total_qty ?? totalQty}</Badge>
                       </div>
 
                       <div className="divide-y divide-line">
                         {part.processes
                           .filter((proc) => isMaterialProcess(proc.process_name))
                           .map((proc) => {
-                            const pending = totalQty - proc.completed_qty;
+                            const partTarget = part.total_qty ?? totalQty;
+                            const pending = partTarget - proc.completed_qty;
                             const isComplete = pending <= 0;
 
                             return (
@@ -413,14 +472,15 @@ export default function OperatorEntry() {
                         <h3 className="truncate pr-2 font-bold" title={part.name}>
                           {part.name}
                         </h3>
-                        <Badge tone="neutral">Target: {totalQty}</Badge>
+                        <Badge tone="neutral">Target: {part.total_qty ?? totalQty}</Badge>
                       </div>
 
                       <div className="divide-y divide-line">
                         {part.processes
                           .filter((proc) => !isWeldingProcess(proc.process_name) && !isMaterialProcess(proc.process_name))
                           .map((proc) => {
-                            const pending = totalQty - proc.completed_qty;
+                            const partTarget = part.total_qty ?? totalQty;
+                            const pending = partTarget - proc.completed_qty;
                             const isComplete = pending <= 0;
 
                             return (

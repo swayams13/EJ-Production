@@ -1,5 +1,57 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-10 (Session 7 - Joint → Type(tag) → per-tag BOM with qty scaling)
+
+### What we did today:
+Replaced the binary `EJ`/`DJ` hardcoding with a proper three-level joint model:
+**Joint (Simple Expansion / Universal / Dismantling) → Type (tag no.) → per-tag BOM**,
+where each BOM component's quantity scales with the line quantity (n). Source of
+truth: the "EJ DEJ Numbering and Quantity" workbook (12 tags), confirmed with the user.
+
+- **New engine `backend/services/joint_catalog.py`** — single source of truth for all
+  12 tags (S-EJ-F, S-EJ-F-S-L, S-EJ-F-1MF-S-L, S-EJ-F-2MF-S-L, S-EJ-W-S-L, U-EJ-F-S-L,
+  U-EJ-F-1MF-S-L, U-EJ-F-2MF-S-L, U-EJ-W-S-L, DEJ-F, DEJ-F-1MF, DEJ-F-2MF). Each component
+  is FIXED / ENTER (user-entered per unit) / DERIVED (`Lug = 2 × Limit rod`) / STATUS
+  (Paint). `resolve_components(tag, n, variable_qtys)` returns per-unit + total (=per_unit×n).
+- **`templates.py`** — replaced hardcoded EJ/DJ parts lists with a reusable
+  `PROCESS_ROUTES` (component→process steps) + `COMPONENT_WEIGHTS`. Legacy templates kept
+  ONLY as a fallback for pre-tag production lines.
+- **DB (`db_service.py`, + startup migrations in `main.py`)** — `ProjectProductionLine`
+  gained `joint_category`, `joint_type_code`, `paint_status` ("Yet to start"/"Started"/
+  "In progress"/"Completed"), `variable_qtys_json`. `Part` gained `qty_per_unit`,
+  `total_qty`. Additive `ALTER TABLE` only, Postgres.
+- **`mes_service.py`** — `create_parts_for_production_line` now builds parts strictly from
+  the tag BOM (scaled), each Part carries qty_per_unit/total_qty; new `sync_part_targets`
+  re-scales targets in place on qty/ENTER edits (preserves completed_qty). Progress % now
+  measures each process against `part.total_qty` (falls back to line qty for legacy parts).
+- **`production_service.sync_project_production_lines`** — tag-aware; lines keyed by
+  (size, tag, pn). Welding feet unchanged: EJ master for BOTH Simple & Universal, DJ master
+  for Dismantling (per user: "same for single and universal", to be updated later).
+- **API** — `BellowItem` +joint_category/joint_type_code/variable_qtys; projects &
+  production routers thread these through; `GET /api/v1/master/joint-types` (catalogue);
+  `PUT /api/v1/production/requirements/{id}/paint-status`; get_requirement_parts + add_transaction
+  now use per-part `total_qty`; inventory `/shortages` now walks each line's real BOM parts.
+- **Frontend** — add/edit project: Sr No · **Joint · Type(tag)** · PN · Size · Qty + dynamic
+  inputs for the tag's ENTER components; shop-floor entry: per-part scaled targets, tag shown,
+  new Paint status control; inventory: full component list + component-based shortages;
+  master page: read-only BOM catalogue viewer.
+
+### How it was built:
+Core engine (catalog, templates, DB, mes/production services) written + smoke-tested on
+Opus; API plumbing and the 5 frontend pages delegated to Sonnet subagents against a locked
+contract, then reviewed/compiled on Opus. All backend files `py_compile` clean.
+
+### ⚠️ OPEN FLAGS / to verify on demo:
+- **Not yet runtime-tested against Postgres** — needs a demo deploy walkthrough: create a
+  project with a tag (e.g. `U-EJ-F-1MF-S-L`, qty 10, Limit rod 4 → expect 80 Lugs, 160 Bolts),
+  verify shop-floor Material/Fabrication targets scale, Paint status saves, shortages read per component.
+- **Frontend not typechecked** (no node_modules in build env) — run `npm --prefix next-frontend run build` on demo.
+- **Weldend = 2 on flange-end `-S-L` variants** — encoded as the user confirmed ("it's correct now");
+  revisit if it turns out to be a sheet artifact.
+- **Universal welding feet** = EJ master per size as-is (not doubled) — per user, to be updated later.
+- **Legacy projects** keep their old EJ/DJ parts (no tag); progress falls back to line qty. Editing
+  them to a tag redefines the line (new BOM parts, resets that line's part progress).
+
 ## Date: 2026-07-09 (Session 6 - Shop Floor Entry Tabs + Graphify Update)
 
 ### What we did today:

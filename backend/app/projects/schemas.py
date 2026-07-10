@@ -1,7 +1,7 @@
 
 
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import date
 
 class BellowItem(BaseModel):
@@ -9,6 +9,9 @@ class BellowItem(BaseModel):
     qty: int
     type: Optional[str] = "EJ"
     pn_rating: Optional[str] = None
+    joint_category: Optional[str] = None
+    joint_type_code: Optional[str] = None
+    variable_qtys: Optional[Dict[str, float]] = None
 
 class ProjectCreate(BaseModel):
     quotation_no: str

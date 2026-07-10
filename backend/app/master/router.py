@@ -21,6 +21,11 @@ def _read_upload_or_400(file: UploadFile):
         raise HTTPException(status_code=400, detail="Only .xlsx/.xls files are accepted")
     return file.file.read()
 
+@router.get("/joint-types")
+def get_joint_types():
+    from backend.services import joint_catalog
+    return {"success": True, "message": "Joint types retrieved", "data": joint_catalog.list_catalog()}
+
 @router.get("/welding")
 def get_welding_master_api():
     data = get_welding_master_latest()

@@ -1,8 +1,10 @@
+import json
 from sqlalchemy.orm import Session
 from backend.services.db_service import (
     Project, ProjectProductionLine, Part, PartProcess, ProductionLog, JobFinalCheck
 )
-from backend.services.templates import TEMPLATES
+from backend.services.templates import TEMPLATES, route_for, base_weight_for
+from backend.services import joint_catalog
 
 class MESService:
 
@@ -47,27 +49,75 @@ class MESService:
         return 0.95
 
     @staticmethod
-    def create_parts_for_production_line(db: Session, line_id: int, req_type: str = "EJ"):
+    def create_parts_for_production_line(db: Session, line_id: int, req_type: str = "EJ",
+                                         tag_no: str = None, variable_qtys: dict = None):
         """
-        Creates all parts and processes based on the template for a given project production line.
+        Create the Part + PartProcess rows for a production line.
+
+        Primary path (tag-driven): if the line has a joint tag in the catalog,
+        the parts are exactly that tag's BOM components, each with a scaled
+        target quantity (qty_per_unit and total_qty = qty_per_unit * line qty).
+        Processes come from PROCESS_ROUTES per component. Paint is a line-level
+        status (paint_status), not a part.
+
+        Fallback path (legacy): lines with no tag use the old EJ/DJ template so
+        pre-existing data keeps working.
         """
         line = db.query(ProjectProductionLine).filter(ProjectProductionLine.id == line_id).first()
         if not line:
             return None
-            
+
+        tag = tag_no or getattr(line, "joint_type_code", None)
+
+        # Resolve the user-entered ("ENTER") component quantities.
+        if variable_qtys is None:
+            variable_qtys = {}
+            raw = getattr(line, "variable_qtys_json", None)
+            if raw:
+                try:
+                    variable_qtys = json.loads(raw) or {}
+                except (ValueError, TypeError):
+                    variable_qtys = {}
+
+        # -------- tag-driven BOM (data-driven per joint + tag) --------
+        if tag and joint_catalog.get_type(tag):
+            comps = joint_catalog.resolve_components(tag, line.quantity or 0, variable_qtys)
+            base_total = sum(base_weight_for(c["name"]) for c in comps) or 1.0
+            for c in comps:
+                new_part = Part(
+                    production_line_id=line.id,
+                    name=c["name"],
+                    weight_percentage=base_weight_for(c["name"]) / base_total * 100.0,
+                    qty_per_unit=c["per_unit"],
+                    total_qty=c["total_qty"],
+                )
+                db.add(new_part)
+                db.flush()
+                for process_name in route_for(c["name"]):
+                    db.add(PartProcess(part_id=new_part.id, process_name=process_name, completed_qty=0))
+            MESService.create_final_checks_for_line(db, line.id)
+            return line
+
+        # -------- legacy fallback template (pre-tag lines only) --------
+        return MESService._create_parts_legacy(db, line, req_type)
+
+    @staticmethod
+    def _create_parts_legacy(db: Session, line, req_type: str):
         template = TEMPLATES.get(req_type)
         if not template:
             return line
-            
+
         for part_data in template:
             new_part = Part(
                 production_line_id=line.id,
                 name=part_data["name"],
-                weight_percentage=part_data["weight"]
+                weight_percentage=part_data["weight"],
+                qty_per_unit=1.0,
+                total_qty=int(line.quantity or 0),
             )
             db.add(new_part)
             db.flush() # Get new_part.id
-            
+
             for process_name in part_data["processes"]:
                 new_process = PartProcess(
                     part_id=new_part.id,
@@ -78,7 +128,61 @@ class MESService:
 
         MESService.create_final_checks_for_line(db, line.id)
         return line
-    
+
+    @staticmethod
+    def sync_part_targets(db: Session, line, variable_qtys: dict = None):
+        """
+        Re-resolve a tag line's BOM and update existing Part targets in place,
+        preserving completed_qty (progress). Used when an existing line's
+        quantity or ENTER quantities change. Adds parts for newly-present
+        components, removes parts for components no longer in the BOM.
+        Legacy lines (no tag) are left untouched.
+        """
+        tag = getattr(line, "joint_type_code", None)
+        if not (tag and joint_catalog.get_type(tag)):
+            return
+
+        if variable_qtys is None:
+            variable_qtys = {}
+            raw = getattr(line, "variable_qtys_json", None)
+            if raw:
+                try:
+                    variable_qtys = json.loads(raw) or {}
+                except (ValueError, TypeError):
+                    variable_qtys = {}
+
+        comps = joint_catalog.resolve_components(tag, line.quantity or 0, variable_qtys)
+        comp_by_name = {c["name"]: c for c in comps}
+        base_total = sum(base_weight_for(c["name"]) for c in comps) or 1.0
+
+        existing = {p.name: p for p in line.parts}
+
+        for name, c in comp_by_name.items():
+            weight = base_weight_for(name) / base_total * 100.0
+            p = existing.get(name)
+            if p:
+                p.qty_per_unit = c["per_unit"]
+                p.total_qty = c["total_qty"]
+                p.weight_percentage = weight
+                # Never let a preserved completed_qty exceed the new target
+                for proc in p.processes:
+                    if proc.completed_qty > c["total_qty"]:
+                        proc.completed_qty = c["total_qty"]
+            else:
+                new_part = Part(
+                    production_line_id=line.id, name=name,
+                    weight_percentage=weight,
+                    qty_per_unit=c["per_unit"], total_qty=c["total_qty"],
+                )
+                db.add(new_part)
+                db.flush()
+                for pname in route_for(name):
+                    db.add(PartProcess(part_id=new_part.id, process_name=pname, completed_qty=0))
+
+        for name, p in existing.items():
+            if name not in comp_by_name:
+                db.delete(p)
+
     @staticmethod
     def calculate_project_progress(db: Session, project_id: int):
         from sqlalchemy.orm import selectinload
@@ -110,14 +214,19 @@ class MESService:
                 if not part.processes:
                     continue
                     
+                # Per-part target: scaled BOM quantity (qty_per_unit * n).
+                # Falls back to line_qty for legacy parts written before the
+                # tag/BOM system (total_qty defaults to 0 there).
+                part_target = getattr(part, "total_qty", 0) or line_qty
+
                 total_process_completion = 0.0
                 valid_processes = 0
                 for proc in part.processes:
                     name = proc.process_name.lower()
                     if "weld" in name or "grind" in name or "tig" in name or "mig" in name:
                         continue
-                        
-                    pct = min(1.0, proc.completed_qty / line_qty)
+
+                    pct = min(1.0, proc.completed_qty / part_target) if part_target else 1.0
                     total_process_completion += pct
                     valid_processes += 1
                     

@@ -1,7 +1,9 @@
 import pandas as pd
 import io
+import json
 import logging
 from backend.services.db_service import SessionLocal, WeldingMaster, ProjectProductionLine, Project, WorkforceMaster, ProjectResourceAssignment, CompanyResourcePool
+from backend.services import joint_catalog
 import math
 import datetime
 
@@ -284,58 +286,96 @@ def get_welding_master_latest():
     finally:
         session.close()
 
+def _line_identity(size, tag, weld_family, pn_rating):
+    """
+    Stable identity for a production line. Tagged lines are keyed by their tag;
+    legacy lines (no tag) fall back to weld_family so pre-tag data still matches.
+    """
+    return (size, tag or ("__" + (weld_family or "EJ")), pn_rating)
+
+
 def sync_project_production_lines(project_id, sizes_and_qtys):
     """
-    sizes_and_qtys: list of dicts {"size": int, "qty": int, "type": str}
-    Syncs the production lines for a project based on the latest welding master.
-    Preserves existing lines to keep MES Part/Process tracking data intact.
+    sizes_and_qtys: list of dicts with keys:
+        size, qty, pn_rating,
+        joint_type_code (tag, e.g. "U-EJ-F-1MF-S-L"),
+        joint_category  (SIMPLE_EJ | UNIVERSAL_EJ | DJ),
+        variable_qtys   ({component_name: per_unit_qty} for ENTER components),
+        type            (legacy EJ/DJ, used only when no tag is supplied)
+
+    Syncs the production lines for a project. Welding-feet come from the master
+    for the tag's weld_family (EJ master for Simple+Universal, DJ for
+    Dismantling). Preserves existing lines/parts to keep MES tracking intact.
     """
     session = SessionLocal()
     try:
         master_data = {(m.size, m.joint_type): m for m in get_welding_master_latest()}
         existing_lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-        existing_map = {(l.size, getattr(l, 'joint_type', 'EJ')): l for l in existing_lines}
-        
-        new_items_set = {(item['size'], item.get('type', 'EJ'), item.get('pn_rating')) for item in sizes_and_qtys}
-        
-        # Delete lines that are no longer needed
-        for key, line in existing_map.items():
-            line_pn = getattr(line, 'pn_rating', None)
-            if (key[0], key[1], line_pn) not in new_items_set:
-                session.delete(line)
-                
-        # Update or Create lines
+
         from backend.services.mes_service import MESService
-        
+
+        # Build the set of desired identities
+        desired = {}
         for item in sizes_and_qtys:
             size = item['size']
-            qty = item['qty']
-            j_type = item.get('type', 'EJ')
-            m = master_data.get((size, j_type))
+            tag = item.get('joint_type_code')
+            weld_family = joint_catalog.weld_family_for(tag) if tag else item.get('type', 'EJ')
+            pn_rating = item.get('pn_rating')
+            desired[_line_identity(size, tag, weld_family, pn_rating)] = item
 
-            if not m and j_type == 'DJ':
+        # Delete lines no longer requested
+        for line in existing_lines:
+            ident = _line_identity(
+                line.size,
+                getattr(line, 'joint_type_code', None),
+                getattr(line, 'joint_type', 'EJ'),
+                getattr(line, 'pn_rating', None),
+            )
+            if ident not in desired:
+                session.delete(line)
+
+        existing_by_ident = {}
+        for line in existing_lines:
+            ident = _line_identity(
+                line.size,
+                getattr(line, 'joint_type_code', None),
+                getattr(line, 'joint_type', 'EJ'),
+                getattr(line, 'pn_rating', None),
+            )
+            existing_by_ident[ident] = line
+
+        for ident, item in desired.items():
+            size = item['size']
+            qty = item['qty']
+            tag = item.get('joint_type_code')
+            pn_rating = item.get('pn_rating')
+            variable_qtys = item.get('variable_qtys') or {}
+            weld_family = joint_catalog.weld_family_for(tag) if tag else item.get('type', 'EJ')
+            category = item.get('joint_category') or (joint_catalog.category_for(tag) if tag else None)
+
+            # Welding-feet master (EJ for Simple+Universal, DJ for Dismantling)
+            m = master_data.get((size, weld_family))
+            if not m and weld_family == 'DJ':
                 m_ej = master_data.get((size, 'EJ'))
                 if m_ej:
-                    logger.warning(
-                        "No DJ master data for size=%s; falling back to EJ master record.",
-                        size
-                    )
+                    logger.warning("No DJ master data for size=%s; falling back to EJ master record.", size)
                     m = m_ej
 
-            tig, mig, grind = compute_master_feet(m, j_type, qty)
+            tig, mig, grind = compute_master_feet(m, weld_family, qty)
+            var_json = json.dumps(variable_qtys) if variable_qtys else None
 
-            pn_rating = item.get('pn_rating')
-            
-            key = (size, j_type)
-            
-            # Find an existing line that matches size, type, and pn_rating
-            existing_line = next((l for k, l in existing_map.items() if k == key and getattr(l, 'pn_rating', None) == pn_rating), None)
-            
+            existing_line = existing_by_ident.get(ident)
             if existing_line:
                 existing_line.quantity = qty
                 existing_line.tig_feet = tig
                 existing_line.mig_feet = mig
                 existing_line.grinding_feet = grind
+                existing_line.joint_type = weld_family
+                existing_line.joint_category = category
+                existing_line.joint_type_code = tag
+                existing_line.variable_qtys_json = var_json
+                # Re-scale the BOM part targets for the new qty / ENTER values
+                MESService.sync_part_targets(session, existing_line, variable_qtys)
             else:
                 line = ProjectProductionLine(
                     project_id=project_id,
@@ -344,19 +384,23 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
                     tig_feet=tig,
                     mig_feet=mig,
                     grinding_feet=grind,
-                    joint_type=j_type,
-                    pn_rating=pn_rating
+                    joint_type=weld_family,
+                    pn_rating=pn_rating,
+                    joint_category=category,
+                    joint_type_code=tag,
+                    variable_qtys_json=var_json,
                 )
                 session.add(line)
-                session.flush() # get line.id
-                
-                # Auto-generate MES Parts
-                MESService.create_parts_for_production_line(session, line.id, j_type)
-                
+                session.flush()  # get line.id
+                MESService.create_parts_for_production_line(
+                    session, line.id, req_type=weld_family, tag_no=tag, variable_qtys=variable_qtys
+                )
+
         session.commit()
         return True
     except Exception as e:
         session.rollback()
+        logger.exception("sync_project_production_lines failed: %s", e)
         return False
     finally:
         session.close()

@@ -142,6 +142,15 @@ _run_startup_migration("part_processes.itemwise fields", [
     "ALTER TABLE part_processes ADD COLUMN po_number VARCHAR",
 ])
 
+_run_startup_migration("joint tag columns", [
+    "ALTER TABLE project_production_lines ADD COLUMN joint_category VARCHAR",
+    "ALTER TABLE project_production_lines ADD COLUMN joint_type_code VARCHAR",
+    "ALTER TABLE project_production_lines ADD COLUMN paint_status VARCHAR DEFAULT 'Yet to start'",
+    "ALTER TABLE project_production_lines ADD COLUMN variable_qtys_json TEXT",
+    "ALTER TABLE parts ADD COLUMN qty_per_unit DOUBLE PRECISION DEFAULT 1.0",
+    "ALTER TABLE parts ADD COLUMN total_qty INTEGER DEFAULT 0",
+])
+
 _run_startup_migration("job_final_checks table", [
     """
     CREATE TABLE IF NOT EXISTS job_final_checks (

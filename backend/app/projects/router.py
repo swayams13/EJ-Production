@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 import math
+import json
 from typing import List, Optional
 from pydantic import BaseModel
 
 from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory
 from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet, get_productivity_rates
 from backend.app.projects.schemas import ProjectCreate, ProjectUpdate, SimulationRequest, DurationRequest, SimulateDurationRequest, BellowItem
+from backend.services import joint_catalog
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Projects"])
 
@@ -75,7 +77,12 @@ def get_projects(db: Session = Depends(get_db)):
             "pn_rating": getattr(l, "pn_rating", None),
             "tig_feet": round(l.tig_feet, 2) if l.tig_feet else 0,
             "mig_feet": round(l.mig_feet, 2) if l.mig_feet else 0,
-            "grinding_feet": round(l.grinding_feet, 2) if l.grinding_feet else 0
+            "grinding_feet": round(l.grinding_feet, 2) if l.grinding_feet else 0,
+            "joint_category": getattr(l, "joint_category", None),
+            "joint_type_code": getattr(l, "joint_type_code", None),
+            "tag_no": getattr(l, "joint_type_code", None),
+            "description": (joint_catalog.get_type(l.joint_type_code) or {}).get("description") if getattr(l, "joint_type_code", None) else None,
+            "paint_status": getattr(l, "paint_status", None),
         } for l in lines]
         
         progress = MESService.calculate_project_progress(db, p.id)
@@ -164,7 +171,15 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db)):
     db.commit()
     
     if req.bellows:
-        bellows_data = [{"size": b.size, "qty": b.qty, "type": getattr(b, "type", "EJ"), "pn_rating": getattr(b, "pn_rating", None)} for b in req.bellows]
+        bellows_data = [{
+            "size": b.size,
+            "qty": b.qty,
+            "type": getattr(b, "type", "EJ"),
+            "pn_rating": getattr(b, "pn_rating", None),
+            "joint_category": getattr(b, "joint_category", None),
+            "joint_type_code": getattr(b, "joint_type_code", None),
+            "variable_qtys": getattr(b, "variable_qtys", None),
+        } for b in req.bellows]
         sync_project_production_lines(new_proj.id, bellows_data)
         
         target_days = (dt_deadline.date() - datetime.utcnow().date()).days if req.target_date else 15
@@ -278,7 +293,7 @@ def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
     master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     
     for b in req.bellows:
-        b_type = getattr(b, 'type', 'EJ')
+        b_type = joint_catalog.weld_family_for(b.joint_type_code) if getattr(b, 'joint_type_code', None) else getattr(b, 'type', 'EJ')
         m = master_data.get((b.size, b_type))
 
         if not m and b_type == 'DJ':
@@ -309,11 +324,28 @@ def simulate_project(req: SimulationRequest, db: Session = Depends(get_db)):
 @router.get("/{project_id}/bellows")
 def get_project_bellows(project_id: int, db: Session = Depends(get_db)):
     lines = db.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
-    return {"success": True, "message": "Bellows retrieved", "data": [{"size": l.size, "qty": l.quantity, "type": getattr(l, "joint_type", "EJ"), "pn_rating": getattr(l, "pn_rating", None)} for l in lines]}
+    return {"success": True, "message": "Bellows retrieved", "data": [{
+        "size": l.size,
+        "qty": l.quantity,
+        "type": getattr(l, "joint_type", "EJ"),
+        "pn_rating": getattr(l, "pn_rating", None),
+        "joint_category": getattr(l, "joint_category", None),
+        "joint_type_code": getattr(l, "joint_type_code", None),
+        "paint_status": getattr(l, "paint_status", None),
+        "variable_qtys": json.loads(l.variable_qtys_json) if getattr(l, "variable_qtys_json", None) else {},
+    } for l in lines]}
 
 @router.put("/{project_id}/bellows")
 def update_project_bellows(project_id: int, req: List[BellowItem], db: Session = Depends(get_db)):
-    bellows_data = [{"size": b.size, "qty": b.qty, "type": getattr(b, "type", "EJ"), "pn_rating": getattr(b, "pn_rating", None)} for b in req]
+    bellows_data = [{
+        "size": b.size,
+        "qty": b.qty,
+        "type": getattr(b, "type", "EJ"),
+        "pn_rating": getattr(b, "pn_rating", None),
+        "joint_category": getattr(b, "joint_category", None),
+        "joint_type_code": getattr(b, "joint_type_code", None),
+        "variable_qtys": getattr(b, "variable_qtys", None),
+    } for b in req]
     sync_project_production_lines(project_id, bellows_data)
     
     assign = db.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == project_id).first()
@@ -331,7 +363,7 @@ def simulate_duration(req: SimulateDurationRequest, db: Session = Depends(get_db
     tot_tig, tot_mig, tot_grind = 0, 0, 0
     master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     for b in req.bellows:
-        b_type = getattr(b, 'type', 'EJ')
+        b_type = joint_catalog.weld_family_for(b.joint_type_code) if getattr(b, 'joint_type_code', None) else getattr(b, 'type', 'EJ')
         m = master_data.get((b.size, b_type))
 
         if not m and b_type == 'DJ':
@@ -366,7 +398,7 @@ def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_
     tot_tig, tot_mig, tot_grind = 0, 0, 0
     master_data = {(m.size, m.joint_type or 'EJ'): m for m in get_welding_master_latest()}
     for b in req.bellows:
-        b_type = getattr(b, 'type', 'EJ')
+        b_type = joint_catalog.weld_family_for(b.joint_type_code) if getattr(b, 'joint_type_code', None) else getattr(b, 'type', 'EJ')
         m = master_data.get((b.size, b_type))
 
         if not m and b_type == 'DJ':
@@ -400,4 +432,12 @@ def simulate_resources(req: SimulateResourcesRequest, db: Session = Depends(get_
 @router.get("/{project_id}/requirements")
 def get_requirements(project_id: int, db: Session = Depends(get_db)):
     lines = db.query(ProjectProductionLine).filter_by(project_id=project_id).all()
-    return {"success": True, "message": "Requirements retrieved", "data": [{"id": l.id, "type": "EJ", "size": str(l.size), "total_qty": l.quantity} for l in lines]}
+    return {"success": True, "message": "Requirements retrieved", "data": [{
+        "id": l.id,
+        "type": getattr(l, 'joint_type', 'EJ'),
+        "size": str(l.size),
+        "total_qty": l.quantity,
+        "tag_no": getattr(l, 'joint_type_code', None),
+        "joint_category": getattr(l, 'joint_category', None),
+        "description": (joint_catalog.get_type(l.joint_type_code) or {}).get("description") if getattr(l, 'joint_type_code', None) else None,
+    } for l in lines]}

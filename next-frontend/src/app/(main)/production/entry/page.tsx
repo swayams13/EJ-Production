@@ -46,6 +46,15 @@ interface FinalCheck {
   notes?: string | null;
 }
 
+interface AssemblyStep {
+  id: number;
+  step_no: number;
+  label: string;
+  status: string;
+  date_ready?: string | null;
+  notes?: string | null;
+}
+
 interface PartRow {
   id: string;
   name: string;
@@ -79,6 +88,7 @@ export default function OperatorEntry() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const [finalChecks, setFinalChecks] = useState<FinalCheck[]>([]);
+  const [assemblySteps, setAssemblySteps] = useState<AssemblyStep[]>([]);
   const [activeTab, setActiveTab] = useState<"Material" | "Fabrication" | "Welding" | "FinalChecks">("Material");
 
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
@@ -108,6 +118,7 @@ export default function OperatorEntry() {
       setTotalQty(0);
       setPaintStatus("");
       setTagNo(null);
+      setAssemblySteps([]);
       return;
     }
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/parts/${requirementId}`)
@@ -117,6 +128,7 @@ export default function OperatorEntry() {
           setTotalQty(resData.data.total_qty);
           setParts(resData.data.parts);
           setFinalChecks(resData.data.final_checks || []);
+          setAssemblySteps(resData.data.assembly_steps || []);
           setPaintStatus(resData.data.paint_status || "");
           setTagNo(resData.data.tag_no || resData.data.joint_type_code || null);
         }
@@ -194,6 +206,23 @@ export default function OperatorEntry() {
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Update failed"); }
       setSuccessMsg("Final check updated");
+      const reqId = requirementId; setRequirementId(""); setTimeout(() => setRequirementId(reqId), 50);
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    } finally { setSubmitting(false); }
+  };
+
+  const handleUpdateAssemblyStep = async (stepId: number, patch: Partial<AssemblyStep>) => {
+    setSubmitting(true); setErrorMsg("");
+    try {
+      const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/assembly-steps/${stepId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Update failed"); }
+      setSuccessMsg("Assembly step updated");
       const reqId = requirementId; setRequirementId(""); setTimeout(() => setRequirementId(reqId), 50);
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
@@ -463,6 +492,7 @@ export default function OperatorEntry() {
                 )}
               </div>
             ) : activeTab === "Fabrication" ? (
+              <>
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 {parts
                   .filter((p) => !partId || p.id.toString() === partId)
@@ -548,6 +578,34 @@ export default function OperatorEntry() {
                   </div>
                 )}
               </div>
+              {assemblySteps.length > 0 && (
+                <Card className="p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <h3 className="font-bold text-ink">Proposed Assembly Sequence</h3>
+                    <Badge tone="warning">Pending GM sign-off</Badge>
+                  </div>
+                  <div className="divide-y divide-line">
+                    {[...assemblySteps]
+                      .sort((a, b) => a.step_no - b.step_no)
+                      .map((step) => (
+                        <div key={step.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-ink">{step.step_no}. {step.label}</span>
+                            <Badge tone={step.status === "ready" ? "success" : "neutral"}>{step.status}</Badge>
+                          </div>
+                          <Button
+                            variant={step.status === "ready" ? "secondary" : "primary"}
+                            disabled={submitting}
+                            onClick={() => handleUpdateAssemblyStep(step.id, { status: step.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
+                          >
+                            {step.status === "ready" ? "Mark Pending" : "Mark Ready"}
+                          </Button>
+                        </div>
+                      ))}
+                  </div>
+                </Card>
+              )}
+              </>
             ) : (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 {(currentReqType === "DJ" ? ["MIG", "Grinding"] : ["TIG", "MIG", "Grinding"]).map((type) => {
@@ -616,7 +674,7 @@ export default function OperatorEntry() {
             {activeTab === "FinalChecks" && (
               finalChecks.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  {finalChecks.filter((c) => ["testing", "painting", "weight", "marking"].includes(c.check_type)).map((c) => (
+                  {finalChecks.filter((c) => ["testing", "painting", "weight", "marking", "packing"].includes(c.check_type)).map((c) => (
                     <Card key={c.id} className="p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <h3 className="font-bold capitalize text-ink">{c.check_type}</h3>

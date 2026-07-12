@@ -1,14 +1,14 @@
 import json
 from sqlalchemy.orm import Session
 from backend.services.db_service import (
-    Project, ProjectProductionLine, Part, PartProcess, ProductionLog, JobFinalCheck
+    Project, ProjectProductionLine, Part, PartProcess, ProductionLog, JobFinalCheck, AssemblyStep
 )
 from backend.services.templates import TEMPLATES, route_for, base_weight_for
 from backend.services import joint_catalog
 
 class MESService:
 
-    FINAL_CHECK_TYPES = ["testing", "painting", "weight", "marking"]
+    FINAL_CHECK_TYPES = ["testing", "painting", "weight", "marking", "packing"]
 
     @staticmethod
     def default_final_check_rows(line_id: int):
@@ -17,6 +17,7 @@ class MESService:
             "painting": {},
             "weight": {},
             "marking": {"marking_type": "Hard Punch"},
+            "packing": {},
         }
         return [
             {"production_line_id": line_id, "check_type": t, "is_required": True, **defaults[t]}
@@ -30,6 +31,18 @@ class MESService:
             if row["check_type"] in existing:
                 continue
             db.add(JobFinalCheck(**row))
+
+    @staticmethod
+    def create_assembly_steps_for_line(db: Session, line_id: int, tag_no: str = None):
+        """Create AssemblyStep rows from the tag's proposed chain. No-op for legacy/untagged lines.
+        Idempotent: skips step_no values already present, so it never resets a step marked ready."""
+        if not tag_no or not joint_catalog.get_type(tag_no):
+            return
+        existing = {s.step_no for s in db.query(AssemblyStep).filter_by(production_line_id=line_id).all()}
+        for step in joint_catalog.assembly_chain_for(tag_no):
+            if step["step_no"] in existing:
+                continue
+            db.add(AssemblyStep(production_line_id=line_id, step_no=step["step_no"], label=step["label"]))
 
     @staticmethod
     def final_check_gate(checks):
@@ -96,6 +109,7 @@ class MESService:
                 for process_name in route_for(c["name"]):
                     db.add(PartProcess(part_id=new_part.id, process_name=process_name, completed_qty=0))
             MESService.create_final_checks_for_line(db, line.id)
+            MESService.create_assembly_steps_for_line(db, line.id, tag)
             return line
 
         # -------- legacy fallback template (pre-tag lines only) --------
@@ -182,6 +196,8 @@ class MESService:
         for name, p in existing.items():
             if name not in comp_by_name:
                 db.delete(p)
+
+        MESService.create_assembly_steps_for_line(db, line.id, tag)
 
     @staticmethod
     def calculate_project_progress(db: Session, project_id: int):

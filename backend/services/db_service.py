@@ -166,6 +166,18 @@ class JobFinalCheck(Base):
 
     __table_args__ = (UniqueConstraint("production_line_id", "check_type", name="uq_final_check_line_type"),)
 
+class AssemblyStep(Base):
+    __tablename__ = "assembly_steps"
+    id = Column(Integer, primary_key=True, index=True)
+    production_line_id = Column(Integer, ForeignKey("project_production_lines.id"), nullable=False)
+    step_no = Column(Integer, nullable=False)
+    label = Column(String, nullable=False)          # e.g. "'A' + Job Flanges → 'C'"
+    status = Column(String, default="pending")       # pending | in_process | ready
+    date_ready = Column(Date, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    __table_args__ = (UniqueConstraint("production_line_id", "step_no", name="uq_assembly_step_line_no"),)
+
 class WeldingLog(Base):
     __tablename__ = "welding_logs"
     id = Column(Integer, primary_key=True, index=True)

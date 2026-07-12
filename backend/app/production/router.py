@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from pydantic import BaseModel
+from typing import Optional
 
-from backend.services.db_service import get_db, ProjectProductionLine, PartProcess, ProductionLog, User, AuditLog, JobFinalCheck
+from backend.services.db_service import get_db, ProjectProductionLine, PartProcess, ProductionLog, User, AuditLog, JobFinalCheck, AssemblyStep
 from backend.app.production.schemas import TransactionCreate, FinalCheckUpdate
 from backend.app.auth.rbac import require_roles
 from backend.services import joint_catalog
@@ -62,11 +63,17 @@ def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_us
         "date_pending": c.date_pending.isoformat() if c.date_pending else None,
         "notes": c.notes,
     } for c in checks]
+    steps = db.query(AssemblyStep).filter_by(production_line_id=line.id).order_by(AssemblyStep.step_no).all()
+    steps_data = [{
+        "id": s.id, "step_no": s.step_no, "label": s.label, "status": s.status,
+        "date_ready": s.date_ready.isoformat() if s.date_ready else None, "notes": s.notes,
+    } for s in steps]
     return {"success": True, "data": {
         "requirement_id": line.id,
         "total_qty": line.quantity,
         "parts": parts_data,
         "final_checks": checks_data,
+        "assembly_steps": steps_data,
         "joint_type_code": getattr(line, 'joint_type_code', None),
         "joint_category": getattr(line, 'joint_category', None),
         "paint_status": getattr(line, 'paint_status', None),
@@ -156,6 +163,29 @@ def update_final_check(check_id: int, body: FinalCheckUpdate, db: Session = Depe
     ))
     db.commit()
     return {"success": True, "message": f"Updated {check.check_type}"}
+
+class AssemblyStepUpdate(BaseModel):
+    status: Optional[str] = None
+    date_ready: Optional[date] = None
+    notes: Optional[str] = None
+
+@router.put("/assembly-steps/{step_id}")
+def update_assembly_step(step_id: int, body: AssemblyStepUpdate, db: Session = Depends(get_db),
+                         current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"]))):
+    step = db.query(AssemblyStep).filter_by(id=step_id).first()
+    if not step:
+        raise HTTPException(status_code=404, detail="Assembly step not found")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(step, field, value)
+    db_user = db.query(User).filter_by(username=current_user["username"]).first() if current_user else None
+    db.add(AuditLog(
+        user_id=db_user.id if db_user else None,
+        username=current_user["username"] if current_user else None,
+        action="Update", table_name="assembly_steps", record_id=step.id,
+        details=f"Updated assembly step {step.step_no} -> status={step.status}",
+    ))
+    db.commit()
+    return {"success": True, "message": f"Updated assembly step {step.step_no}"}
 
 from backend.app.production.schemas import WeldingLogCreate
 from backend.services.db_service import WeldingLog

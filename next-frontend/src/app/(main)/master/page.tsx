@@ -32,12 +32,18 @@ interface JointComponent {
   source?: string | null;
 }
 
+interface AssemblyChainStep {
+  step_no: number;
+  label: string;
+}
+
 interface JointTypeDef {
   tag_no: string;
   description: string;
   weld_family: string;
   components: JointComponent[];
   variable_components?: string[];
+  assembly_chain?: AssemblyChainStep[];
 }
 
 interface JointCategoryGroup {
@@ -518,6 +524,19 @@ export default function MasterData() {
                           <p className="mt-2 text-[13px] text-ink-soft">
                             Variable components: {t.variable_components.join(", ")}
                           </p>
+                        )}
+                        {t.assembly_chain && t.assembly_chain.length > 0 && (
+                          <div className="mt-3">
+                            <div className="mb-2 flex items-center gap-2">
+                              <h4 className="font-display text-xs font-bold uppercase tracking-wide text-ink">Proposed Assembly Sequence</h4>
+                              <Badge tone="warning">Pending GM sign-off</Badge>
+                            </div>
+                            <ol className="list-decimal pl-5 text-[13px] text-ink-soft">
+                              {t.assembly_chain.map((s) => (
+                                <li key={s.step_no}>{s.label}</li>
+                              ))}
+                            </ol>
+                          </div>
                         )}
                       </div>
                     ))}

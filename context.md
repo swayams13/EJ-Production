@@ -1,4 +1,4 @@
-# EJ Production Tracker — Session Context Handoff (2026-07-10)
+# EJ Production Tracker — Session Context Handoff (2026-07-12)
 
 ## Purpose
 
@@ -157,29 +157,106 @@ legacy" escape hatch.
 Committed on `demo` as `4716981` ("fix(edit-projects): keep legacy EJ/DJ lines visible + safe on
 save, add Recategorize control"), on top of `f912739` (the main Joint→Type→BOM feature commit).
 
+## This session (2026-07-12): Assembly Chain tracking + Box Packing final check
+
+Implemented the two genuinely-new work items from `docs/EJ_ITEMWISE_REPORT_IMPLEMENTATION_BRIEF.md`
+(the GM-review workbook). Everything else in that brief was already built in Session 7 and verified to
+match the workbook — the 12-tag catalog and the 4 existing `JobFinalCheck` types were **not** touched.
+Both new features are marked **"Pending GM sign-off"** in the UI because the workbook's assembly-chain
+sequences are explicitly *proposed*, not confirmed (Universal 2-bellows chains least certain).
+
+### Feature 1 — Assembly Chain tracking per tag (gated by the Recategorize opt-in)
+
+Each of the 12 tags now carries a proposed, ordered sub-assembly sequence. The chain data lives in
+**one editable `ASSEMBLY_CHAINS` dict in `backend/services/joint_catalog.py`** — revising a sequence
+after GM feedback is a single data edit, no API/UI change. This is the single source of truth for
+chains, same rule as the BOM: do not add a second chain source anywhere else.
+
+**This feature follows the exact same opt-in Recategorize gate as the BOM** (see "Legacy project
+handling" above): only **new tagged lines** and **legacy lines the user explicitly recategorizes** get
+assembly steps. Un-recategorized legacy lines get none, and render no assembly card at all (empty step
+list → nothing shown). A recategorized legacy line goes through `sync_project_production_lines`'s
+"identity changed → delete old line, create new line" path, hits the tag-driven branch, and gets its
+steps built fresh — matching the "BOM rebuilt from scratch on recategorize" behavior already documented
+above. Assembly steps are per-line **status** (`pending | in_process | ready`), line-level like Paint,
+not per-piece.
+
+Files carrying this feature:
+- `backend/services/db_service.py` — new `AssemblyStep(Base)` model (`assembly_steps` table, unique on
+  `(production_line_id, step_no)`). Brand-new table → created by `Base.metadata.create_all` in
+  `init_db()` on next start; **no `ALTER TABLE` migration entry** (those are only for new columns on
+  existing tables). `init_db()`/columns list untouched.
+- `backend/services/joint_catalog.py` — `_step()` constructor, the `ASSEMBLY_CHAINS` dict (12 tags),
+  a loop attaching `assembly_chain` onto each `JOINT_TYPES` entry, `assembly_chain_for(tag_no)` helper,
+  and `"assembly_chain"` added to `list_catalog()` output. Existing `JOINT_TYPES` data unchanged.
+- `backend/services/mes_service.py` — new idempotent `create_assembly_steps_for_line()` (no-op for
+  legacy/untagged; skips already-present `step_no`s so it never resets a `ready` step). Called from the
+  tag-driven branch of `create_parts_for_production_line` and from `sync_part_targets` — **NOT** from
+  `_create_parts_legacy`. `calculate_project_progress` untouched.
+- `backend/app/production/router.py` — `get_requirement_parts` now returns an `assembly_steps` array;
+  new `AssemblyStepUpdate` model + `PUT /assembly-steps/{step_id}` endpoint (same role list, audit-log,
+  and 404 pattern as `update_final_check`).
+- `next-frontend/src/app/(main)/production/entry/page.tsx` — `AssemblyStep` interface, `assemblySteps`
+  state, `handleUpdateAssemblyStep`, and a "Proposed Assembly Sequence" `Card` (with `Badge
+  tone="warning"` "Pending GM sign-off" + Mark Ready/Pending toggles) rendered **inside the existing
+  "Fabrication & Assembly" tab**, only when steps exist. No new tab added.
+- `next-frontend/src/app/(main)/master/page.tsx` — `AssemblyChainStep` interface, optional
+  `assembly_chain` on `JointTypeDef`, and a read-only "Proposed Assembly Sequence" ordered list (same
+  warning badge) under each tag's BOM in the "Joint Types & BOM" card, so management can review/print
+  all 12 proposed chains for GM.
+
+### Feature 2 — Box Packing final check (deliberately applies to legacy lines too)
+
+Added `"packing"` as the 5th `JobFinalCheck` type alongside testing/painting/weight/marking, in
+`backend/services/mes_service.py` (`FINAL_CHECK_TYPES` + `default_final_check_rows`) and surfaced in the
+Shop Floor Entry Final Checks tab (`entry/page.tsx` — `"packing"` added to the hardcoded
+`["testing","painting","weight","marking"]` filter array, easy to miss).
+
+**This is the one deliberate exception to the Recategorize gate — it applies to ALL lines including
+legacy ones — and that is correct, not an oversight.** Box packing is a job-level dispatch checkbox,
+the same *kind* of thing as the existing 4 final checks (which already seed unconditionally via
+`backfill_itemwise()` on every backend startup), not a BOM/fabrication component tied to a tag. It's
+purely additive and touches no Part/BOM data, so extending it to every line carries none of the
+data-rebuild risk that gates Feature 1. On the next backend restart, `backfill_itemwise()` seeds a
+`packing` row onto every existing line, new and legacy alike — no new migration script needed.
+
+### No progress-math changes
+Assembly steps and the packing check are informational/trackable only. `calculate_project_progress`'s
+70% fabrication / 30% welding blend and the final-check gate were left byte-for-byte unchanged, per the
+brief's guardrail — these are trackable, not wired into the overall progress formula (a judgment call
+GM hasn't made).
+
 ## Current repo / verification state
 
-- Branch: `demo`. Latest commits: `4716981` (legacy-row fix) on top of `f912739` (the main
-  feature).
-- **Not yet confirmed by the user:** `npm run build` in `next-frontend` has not been run
-  successfully and reported back. Neither the cloud sandbox nor the device-bridge Linux VM used in
-  this session have working npm-registry network access, so the TSX changes were hand-verified
-  (read in full, traced logic, confirmed against the `Modal` component's actual prop signature)
-  but never machine-typechecked. **Run `npm run build` from the user's own terminal before
-  pushing**, and treat any TypeScript errors it surfaces as the top priority to fix.
-- **Not yet confirmed:** `git push origin demo` — the user needs to push from their own terminal
-  (this session's tooling has no outbound network access for git push).
-- Runtime-against-Postgres has not been verified in this session either (per the open flags
-  already logged in `projectprogress.md`'s "Session 7" entry) — worth a smoke test once deployed:
-  create a project with a tag, confirm Parts/qty scale correctly, edit qty and confirm
-  `sync_part_targets` rescales without losing `completed_qty`, and open a pre-existing legacy
-  project in Edit Projects to confirm it now shows its legacy badge instead of blank selects.
+- Branch: `demo`. Last committed work is still `4716981` (legacy-row fix) on top of `f912739` (the
+  main Joint→Type→BOM feature). **This session's Assembly Chain + Box Packing changes (the 6 files
+  listed above) are NOT yet committed** — nothing was `git add`/`commit`/`push`ed this session. The
+  user must commit and push to `demo` from their own terminal per `CLAUDE.md`'s workflow (this
+  session's tooling has no git-push network access). Never touch `main` without explicit go-ahead.
+- **The two edited `.tsx` files were NOT machine-verified this session.** `py_compile` syntax-checked
+  every Python file changed (`db_service.py`, `joint_catalog.py`, `mes_service.py`, `router.py`), but
+  there was **no npm-registry network access** to run a real Next.js build or TypeScript typecheck.
+  The TSX changes (`production/entry/page.tsx`, `master/page.tsx`) were hand-verified against the
+  actual `Card`/`Badge`/`Button` prop signatures but never compiled. **Run `npm --prefix next-frontend
+  run build` (and `run lint`) from the user's own terminal before pushing**, and treat any TypeScript
+  errors it surfaces as the top priority to fix.
+- Runtime-against-Postgres has not been verified this session — worth a smoke test once deployed:
+  create a new tagged line and confirm it seeds `assembly_steps` plus all 5 final checks including
+  `packing`; open a legacy line and confirm it shows **no** assembly card but **does** get a `packing`
+  check; recategorize a legacy line and confirm its BOM rebuilds and assembly steps get seeded; mark a
+  step `ready`, then edit that line's qty and re-save, and confirm the step is **not** reset to
+  `pending` (idempotency). Session-7 smoke items (Parts/qty scaling, `sync_part_targets` preserving
+  `completed_qty`, legacy badge in Edit Projects) still apply too.
 
 ## How to continue in a new session
 
-1. Read this file, then skim `projectprogress.md`'s latest entry for anything added after
-   2026-07-10.
-2. Confirm with the user whether `npm run build` and `git push origin demo` succeeded. If build
-   errors were found, fix them and commit as a new commit (not an amend).
-3. Any further legacy-line work, additional tags, or master-data changes should extend
-   `joint_catalog.py` / `templates.py` — do not add a second BOM source anywhere else.
+1. Read this file, then skim `projectprogress.md`'s latest entry (Session 8, 2026-07-12) for anything
+   added after this handoff.
+2. Confirm with the user whether the Session-8 changes were committed, `npm --prefix next-frontend run
+   build` passed, and `git push origin demo` succeeded. If build errors were found, fix them and commit
+   as a new commit (not an amend).
+3. When GM's assembly-chain answers come back, edit the `ASSEMBLY_CHAINS` dict in `joint_catalog.py`
+   only — it's designed as a single data edit, no API/UI change. If GM rejects Box Packing, remove
+   `"packing"` from `FINAL_CHECK_TYPES`.
+4. Any further legacy-line work, additional tags, chain edits, or master-data changes should extend
+   `joint_catalog.py` / `templates.py` — do not add a second BOM or assembly-chain source anywhere else.

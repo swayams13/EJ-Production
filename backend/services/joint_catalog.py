@@ -212,6 +212,111 @@ JOINT_TYPES = [
 _BY_TAG = {jt["tag_no"]: jt for jt in JOINT_TYPES}
 
 
+def _step(no, label):
+    return {"step_no": no, "label": label}
+
+ASSEMBLY_CHAINS = {
+    "S-EJ-F": [
+        _step(1, "Bellows (Element) + Collar → Sub-assembly 'A'"),
+        _step(2, "'A' + Job Flanges → FINAL"),
+    ],
+    "S-EJ-F-S-L": [
+        _step(1, "Bellows + Collar → 'A'"),
+        _step(2, "'A' + Weldend → 'B'"),
+        _step(3, "'B' + Job Flanges → 'C'"),
+        _step(4, "'C' + Internal Sleeve → 'D'"),
+        _step(5, "'D' + Lugs & Limit Rods → FINAL"),
+    ],
+    "S-EJ-F-1MF-S-L": [
+        _step(1, "Bellows + Collar → 'A'"),
+        _step(2, "'A' + Weldend → 'B'"),
+        _step(3, "'B' + Job Flanges → 'C'"),
+        _step(4, "'C' + Companion (Matching) Flanges → 'D'"),
+        _step(5, "'D' + Internal Sleeve → 'E'"),
+        _step(6, "'E' + Lugs & Limit Rods → FINAL"),
+    ],
+    "S-EJ-F-2MF-S-L": [
+        _step(1, "Bellows + Collar → 'A'"),
+        _step(2, "'A' + Weldend → 'B'"),
+        _step(3, "'B' + Job Flanges → 'C'"),
+        _step(4, "'C' + Companion (Matching) Flanges ×2 → 'D'"),
+        _step(5, "'D' + Internal Sleeve → 'E'"),
+        _step(6, "'E' + Lugs & Limit Rods → FINAL"),
+    ],
+    "S-EJ-W-S-L": [
+        _step(1, "Bellows + Collar → 'A'"),
+        _step(2, "'A' + Weldend → 'B'"),
+        _step(3, "'B' + Internal Sleeve → 'C'"),
+        _step(4, "'C' + Lugs & Limit Rods → FINAL"),
+    ],
+    "U-EJ-F-S-L": [
+        _step(1, "Bellows-1 + Collars → 'A1'"),
+        _step(2, "Bellows-2 + Collars → 'A2'"),
+        _step(3, "'A1' + 'A2' + Weldend (centre) → 'B'"),
+        _step(4, "'B' + Job Flanges → 'C'"),
+        _step(5, "'C' + Internal Sleeves → 'D'"),
+        _step(6, "'D' + Lugs & Limit Rods → FINAL"),
+    ],
+    "U-EJ-F-1MF-S-L": [
+        _step(1, "Bellows-1 + Collars → 'A1'"),
+        _step(2, "Bellows-2 + Collars → 'A2'"),
+        _step(3, "'A1' + 'A2' + Weldend (centre) → 'B'"),
+        _step(4, "'B' + Job Flanges → 'C'"),
+        _step(5, "'C' + Companion (Matching) Flanges → 'D'"),
+        _step(6, "'D' + Internal Sleeves → 'E'"),
+        _step(7, "'E' + Lugs & Limit Rods → FINAL"),
+    ],
+    "U-EJ-F-2MF-S-L": [
+        _step(1, "Bellows-1 + Collars → 'A1'"),
+        _step(2, "Bellows-2 + Collars → 'A2'"),
+        _step(3, "'A1' + 'A2' + Weldend (centre) → 'B'"),
+        _step(4, "'B' + Job Flanges → 'C'"),
+        _step(5, "'C' + Companion (Matching) Flanges ×2 → 'D'"),
+        _step(6, "'D' + Internal Sleeves → 'E'"),
+        _step(7, "'E' + Lugs & Limit Rods → FINAL"),
+    ],
+    "U-EJ-W-S-L": [
+        _step(1, "Bellows-1 + Collars → 'A1'"),
+        _step(2, "Bellows-2 + Collars → 'A2'"),
+        _step(3, "'A1' + 'A2' + Spool (centre) → 'B'"),
+        _step(4, "'B' + Weldend → 'C'"),
+        _step(5, "'C' + Job Flanges → 'D'"),
+        _step(6, "'D' + Internal Sleeves → 'E'"),
+        _step(7, "'E' + Lugs & Limit Rods → FINAL"),
+    ],
+    "DEJ-F": [
+        _step(1, "Flange FP1 + Pipe-1 → 'A'"),
+        _step(2, "Flange FP2 + Pipe-2 → 'B'"),
+        _step(3, "Stopper Flange FS + Stopper Patti → 'C'"),
+        _step(4, "'A' + 'B' + 'C' + Studs & O-rings → FINAL"),
+    ],
+    "DEJ-F-1MF": [
+        _step(1, "Flange FP1 + Pipe-1 → 'A'"),
+        _step(2, "Flange FP2 + Pipe-2 → 'B'"),
+        _step(3, "Stopper Flange FS + Stopper Patti → 'C'"),
+        _step(4, "'A' + 'B' + 'C' + Studs & O-rings → 'D'"),
+        _step(5, "'D' + Companion (Matching) Flange → FINAL"),
+    ],
+    "DEJ-F-2MF": [
+        _step(1, "Flange FP1 + Pipe-1 → 'A'"),
+        _step(2, "Flange FP2 + Pipe-2 → 'B'"),
+        _step(3, "Stopper Flange FS + Stopper Patti → 'C'"),
+        _step(4, "'A' + 'B' + 'C' + Studs & O-rings → 'D'"),
+        _step(5, "'D' + Companion (Matching) Flanges ×2 → FINAL"),
+    ],
+}
+
+# Attach each tag's proposed assembly chain onto its JOINT_TYPES entry.
+for _jt in JOINT_TYPES:
+    _jt["assembly_chain"] = ASSEMBLY_CHAINS.get(_jt["tag_no"], [])
+
+
+def assembly_chain_for(tag_no):
+    """Ordered proposed sub-assembly steps for a tag. Empty list if none (legacy/unknown tag)."""
+    jt = _BY_TAG.get(tag_no)
+    return jt.get("assembly_chain", []) if jt else []
+
+
 def get_type(tag_no):
     """Return the catalog entry for a tag, or None."""
     return _BY_TAG.get(tag_no)
@@ -262,6 +367,7 @@ def list_catalog():
                     }
                     for c in jt["components"]
                 ],
+                "assembly_chain": jt.get("assembly_chain", []),
                 "variable_components": [
                     c["name"] for c in jt["components"] if c["kind"] == ENTER
                 ],

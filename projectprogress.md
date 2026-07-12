@@ -1,5 +1,79 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-12 (Session 8 - Assembly Chain tracking + Box Packing final check)
+
+### What we did today:
+Implemented the two genuinely-new work items from `docs/EJ_ITEMWISE_REPORT_IMPLEMENTATION_BRIEF.md`
+(the GM-review workbook, 10 Jul 2026). Everything else in that brief was already built in Session 7
+and left untouched (verified the existing 12-tag catalog and 4 `JobFinalCheck` types match the
+workbook exactly — no re-implementation).
+
+- **Assembly Chain tracking per tag (Work Item 1)** — each of the 12 tags now carries a proposed,
+  ordered sub-assembly sequence (e.g. `'B' + Job Flanges → 'C'`). New `AssemblyStep` table (per-line,
+  line-level status like Paint — `pending | in_process | ready`, not per-piece), a service helper that
+  seeds steps from the tag's chain, a `PUT /production/assembly-steps/{id}` endpoint, and UI in both
+  the Shop Floor Entry "Fabrication & Assembly" tab and the Master Data "Joint Types & BOM" card.
+  **Gated by the existing opt-in Recategorize pattern:** only brand-new tagged lines and legacy lines
+  the user explicitly recategorizes get assembly steps; un-recategorized legacy lines get none (and
+  render no assembly card at all, since their step list is empty).
+- **Box Packing final-check type (Work Item 2)** — added `"packing"` as the 5th `JobFinalCheck` type
+  alongside testing/painting/weight/marking. Unlike assembly chains, this one **intentionally applies
+  to every line including legacy ones** — it's a job-level dispatch checkbox, the same *kind* of thing
+  as the existing 4 checks (which already seed unconditionally via `backfill_itemwise()` on every
+  startup), not a BOM/fabrication component, so it's purely additive and touches no Part/BOM data.
+- **Both features flagged "Pending GM sign-off" in the UI** — the workbook's assembly-chain sequences
+  are explicitly *proposed*, not confirmed (Universal 2-bellows chains least certain). The chain data
+  lives in one editable `ASSEMBLY_CHAINS` dict in `joint_catalog.py` so revising after GM feedback is a
+  data edit, not a re-architecture.
+- **No progress-math changes.** Assembly steps and the packing check are informational/trackable only —
+  `calculate_project_progress`'s 70/30 fabrication/welding blend and the final-check gate were left
+  byte-for-byte unchanged, per the brief's guardrail.
+
+### Files changed (6):
+- `backend/services/db_service.py` — new `AssemblyStep(Base)` model (`assembly_steps` table, unique on
+  `(production_line_id, step_no)`). Created automatically by `Base.metadata.create_all` on next start —
+  no `ALTER TABLE` entry needed (new table, not a new column). `init_db()`/columns list untouched.
+- `backend/services/joint_catalog.py` — `_step()` constructor + the `ASSEMBLY_CHAINS` dict (12 tags,
+  verbatim from the workbook), a wiring loop attaching `assembly_chain` onto each `JOINT_TYPES` entry,
+  `assembly_chain_for(tag_no)` helper, and `"assembly_chain"` added to `list_catalog()` output. Existing
+  `JOINT_TYPES` component/quantity data left byte-for-byte unchanged.
+- `backend/services/mes_service.py` — `"packing"` added to `FINAL_CHECK_TYPES` and
+  `default_final_check_rows`; new idempotent `create_assembly_steps_for_line()` (no-op for
+  legacy/untagged; skips already-present `step_no`s so it never resets a `ready` step); called from the
+  tag-driven branch of `create_parts_for_production_line` and from `sync_part_targets` (NOT from
+  `_create_parts_legacy`). `calculate_project_progress` untouched.
+- `backend/app/production/router.py` — `get_requirement_parts` now returns an `assembly_steps` array;
+  new `AssemblyStepUpdate` model + `PUT /assembly-steps/{step_id}` endpoint (same role list, audit-log,
+  and 404 pattern as `update_final_check`).
+- `next-frontend/src/app/(main)/production/entry/page.tsx` — `AssemblyStep` interface + `assemblySteps`
+  state, `handleUpdateAssemblyStep`, a "Proposed Assembly Sequence" card (with `Badge tone="warning"`
+  "Pending GM sign-off" + Mark Ready/Pending toggles) rendered inside the Fabrication tab only when
+  steps exist, and `"packing"` added to the hardcoded Final Checks filter array.
+- `next-frontend/src/app/(main)/master/page.tsx` — `AssemblyChainStep` interface, optional
+  `assembly_chain` on `JointTypeDef`, and a read-only "Proposed Assembly Sequence" ordered list (same
+  warning badge) under each tag's BOM in the "Joint Types & BOM" card.
+
+### How it was built:
+Followed the pinned CONTRACT.md shapes from the brief exactly. Backend files `py_compile`-clean;
+router and `ast.parse`-verified. Each file was written by a subagent against the locked contract, then
+verified — the verifier found the implementation consistent on the first pass, no fixes needed.
+
+### ⚠️ OPEN FLAGS / to verify before pushing:
+- **The two edited `.tsx` files were NOT machine-verified this session.** `py_compile` syntax-checked
+  every Python file, but there was **no npm-registry network access** to run a real Next.js build or
+  typecheck. TSX changes were hand-verified (types, prop signatures against the actual `Card`/`Badge`/
+  `Button` components) but never compiled. **Run `npm --prefix next-frontend run build` (and `lint`)
+  from the user's own terminal and fix any TS errors before the demo deploy is trusted.**
+- **Nothing was committed or pushed this session.** `git add`/`commit`/`push origin demo` must be done
+  from the user's own terminal per `CLAUDE.md`'s workflow (this session's tooling has no git-push
+  network access). Never touch `main` without explicit go-ahead.
+- **Assembly chains are proposed, not confirmed** — flagged "Pending GM sign-off" in both UIs. When GM
+  answers, edit the `ASSEMBLY_CHAINS` dict in `joint_catalog.py` only (one data edit; no API/UI change).
+- **Runtime-against-Postgres not verified.** Smoke test on demo: new tagged line seeds `assembly_steps`
+  + all 5 final checks including `packing`; a legacy line shows no assembly card but does get a
+  `packing` check; recategorizing a legacy line rebuilds its BOM and seeds assembly steps; marking a
+  step `ready` then editing that line's qty does NOT reset it (idempotency).
+
 ## Date: 2026-07-10 (Session 7 - Joint → Type(tag) → per-tag BOM with qty scaling)
 
 ### What we did today:

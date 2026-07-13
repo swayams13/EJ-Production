@@ -22,10 +22,11 @@
 - RBAC unit checks pass (Supervisor allowed/blocked correctly, Worker/Operator blocked, Admin blocked from user mgmt).
 - Generated `JWT_SECRET_KEY` appended to local `.env` (gitignored).
 
-### ⚠️ BEFORE THIS DEPLOYS ON RAILWAY (demo):
-1. **Set `JWT_SECRET_KEY`** in the backend service variables — the app now refuses to start without it.
-2. **Set `FRONTEND_ORIGINS`** to the demo frontend URL (comma-separated if multiple).
-3. Smoke test: login as GM/PM/Dev works; Supervisor user can use Shop Floor Entry but gets 403 on project create; operator-role account gets 403 everywhere; dashboards load.
+### Deploy status (end of session):
+- Pushed to `demo` (commit `e13c1d9`). **User confirmed both `JWT_SECRET_KEY` and `FRONTEND_ORIGINS` are set on Railway.**
+- `FRONTEND_ORIGINS` must be the exact origin — scheme + domain, no trailing slash/path; comma-separate multiple.
+- **Smoke test still PENDING on demo**: (1) backend starts (no missing-secret crash in logs); (2) Dev/GM/PM login works (pre-deploy tokens get bounced once — expected, old secret); (3) Supervisor can submit shop-floor entry but gets 403 creating a project (403 is silent in UI for now — check network tab); (4) Operator-role login sees no data (403 everywhere — intended); (5) dashboards load.
+- Not merged to main — awaiting demo verification + explicit go-ahead, per workflow.
 
 ### Follow-ups queued:
 - Operator-picker dropdown on Shop Floor Entry forms (supervisor attributes each entry to the worker who did the work) — backend `operator_id` already supported.

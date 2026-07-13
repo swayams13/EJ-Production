@@ -1,5 +1,37 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-13 (Session 10 — Welding tab: per-component steps + assembly backfill + qty tracking)
+
+### Legacy vs Tagged line behaviour (clarified this session):
+
+**Legacy / unrecategorized lines** (`joint_type_code = NULL`):
+- 4 tabs in Shop Floor Entry (no Assembly tab — hidden when `assemblySteps.length === 0`)
+- Generic EJ or DJ template BOM parts
+- All 5 Final Checks (including Box Packing) — seeded by backfill for every line
+- Material Status, Fabrication, Welding & Grinding work normally
+
+**New tagged lines / recategorized lines** (`joint_type_code` set):
+- All 5 tabs including Assembly
+- Tag-specific BOM with correct scaled quantities per component
+- Assembly sequence with qty tracking per step
+
+**Upgrade path**: Edit Project → Recategorize button per line → pick a tag → save. Rebuilds BOM, seeds assembly steps. Explicit opt-in, never automatic.
+
+### demo vs main gap (as of end of session):
+26 commits ahead of main. Key features not yet in main:
+- Joint → Type (tag) → per-tag BOM (Session 7)
+- Full Itemwise Progress Tracking with enriched step templates (Session 5)
+- 5-tab Shop Floor Entry (Sessions 6–9)
+- Assembly Chain tracking + Box Packing final check (Session 8)
+- Assembly qty tracking per step (Session 10)
+- Per-component welding steps on Welding tab (Session 10)
+- Assembly backfill for existing tagged lines (Session 10)
+- Auto-recalculate resources on welding log (Session 6)
+- Various UI fixes (Projects page, Edit Project legacy lines)
+None merged to main — awaiting user verification on Railway demo + explicit go-ahead.
+
+---
+
 ## Date: 2026-07-13 (Session 10 — Welding tab: per-component steps + assembly backfill)
 
 ### What we did today:

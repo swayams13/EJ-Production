@@ -89,7 +89,7 @@ export default function OperatorEntry() {
 
   const [finalChecks, setFinalChecks] = useState<FinalCheck[]>([]);
   const [assemblySteps, setAssemblySteps] = useState<AssemblyStep[]>([]);
-  const [activeTab, setActiveTab] = useState<"Material" | "Fabrication" | "Welding" | "FinalChecks">("Material");
+  const [activeTab, setActiveTab] = useState<"Material" | "Fabrication" | "Assembly" | "Welding" | "FinalChecks">("Material");
 
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
   const isMaterialProcess = (name: string) => /^(PO|Material Received|Inward Insp)$/i.test(name);
@@ -142,6 +142,15 @@ export default function OperatorEntry() {
         }
       });
   }, [requirementId]);
+
+  // If the active tab is "Assembly" but the current requirement has no assembly
+  // steps, that tab is hidden — fall back to a tab that is always present so the
+  // content area never renders blank.
+  useEffect(() => {
+    if (activeTab === "Assembly" && assemblySteps.length === 0) {
+      setActiveTab("Fabrication");
+    }
+  }, [assemblySteps, activeTab]);
 
   const handleQtyChange = (processId: string, val: string) => {
     setQtyInputs({ ...qtyInputs, [processId]: val });
@@ -274,6 +283,10 @@ export default function OperatorEntry() {
 
   const PAINT_STATUS_OPTIONS = ["Yet to start", "Started", "In progress", "Completed"];
 
+  const visibleTabs = (
+    ["Material", "Fabrication", "Assembly", "Welding", "FinalChecks"] as const
+  ).filter((tab) => tab !== "Assembly" || assemblySteps.length > 0);
+
   const handlePaintStatusChange = async (status: string) => {
     const prev = paintStatus;
     setPaintStatus(status);
@@ -384,10 +397,11 @@ export default function OperatorEntry() {
             <div className="border-b border-line pb-4">
               <h2 className="mb-4 text-xl font-bold text-ink">Track Production</h2>
               <div className="flex w-full flex-wrap gap-1 rounded-lg bg-paper p-1">
-                {(["Material", "Fabrication", "Welding", "FinalChecks"] as const).map((tab) => {
+                {visibleTabs.map((tab) => {
                   const label =
                     tab === "Material" ? "Material Status" :
-                    tab === "Fabrication" ? "Fabrication & Assembly" :
+                    tab === "Fabrication" ? "Fabrication" :
+                    tab === "Assembly" ? "Assembly" :
                     tab === "Welding" ? (currentReqType === "DJ" ? "Welding" : "Welding & Grinding") :
                     "Final Checks";
                   return (
@@ -492,7 +506,6 @@ export default function OperatorEntry() {
                 )}
               </div>
             ) : activeTab === "Fabrication" ? (
-              <>
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 {parts
                   .filter((p) => !partId || p.id.toString() === partId)
@@ -578,35 +591,33 @@ export default function OperatorEntry() {
                   </div>
                 )}
               </div>
-              {assemblySteps.length > 0 && (
-                <Card className="p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <h3 className="font-bold text-ink">Proposed Assembly Sequence</h3>
-                    <Badge tone="warning">Pending GM sign-off</Badge>
-                  </div>
-                  <div className="divide-y divide-line">
-                    {[...assemblySteps]
-                      .sort((a, b) => a.step_no - b.step_no)
-                      .map((step) => (
-                        <div key={step.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-ink">{step.step_no}. {step.label}</span>
-                            <Badge tone={step.status === "ready" ? "success" : "neutral"}>{step.status}</Badge>
-                          </div>
-                          <Button
-                            variant={step.status === "ready" ? "secondary" : "primary"}
-                            disabled={submitting}
-                            onClick={() => handleUpdateAssemblyStep(step.id, { status: step.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
-                          >
-                            {step.status === "ready" ? "Mark Pending" : "Mark Ready"}
-                          </Button>
+            ) : activeTab === "Assembly" ? (
+              <Card className="p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <h3 className="font-bold text-ink">Proposed Assembly Sequence</h3>
+                  <Badge tone="warning">Pending GM sign-off</Badge>
+                </div>
+                <div className="divide-y divide-line">
+                  {[...assemblySteps]
+                    .sort((a, b) => a.step_no - b.step_no)
+                    .map((step) => (
+                      <div key={step.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-ink">{step.step_no}. {step.label}</span>
+                          <Badge tone={step.status === "ready" ? "success" : "neutral"}>{step.status}</Badge>
                         </div>
-                      ))}
-                  </div>
-                </Card>
-              )}
-              </>
-            ) : (
+                        <Button
+                          variant={step.status === "ready" ? "secondary" : "primary"}
+                          disabled={submitting}
+                          onClick={() => handleUpdateAssemblyStep(step.id, { status: step.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
+                        >
+                          {step.status === "ready" ? "Mark Pending" : "Mark Ready"}
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+              </Card>
+            ) : activeTab === "Welding" ? (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 {(currentReqType === "DJ" ? ["MIG", "Grinding"] : ["TIG", "MIG", "Grinding"]).map((type) => {
                   const isDJ = currentReqType === "DJ";
@@ -669,7 +680,7 @@ export default function OperatorEntry() {
                   );
                 })}
               </div>
-            )}
+            ) : null}
 
             {activeTab === "FinalChecks" && (
               finalChecks.length > 0 ? (

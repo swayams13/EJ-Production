@@ -198,8 +198,9 @@ Files carrying this feature:
   and 404 pattern as `update_final_check`).
 - `next-frontend/src/app/(main)/production/entry/page.tsx` — `AssemblyStep` interface, `assemblySteps`
   state, `handleUpdateAssemblyStep`, and a "Proposed Assembly Sequence" `Card` (with `Badge
-  tone="warning"` "Pending GM sign-off" + Mark Ready/Pending toggles) rendered **inside the existing
-  "Fabrication & Assembly" tab**, only when steps exist. No new tab added.
+  tone="warning"` "Pending GM sign-off" + Mark Ready/Pending toggles). **NOTE (updated Session 9,
+  2026-07-12):** this card now lives in its own dedicated top-level **Assembly tab**, not inside the
+  Fabrication tab — see the Session 9 note below.
 - `next-frontend/src/app/(main)/master/page.tsx` — `AssemblyChainStep` interface, optional
   `assembly_chain` on `JointTypeDef`, and a read-only "Proposed Assembly Sequence" ordered list (same
   warning badge) under each tag's BOM in the "Joint Types & BOM" card, so management can review/print
@@ -226,6 +227,18 @@ Assembly steps and the packing check are informational/trackable only. `calculat
 brief's guardrail — these are trackable, not wired into the overall progress formula (a judgment call
 GM hasn't made).
 
+## Session 9 (2026-07-12): Shop Floor Entry tab restructure (frontend-only)
+
+Per explicit user request, the Shop Floor Entry page (`production/entry/page.tsx`) tab bar was
+restructured from 4 tabs (Assembly embedded inside "Fabrication & Assembly") into **5 top-level tabs**
+in this exact order: **Material Status → Fabrication → Assembly → Welding & Grinding → Final Checks**.
+The Session-8 "Proposed Assembly Sequence" card was promoted out of the Fabrication tab into its own
+Assembly tab. **The Assembly tab is hidden entirely (not an empty state)** for lines with no
+assembly-chain data (legacy/un-recategorized lines, empty `assemblySteps`), per the user's explicit
+choice — a `visibleTabs` filter drops it, and a fallback `useEffect` snaps `activeTab` off "Assembly" if
+it's ever hidden. **Only `production/entry/page.tsx` changed; no backend changes.** Nothing was
+committed or pushed this round.
+
 ## Current repo / verification state
 
 - Branch: `demo`. Last committed work is still `4716981` (legacy-row fix) on top of `f912739` (the
@@ -233,6 +246,7 @@ GM hasn't made).
   listed above) are NOT yet committed** — nothing was `git add`/`commit`/`push`ed this session. The
   user must commit and push to `demo` from their own terminal per `CLAUDE.md`'s workflow (this
   session's tooling has no git-push network access). Never touch `main` without explicit go-ahead.
+  **Session 9's tab restructure (`production/entry/page.tsx` only) is likewise NOT committed/pushed.**
 - **The two edited `.tsx` files were NOT machine-verified this session.** `py_compile` syntax-checked
   every Python file changed (`db_service.py`, `joint_catalog.py`, `mes_service.py`, `router.py`), but
   there was **no npm-registry network access** to run a real Next.js build or TypeScript typecheck.

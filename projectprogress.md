@@ -1,5 +1,53 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-12 (Session 9 - Shop Floor Entry tab restructure: 5 top-level tabs)
+
+### What we did today:
+Restructured the Shop Floor Entry page's (`/production/entry`) tab bar from 4 tabs (with Assembly
+embedded inside the "Fabrication & Assembly" tab) into **5 top-level tabs**, per explicit user request,
+in this exact order: **Material Status → Fabrication → Assembly → Welding & Grinding → Final Checks**.
+The Assembly card built last session (Session 8's "Proposed Assembly Sequence") is now promoted out of
+the Fabrication tab into its own dedicated Assembly tab.
+
+- **Assembly is now its own top-level tab**, no longer a card nested inside Fabrication. The Fabrication
+  tab is renamed from "Fabrication & Assembly" back to just "Fabrication" and holds only the parts grid.
+- **The Assembly tab is hidden entirely** (not shown with an empty state) for lines with no
+  assembly-chain data — i.e. legacy/un-recategorized lines whose `assemblySteps` list is empty — **per
+  the user's explicit choice.** A `visibleTabs` array filters "Assembly" out when `assemblySteps.length
+  === 0`, and the tab bar maps over `visibleTabs`.
+- **Fallback guard added**: a small `useEffect` snaps `activeTab` back to "Fabrication" if it ever lands
+  on "Assembly" while that tab is hidden (empty step list), so the content area never renders blank.
+- **No backend changes.** This is a pure frontend tab-layout reshuffle of an already-built feature — the
+  assembly-step data, endpoints, and `handleUpdateAssemblyStep` from Session 8 are untouched.
+
+### Files changed (1):
+- `next-frontend/src/app/(main)/production/entry/page.tsx` — `activeTab` union type extended to
+  `"Material" | "Fabrication" | "Assembly" | "Welding" | "FinalChecks"`; new `visibleTabs` array
+  (inserted after `PAINT_STATUS_OPTIONS`) that drops "Assembly" when there are no steps; the tab bar now
+  maps over `visibleTabs` with a "Fabrication" (no longer "Fabrication & Assembly") label plus a new
+  `"Assembly"` label case (DJ-conditional Welding label preserved verbatim); a fallback `useEffect`
+  (after the parts-fetch effect) redirecting an orphaned "Assembly" tab to "Fabrication"; the Fabrication
+  content branch stripped of its fragment wrapper and embedded assembly card (now the parts grid only);
+  a new `activeTab === "Assembly"` branch rendering the moved "Proposed Assembly Sequence" `Card`
+  verbatim (old `assemblySteps.length > 0 &&` guard dropped, since the tab itself is now gated); the
+  Welding branch converted from a bare `else` to an explicit `activeTab === "Welding"` branch closing the
+  chain with `) : null}`. `isMaterialProcess`/`isWeldingProcess`, `handleUpdateAssemblyStep`, and the
+  separate Final Checks block were left untouched. No backend files touched.
+
+### How it was built:
+Opus-planned, Sonnet-executed against a locked contract file (`CONTRACT2.md`). The implementer reported
+the file applied cleanly on the first pass with no fixes needed — all backend files and the untouched
+helpers/blocks above were left as-is.
+
+### ⚠️ OPEN FLAGS:
+- **Frontend-only change; nothing committed or pushed this round.** `git add`/`commit`/`push origin demo`
+  must be done from the user's own terminal per `CLAUDE.md`'s workflow. Never touch `main` without
+  explicit go-ahead. This sits on top of Session 8's still-uncommitted Assembly Chain + Box Packing work
+  (also frontend-and-backend, not yet pushed).
+- **The edited `.tsx` was NOT machine-verified** — no npm-registry network access to run a real Next.js
+  build/typecheck. Changes were hand-verified against the existing tab-bar/branch structure but never
+  compiled. **Run `npm --prefix next-frontend run build` (and `run lint`) before pushing.**
+
 ## Date: 2026-07-12 (Session 8 - Assembly Chain tracking + Box Packing final check)
 
 ### What we did today:

@@ -1,5 +1,28 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-13 (Session 11 — Full senior-engineer architecture/security/ops review)
+
+### What we did today:
+Read-only enterprise-readiness review (4 parallel audit agents: backend+schema, API/security, frontend, ops/hygiene; every critical claim re-verified against actual code per the standing rule). No code changed.
+
+**Verified-real, top findings:**
+- RBAC role check commented out in `auth/rbac.py:32-37`; ~27 endpoints (master, projects, scheduler, inventory, users, workforce, dashboard) have no auth dependency at all; debug/mutating GET endpoints (`debug_reload_feet`, `dedupe-db`, `sync-dj-temp`, `backfill-grinding`) unauthenticated.
+- JWT secret has hardcoded fallback (`auth/router.py:13`), 24h expiry, CORS `allow_origins=["*"]` with credentials (`main.py:46-52`).
+- No Alembic — schema evolves via `create_all` + hand-rolled startup ALTERs; no CHECK constraints, FKs not `nullable=False`, Float for feet/qty, no unique on `(production_line_id, part.name)`, singleton `company_resource_pool` unenforced.
+- N+1s: `get_projects`, `get_holds`, and `JobFinalCheck` query inside the per-line loop of `calculate_project_progress` (mes_service.py:267).
+- No pytest/CI; root tests use SQLite against a Postgres-only app. No backup/DR. `fastapi`/`uvicorn`/`pydantic` unpinned. `production_tracker.db` tracked in git since initial commit.
+- Frontend: client-only route protection, localStorage tokens, hand-duplicated interfaces per page, 851-line entry page, polling without backoff.
+
+**False positives rejected (3rd occurrence of #1):**
+- `welding_pct * 30.0` in `calculate_project_progress` is CORRECT (fab on 0-100 scale, welding_pct capped 0-1) — same false positive as the two 2026-07-05 audits.
+- `.env` was NEVER committed (gitignored, no git history) — agents claimed otherwise; real issue is only plaintext dev creds in the local file.
+- "Part duplication bug" is latent, not live: `create_parts_for_production_line`'s only caller is the new-line branch; existing lines go through idempotent `sync_part_targets`.
+
+### What needs to be done next (recommended order):
+1. Re-enable RBAC + add auth to unprotected routers; remove/gate debug endpoints. 2. Fail-fast JWT secret, pin CORS origins. 3. Adopt Alembic (baseline current schema), then a constraint pass. 4. pytest + GitHub Actions with Postgres service container. 5. Railway backup/DR docs. 6. Repo cleanup (45 root scripts, dead `frontend/`, `main_copy.py`, tracked .db). Full report delivered in chat this session.
+
+---
+
 ## Date: 2026-07-13 (Session 10 — Welding tab: per-component steps + assembly backfill + qty tracking)
 
 ### Legacy vs Tagged line behaviour (clarified this session):

@@ -1,5 +1,26 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-13 (Session 13 — RBAC smoke test PASSED locally)
+
+### What we did:
+Ran the pending Session 12 smoke test against a local backend (same code as `demo` HEAD `0437fd1`, local Postgres + local `.env`). All checks pass:
+- Backend starts with fail-fast JWT (no missing-secret crash).
+- Dev/GM/PM env-credential logins work; missing/garbage tokens → 401 (old pre-deploy tokens will bounce as expected).
+- Supervisor (test user via API): all dashboards + `/projects` + `/users` views 200; shop-floor entry POST passes auth (422 on empty body = validation, not RBAC); **403 on project create and user create** — correct.
+- Operator (test user): 403 on projects, users, master — blocked everywhere as intended.
+- All 4 deleted debug endpoints confirmed gone from code and unreachable (404/405).
+- Test users created + deleted through the users API itself (also exercised USER_ADMINS gating; GM allowed, Supervisor 403).
+
+### Railway demo smoke test (same session, after user supplied URL):
+- Frontend: `https://independent-rebirth-demo.up.railway.app`; backend: `https://ej-production-demo-ca9e.up.railway.app` (extracted from the built JS bundle — record these somewhere durable).
+- **PASS**: backend booted (JWT secret picked up), no-token & garbage-token → 401, GM + PM logins work, all dashboards/projects/users/master 200 with GM token, deleted debug endpoints 404, **CORS correct** (frontend origin allowed, foreign origin preflight rejected 400 — `FRONTEND_ORIGINS` working).
+- Developer login initially looked failed (401) but that was only because the test used the *local* `.env` `DEV_PASS`, which differs from the value set on Railway. **User confirmed Developer login works on demo.** All smoke checks pass.
+
+### Still pending:
+- User's own manual verification on demo UI → explicit go-ahead → merge `demo` → `main`.
+
+---
+
 ## Date: 2026-07-13 (Session 12 — P0 security: RBAC re-enabled + full endpoint auth)
 
 ### Role matrix decided (with user):

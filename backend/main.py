@@ -173,6 +173,10 @@ _run_startup_migration("job_final_checks table", [
     """,
 ])
 
+_run_startup_migration("assembly_steps.completed_qty", [
+    "ALTER TABLE assembly_steps ADD COLUMN completed_qty INTEGER DEFAULT 0",
+])
+
 from backend.services.db_service import SessionLocal
 from backend.services.itemwise_backfill import backfill_itemwise
 backfill_itemwise(SessionLocal)

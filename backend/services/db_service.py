@@ -173,6 +173,7 @@ class AssemblyStep(Base):
     step_no = Column(Integer, nullable=False)
     label = Column(String, nullable=False)          # e.g. "'A' + Job Flanges → 'C'"
     status = Column(String, default="pending")       # pending | in_process | ready
+    completed_qty = Column(Integer, default=0)
     date_ready = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)
 

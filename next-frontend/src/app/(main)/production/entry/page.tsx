@@ -51,6 +51,7 @@ interface AssemblyStep {
   step_no: number;
   label: string;
   status: string;
+  completed_qty: number;
   date_ready?: string | null;
   notes?: string | null;
 }
@@ -600,25 +601,124 @@ export default function OperatorEntry() {
                 <div className="divide-y divide-line">
                   {[...assemblySteps]
                     .sort((a, b) => a.step_no - b.step_no)
-                    .map((step) => (
-                      <div key={step.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-ink">{step.step_no}. {step.label}</span>
-                          <Badge tone={step.status === "ready" ? "success" : "neutral"}>{step.status}</Badge>
+                    .map((step) => {
+                      const stepPending = Math.max(0, totalQty - step.completed_qty);
+                      const stepDone = step.completed_qty;
+                      const inputKey = `assembly_${step.id}`;
+                      return (
+                        <div key={step.id} className={`flex flex-col gap-3 p-4 ${step.status === "ready" ? "bg-success-tint/40" : ""}`}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`font-bold ${step.status === "ready" ? "text-success" : "text-ink"}`}>
+                              {step.step_no}. {step.label}
+                            </span>
+                            <Badge tone={step.status === "ready" ? "success" : "neutral"}>{step.status}</Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge tone="success">Done: {stepDone}</Badge>
+                            <Badge tone="critical">Pend: {stepPending}</Badge>
+                            <Badge tone="neutral">Target: {totalQty}</Badge>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                              type="number"
+                              min="1"
+                              max={stepPending}
+                              placeholder="Today's Qty"
+                              value={qtyInputs[inputKey] || ""}
+                              onChange={(e) => setQtyInputs({ ...qtyInputs, [inputKey]: e.target.value })}
+                              className="w-36"
+                            />
+                            <Button
+                              variant="secondary"
+                              disabled={submitting || !qtyInputs[inputKey]}
+                              onClick={() => {
+                                const add = parseInt(qtyInputs[inputKey] || "0");
+                                if (add > 0) {
+                                  handleUpdateAssemblyStep(step.id, { completed_qty: step.completed_qty + add });
+                                  setQtyInputs({ ...qtyInputs, [inputKey]: "" });
+                                }
+                              }}
+                            >
+                              Save Qty
+                            </Button>
+                            <Button
+                              variant={step.status === "ready" ? "secondary" : "primary"}
+                              disabled={submitting}
+                              onClick={() => handleUpdateAssemblyStep(step.id, { status: step.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
+                            >
+                              {step.status === "ready" ? "Mark Pending" : "Mark Ready"}
+                            </Button>
+                          </div>
                         </div>
-                        <Button
-                          variant={step.status === "ready" ? "secondary" : "primary"}
-                          disabled={submitting}
-                          onClick={() => handleUpdateAssemblyStep(step.id, { status: step.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
-                        >
-                          {step.status === "ready" ? "Mark Pending" : "Mark Ready"}
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </Card>
             ) : activeTab === "Welding" ? (
               <div className="flex flex-col gap-10">
+                <div>
+                  <h3 className="mb-4 text-lg font-bold text-ink">Welding Footage</h3>
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                    {(currentReqType === "DJ" ? ["MIG", "Grinding"] : ["TIG", "MIG", "Grinding"]).map((type) => {
+                      const isDJ = currentReqType === "DJ";
+                      const displayType = isDJ && type === "MIG" ? "Welding" : type;
+                      const target = weldingSummary?.targets?.[type] || 0;
+                      const completed = weldingSummary?.completed?.[type] || 0;
+                      const pending = Math.max(0, target - completed);
+                      const isComplete = pending <= 0 && target > 0;
+                      return (
+                        <Card key={type}>
+                          <div className={`flex items-center justify-between px-4 py-3 text-white ${isComplete ? "bg-success" : "bg-brand"}`}>
+                            <h3 className="font-bold">{displayType}</h3>
+                            <Badge tone="neutral">Target: {target.toFixed(1)} ft</Badge>
+                          </div>
+                          <div className="flex flex-col gap-4 p-5">
+                            <div className="flex items-center justify-between rounded-md border border-line bg-paper p-3">
+                              <div className="text-center">
+                                <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Done</div>
+                                <div className="font-data tabular-nums text-lg font-bold text-brand-deep">
+                                  {completed.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
+                                </div>
+                              </div>
+                              <div className="h-8 w-px bg-line" />
+                              <div className="text-center">
+                                <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Pending</div>
+                                <div className="font-data tabular-nums text-lg font-bold text-critical">
+                                  {pending.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
+                                </div>
+                              </div>
+                            </div>
+                            {!isComplete && target > 0 ? (
+                              <div className="mt-2 flex flex-col gap-2">
+                                <Input
+                                  type="number"
+                                  min="0.1"
+                                  step="0.1"
+                                  placeholder="Today's Feet Done"
+                                  value={feetInputs[type] || ""}
+                                  onChange={(e) => handleFeetChange(type, e.target.value)}
+                                />
+                                <Button
+                                  variant="primary"
+                                  className="w-full justify-center"
+                                  disabled={submitting || !feetInputs[type]}
+                                  onClick={() => handleGlobalWeldingSubmit(type)}
+                                >
+                                  Log {displayType} Progress
+                                </Button>
+                              </div>
+                            ) : target === 0 ? (
+                              <div className="py-4 text-center italic text-ink-soft">No {displayType} required for this size.</div>
+                            ) : (
+                              <div className="py-4 text-center font-bold text-success">Target Reached!</div>
+                            )}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div>
                   <h3 className="mb-4 text-lg font-bold text-ink">Component Welding Steps</h3>
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
@@ -695,69 +795,6 @@ export default function OperatorEntry() {
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="mb-4 text-lg font-bold text-ink">Welding Footage</h3>
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                    {(currentReqType === "DJ" ? ["MIG", "Grinding"] : ["TIG", "MIG", "Grinding"]).map((type) => {
-                      const isDJ = currentReqType === "DJ";
-                      const displayType = isDJ && type === "MIG" ? "Welding" : type;
-                      const target = weldingSummary?.targets?.[type] || 0;
-                      const completed = weldingSummary?.completed?.[type] || 0;
-                      const pending = Math.max(0, target - completed);
-                      const isComplete = pending <= 0 && target > 0;
-
-                      return (
-                        <Card key={type}>
-                          <div className={`flex items-center justify-between px-4 py-3 text-white ${isComplete ? "bg-success" : "bg-brand"}`}>
-                            <h3 className="font-bold">{displayType}</h3>
-                            <Badge tone="neutral">Target: {target.toFixed(1)} ft</Badge>
-                          </div>
-                          <div className="flex flex-col gap-4 p-5">
-                            <div className="flex items-center justify-between rounded-md border border-line bg-paper p-3">
-                              <div className="text-center">
-                                <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Done</div>
-                                <div className="font-data tabular-nums text-lg font-bold text-brand-deep">
-                                  {completed.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
-                                </div>
-                              </div>
-                              <div className="h-8 w-px bg-line" />
-                              <div className="text-center">
-                                <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Pending</div>
-                                <div className="font-data tabular-nums text-lg font-bold text-critical">
-                                  {pending.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
-                                </div>
-                              </div>
-                            </div>
-                            {!isComplete && target > 0 ? (
-                              <div className="mt-2 flex flex-col gap-2">
-                                <Input
-                                  type="number"
-                                  min="0.1"
-                                  step="0.1"
-                                  placeholder="Today's Feet Done"
-                                  value={feetInputs[type] || ""}
-                                  onChange={(e) => handleFeetChange(type, e.target.value)}
-                                />
-                                <Button
-                                  variant="primary"
-                                  className="w-full justify-center"
-                                  disabled={submitting || !feetInputs[type]}
-                                  onClick={() => handleGlobalWeldingSubmit(type)}
-                                >
-                                  Log {displayType} Progress
-                                </Button>
-                              </div>
-                            ) : target === 0 ? (
-                              <div className="py-4 text-center italic text-ink-soft">No {displayType} required for this size.</div>
-                            ) : (
-                              <div className="py-4 text-center font-bold text-success">Target Reached!</div>
-                            )}
-                          </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             ) : null}
 

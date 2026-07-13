@@ -66,6 +66,7 @@ def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_us
     steps = db.query(AssemblyStep).filter_by(production_line_id=line.id).order_by(AssemblyStep.step_no).all()
     steps_data = [{
         "id": s.id, "step_no": s.step_no, "label": s.label, "status": s.status,
+        "completed_qty": getattr(s, "completed_qty", 0) or 0,
         "date_ready": s.date_ready.isoformat() if s.date_ready else None, "notes": s.notes,
     } for s in steps]
     return {"success": True, "data": {
@@ -166,6 +167,7 @@ def update_final_check(check_id: int, body: FinalCheckUpdate, db: Session = Depe
 
 class AssemblyStepUpdate(BaseModel):
     status: Optional[str] = None
+    completed_qty: Optional[int] = None
     date_ready: Optional[date] = None
     notes: Optional[str] = None
 

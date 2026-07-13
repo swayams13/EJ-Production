@@ -34,6 +34,7 @@ def backfill_itemwise(SessionLocal):
                         added_steps += 1
 
             MESService.create_final_checks_for_line(db, line.id)
+            MESService.create_assembly_steps_for_line(db, line.id, getattr(line, "joint_type_code", None))
 
         db.commit()
         logger.info("itemwise backfill: added %d missing steps across %d lines", added_steps, len(lines))

@@ -1,5 +1,74 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-13 (Session 10 — Welding tab: per-component steps + assembly backfill)
+
+### What we did today:
+
+Two changes to make the 5-tab Shop Floor Entry fully match the Excel spec
+(`docs/EJ_DJ_12_Tag_Spec_for_Claude.xlsx` + `docs/PER_TAG_ASSEMBLY_MATERIAL_FAB_PLAN.md`).
+
+**Change 1 — Assembly steps backfill (`backend/services/itemwise_backfill.py`)**
+Added one line to `backfill_itemwise()` after the existing
+`create_final_checks_for_line` call:
+```python
+MESService.create_assembly_steps_for_line(db, line.id, getattr(line, "joint_type_code", None))
+```
+Root cause: any tagged line created/synced BEFORE the Session 8 Assembly Chain
+feature was deployed had zero `assembly_steps` rows, so the Assembly tab stayed
+hidden forever. The service function is already idempotent (skips step_nos
+already present, never resets a `ready` step) so this is safe on every startup.
+Guard: `create_assembly_steps_for_line` returns immediately for `None` /
+unknown tag — legacy/untagged lines are untouched.
+
+**Change 2 — Welding & Grinding tab split (`next-frontend/src/app/(main)/production/entry/page.tsx`)**
+The spec (confirmed with user 2026-07-13) requires the Welding tab to show:
+- **Section A — Component Welding Steps**: per-component cards (Element, Collar,
+  Weldend, Flange, Liner, Pipe-1, Pipe-2, etc.) each with qty entry + Save,
+  exactly like the Fabrication tab. These PartProcess rows (`process_name =
+  "Welding"`) already existed in the DB but were invisible — filtered out of
+  Fabrication by `isWeldingProcess()` and never shown on the Welding tab either.
+- **Section B — Welding Footage** (unchanged): TIG/MIG/Grinding feet cards.
+  EJ shows 3 cards; DJ shows 2 (MIG renamed "Welding", TIG hidden).
+
+Implementation: replaced the single-div Welding tab branch with a two-section
+`flex flex-col gap-10` wrapper. Section A reuses the identical card/process
+pattern from the Fabrication tab, filtered to `isWeldingProcess(proc.process_name)`.
+No new handlers, no new API calls, no backend changes.
+
+### Files changed (2):
+- `backend/services/itemwise_backfill.py` — 1 line added
+- `next-frontend/src/app/(main)/production/entry/page.tsx` — Welding tab branch
+  replaced (lines 620–683 in the original; ~120 lines in the new version)
+
+### ⚠️ OPEN FLAGS:
+- **Not committed or pushed.** `git add`/`commit`/`push origin demo` must be
+  done from the user's own terminal per `CLAUDE.md` workflow. Never touch `main`
+  without explicit go-ahead.
+- **TSX not machine-verified** (no npm-registry access). Hand-verified: types
+  match existing interfaces, all handlers (`handleSubmitProcess`, `handleQtyChange`)
+  are unchanged, all components (`Card`, `Badge`, `Button`, `Input`) are already
+  imported. Run `npm --prefix next-frontend run build` before pushing.
+- **Naming reference confirmed**: Internal Sleeve (IS) = Liner in app code.
+  Component nomenclature from the user's image is already correct in the
+  codebase — no renames needed.
+- **Assembly chain sequences** remain flagged "Pending GM sign-off" in the UI.
+  When GM responds, edit `ASSEMBLY_CHAINS` dict in `joint_catalog.py` only.
+- **Smoke test on demo after deploy**:
+  1. Tagged line → Assembly tab appears (backfill seeded steps).
+  2. Legacy/untagged line → no Assembly tab, no new rows.
+  3. Welding tab: per-component welding step cards appear above footage section.
+  4. Entering qty on a welding step (e.g. Element → Welding) saves and refreshes.
+  5. Footage section (TIG/MIG/Grinding feet) unaffected.
+
+### Decisions recorded:
+- User confirmed Option A for Welding tab (keep footage + add per-component steps).
+- Purchase items (Limit rod, Bolts, O-ring, Studs, Gaskets) stay in Fabrication
+  with just a "Ready" step — no change needed.
+- Internal Sleeve = Liner confirmed; no code renames required.
+- Nomenclature table (Progress-Report Form Name ↔ App Code Name) confirmed aligned.
+
+---
+
 ## Date: 2026-07-12 (Session 9 - Shop Floor Entry tab restructure: 5 top-level tabs)
 
 ### What we did today:

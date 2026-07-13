@@ -618,67 +618,146 @@ export default function OperatorEntry() {
                 </div>
               </Card>
             ) : activeTab === "Welding" ? (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                {(currentReqType === "DJ" ? ["MIG", "Grinding"] : ["TIG", "MIG", "Grinding"]).map((type) => {
-                  const isDJ = currentReqType === "DJ";
-                  const displayType = isDJ && type === "MIG" ? "Welding" : type;
-                  const target = weldingSummary?.targets?.[type] || 0;
-                  const completed = weldingSummary?.completed?.[type] || 0;
-                  const pending = Math.max(0, target - completed);
-                  const isComplete = pending <= 0 && target > 0;
-
-                  return (
-                    <Card key={type}>
-                      <div className={`flex items-center justify-between px-4 py-3 text-white ${isComplete ? "bg-success" : "bg-brand"}`}>
-                        <h3 className="font-bold">{displayType}</h3>
-                        <Badge tone="neutral">Target: {target.toFixed(1)} ft</Badge>
+              <div className="flex flex-col gap-10">
+                <div>
+                  <h3 className="mb-4 text-lg font-bold text-ink">Component Welding Steps</h3>
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                    {parts
+                      .filter((p) => !partId || p.id.toString() === partId)
+                      .filter((p) => p.processes.some((proc) => isWeldingProcess(proc.process_name)))
+                      .map((part) => (
+                        <Card key={part.id}>
+                          <div className="flex items-center justify-between bg-ink px-4 py-3 text-white">
+                            <h3 className="truncate pr-2 font-bold" title={part.name}>{part.name}</h3>
+                            <Badge tone="neutral">Target: {part.total_qty ?? totalQty}</Badge>
+                          </div>
+                          <div className="divide-y divide-line">
+                            {part.processes
+                              .filter((proc) => isWeldingProcess(proc.process_name))
+                              .map((proc) => {
+                                const partTarget = part.total_qty ?? totalQty;
+                                const pending = partTarget - proc.completed_qty;
+                                const isComplete = pending <= 0;
+                                return (
+                                  <div key={proc.id} className={`flex flex-col gap-3 p-4 ${isComplete ? "bg-success-tint/40" : ""}`}>
+                                    <div className="flex items-center justify-between">
+                                      <span className={`font-bold ${isComplete ? "text-success" : "text-ink"}`}>
+                                        {proc.process_name}
+                                      </span>
+                                      <div className="flex flex-wrap gap-2">
+                                        <Badge tone="success">Done: {proc.completed_qty}</Badge>
+                                        <Badge tone="critical">Pend: {proc.qty_pending ?? Math.max(0, pending)}</Badge>
+                                        {proc.status && proc.status !== "pending" && <Badge tone="neutral">{proc.status}</Badge>}
+                                      </div>
+                                    </div>
+                                    {!isComplete && (
+                                      <div className="mt-2 flex flex-col gap-2">
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          max={pending}
+                                          placeholder="Today's Qty"
+                                          value={qtyInputs[proc.id] || ""}
+                                          onChange={(e) => handleQtyChange(proc.id, e.target.value)}
+                                        />
+                                        <Button
+                                          variant="primary"
+                                          className="w-full justify-center"
+                                          disabled={submitting || !qtyInputs[proc.id]}
+                                          onClick={() => handleSubmitProcess(proc.id, proc.process_name)}
+                                        >
+                                          Save
+                                        </Button>
+                                      </div>
+                                    )}
+                                    {isComplete && (
+                                      <div className="mt-1 flex items-center gap-1 text-sm font-bold text-success">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Fully Completed
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </Card>
+                      ))}
+                    {parts
+                      .filter((p) => !partId || p.id.toString() === partId)
+                      .filter((p) => p.processes.some((proc) => isWeldingProcess(proc.process_name)))
+                      .length === 0 && (
+                      <div className="col-span-full rounded-lg border border-dashed border-line py-12 text-center">
+                        <p className="text-ink-soft">No welding steps for this requirement.</p>
                       </div>
+                    )}
+                  </div>
+                </div>
 
-                      <div className="flex flex-col gap-4 p-5">
-                        <div className="flex items-center justify-between rounded-md border border-line bg-paper p-3">
-                          <div className="text-center">
-                            <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Done</div>
-                            <div className="font-data tabular-nums text-lg font-bold text-brand-deep">
-                              {completed.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
-                            </div>
-                          </div>
-                          <div className="h-8 w-px bg-line" />
-                          <div className="text-center">
-                            <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Pending</div>
-                            <div className="font-data tabular-nums text-lg font-bold text-critical">
-                              {pending.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
-                            </div>
-                          </div>
-                        </div>
+                <div>
+                  <h3 className="mb-4 text-lg font-bold text-ink">Welding Footage</h3>
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                    {(currentReqType === "DJ" ? ["MIG", "Grinding"] : ["TIG", "MIG", "Grinding"]).map((type) => {
+                      const isDJ = currentReqType === "DJ";
+                      const displayType = isDJ && type === "MIG" ? "Welding" : type;
+                      const target = weldingSummary?.targets?.[type] || 0;
+                      const completed = weldingSummary?.completed?.[type] || 0;
+                      const pending = Math.max(0, target - completed);
+                      const isComplete = pending <= 0 && target > 0;
 
-                        {!isComplete && target > 0 ? (
-                          <div className="mt-2 flex flex-col gap-2">
-                            <Input
-                              type="number"
-                              min="0.1"
-                              step="0.1"
-                              placeholder="Today's Feet Done"
-                              value={feetInputs[type] || ""}
-                              onChange={(e) => handleFeetChange(type, e.target.value)}
-                            />
-                            <Button
-                              variant="primary"
-                              className="w-full justify-center"
-                              disabled={submitting || !feetInputs[type]}
-                              onClick={() => handleGlobalWeldingSubmit(type)}
-                            >
-                              Log {displayType} Progress
-                            </Button>
+                      return (
+                        <Card key={type}>
+                          <div className={`flex items-center justify-between px-4 py-3 text-white ${isComplete ? "bg-success" : "bg-brand"}`}>
+                            <h3 className="font-bold">{displayType}</h3>
+                            <Badge tone="neutral">Target: {target.toFixed(1)} ft</Badge>
                           </div>
-                        ) : target === 0 ? (
-                          <div className="py-4 text-center italic text-ink-soft">No {displayType} required for this size.</div>
-                        ) : (
-                          <div className="py-4 text-center font-bold text-success">Target Reached!</div>
-                        )}
-                      </div>
-                    </Card>
-                  );
-                })}
+                          <div className="flex flex-col gap-4 p-5">
+                            <div className="flex items-center justify-between rounded-md border border-line bg-paper p-3">
+                              <div className="text-center">
+                                <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Done</div>
+                                <div className="font-data tabular-nums text-lg font-bold text-brand-deep">
+                                  {completed.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
+                                </div>
+                              </div>
+                              <div className="h-8 w-px bg-line" />
+                              <div className="text-center">
+                                <div className="text-xs font-bold uppercase tracking-wide text-ink-soft">Pending</div>
+                                <div className="font-data tabular-nums text-lg font-bold text-critical">
+                                  {pending.toFixed(1)} <span className="text-sm font-normal text-ink-soft">ft</span>
+                                </div>
+                              </div>
+                            </div>
+                            {!isComplete && target > 0 ? (
+                              <div className="mt-2 flex flex-col gap-2">
+                                <Input
+                                  type="number"
+                                  min="0.1"
+                                  step="0.1"
+                                  placeholder="Today's Feet Done"
+                                  value={feetInputs[type] || ""}
+                                  onChange={(e) => handleFeetChange(type, e.target.value)}
+                                />
+                                <Button
+                                  variant="primary"
+                                  className="w-full justify-center"
+                                  disabled={submitting || !feetInputs[type]}
+                                  onClick={() => handleGlobalWeldingSubmit(type)}
+                                >
+                                  Log {displayType} Progress
+                                </Button>
+                              </div>
+                            ) : target === 0 ? (
+                              <div className="py-4 text-center italic text-ink-soft">No {displayType} required for this size.</div>
+                            ) : (
+                              <div className="py-4 text-center font-bold text-success">Target Reached!</div>
+                            )}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             ) : null}
 

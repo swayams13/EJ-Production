@@ -42,10 +42,16 @@ app.include_router(projects_router)
 app.include_router(scheduler_router)
 app.include_router(inventory_router)
 
-# Configure CORS
+# Configure CORS — origins come from FRONTEND_ORIGINS (comma-separated),
+# e.g. "https://ej-demo.up.railway.app,https://ej.example.com".
+_origins = [
+    o.strip()
+    for o in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exactly Next.js domain
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

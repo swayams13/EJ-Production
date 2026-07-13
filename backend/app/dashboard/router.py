@@ -6,16 +6,17 @@ import io
 
 from backend.services.db_service import get_db, Project, ProjectProductionLine
 from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel, aggregate_line_feet
+from backend.app.auth.rbac import require_roles, SUPERVISORS
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 @router.get("/status")
-def dashboard_status(target_days: int = 15):
+def dashboard_status(target_days: int = 15, current_user: dict = Depends(require_roles(SUPERVISORS))):
     status = get_company_capacity_status(target_days)
     return {"success": True, "message": "Status retrieved", "data": status}
 
 @router.get("/export")
-def export_dashboard():
+def export_dashboard(current_user: dict = Depends(require_roles(SUPERVISORS))):
     excel_bytes = generate_master_production_register_excel()
     if not excel_bytes:
         raise HTTPException(status_code=500, detail="Failed to generate excel")
@@ -87,12 +88,12 @@ def get_wip_dashboard(db: Session):
     return wip_data
 
 @router.get("/wip")
-def get_wip_dashboard_api(db: Session = Depends(get_db)):
+def get_wip_dashboard_api(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     data = get_wip_dashboard(db)
     return {"success": True, "message": "WIP dashboard retrieved", "data": data}
 
 @router.get("/executive")
-def get_executive_dashboard(db: Session = Depends(get_db)):
+def get_executive_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     total_active = db.query(Project).filter(Project.status == "Active").count()
     total_hold = db.query(Project).filter(Project.status == "Hold").count()
     total_completed = db.query(Project).filter(Project.status == "Completed").count()
@@ -126,7 +127,7 @@ def get_executive_dashboard(db: Session = Depends(get_db)):
     return {"success": True, "message": "Executive dashboard retrieved", "data": result}
 
 @router.get("/planning")
-def get_planning_dashboard(db: Session = Depends(get_db)):
+def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     from backend.services.mes_service import MESService
     from backend.services.db_service import User
     from datetime import date

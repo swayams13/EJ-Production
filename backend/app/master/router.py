@@ -9,7 +9,7 @@ from backend.services.production_service import (
 )
 from backend.services.db_service import get_db
 from backend.app.master.schemas import WorkforceUpdate, PoolUpdate, WeldingSizeCreate
-from backend.app.auth.rbac import require_roles
+from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT
 
 router = APIRouter(prefix="/api/v1/master", tags=["Master"])
 
@@ -22,41 +22,18 @@ def _read_upload_or_400(file: UploadFile):
     return file.file.read()
 
 @router.get("/joint-types")
-def get_joint_types():
+def get_joint_types(current_user: dict = Depends(require_roles(SUPERVISORS))):
     from backend.services import joint_catalog
     return {"success": True, "message": "Joint types retrieved", "data": joint_catalog.list_catalog()}
 
 @router.get("/welding")
-def get_welding_master_api():
+def get_welding_master_api(current_user: dict = Depends(require_roles(SUPERVISORS))):
     data = get_welding_master_latest()
     formatted_data = [{"size": d.size, "type": getattr(d, 'joint_type', 'EJ'), "tig_feet": round(d.tig_feet, 2) if d.tig_feet else 0, "mig_feet": round(d.mig_feet, 2) if d.mig_feet else 0, "grinding_feet": round(d.grinding_feet, 2) if d.grinding_feet else 0} for d in data]
     return {"success": True, "message": "Welding master retrieved", "data": formatted_data}
 
-@router.get("/dedupe-db")
-def dedupe_db(db: Session = Depends(get_db)):
-    from backend.services.db_service import WeldingMaster
-    
-    all_records = db.query(WeldingMaster).all()
-    seen = set()
-    deleted_count = 0
-    
-    # Sort by ID descending to keep newest
-    all_records.sort(key=lambda x: x.id, reverse=True)
-    
-    for r in all_records:
-        key = f"{r.joint_type}-{r.size}"
-        if key in seen:
-            db.delete(r)
-            deleted_count += 1
-        else:
-            seen.add(key)
-            r.version = 100 # Synchronize to a clean global version
-            
-    db.commit()
-    return {"success": True, "message": f"Deleted {deleted_count} duplicates and synchronized all sizes!"}
-
 @router.post("/welding-size")
-def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db)):
+def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
     from backend.services.db_service import WeldingMaster
     
     latest = db.query(WeldingMaster).filter(
@@ -92,57 +69,6 @@ def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db)):
             "grinding_feet": wm.grinding_feet
         }
     }
-
-@router.get("/sync-dj-temp")
-def sync_dj_temp():
-    """
-    Temporary route to trigger the DJ import script without needing the Railway Console.
-    """
-    from sqlalchemy import text
-    from backend.services.db_service import SessionLocal
-    
-    session = SessionLocal()
-    try:
-        session.execute(text("SELECT setval('welding_master_id_seq', COALESCE((SELECT MAX(id)+1 FROM welding_master), 1), false);"))
-        session.commit()
-    except Exception as e:
-        session.rollback()
-    finally:
-        session.close()
-        
-    success, msg = import_dismantling_joint_master()
-    return {"success": success, "message": msg}
-
-@router.get("/backfill-grinding")
-def backfill_grinding_feet():
-    """
-    Temporary route to backfill grinding feet for all previously loaded projects (both EJ and DJ).
-    """
-    from backend.services.db_service import SessionLocal, ProjectProductionLine, WeldingMaster
-    
-    session = SessionLocal()
-    try:
-        lines = session.query(ProjectProductionLine).all()
-        updated_count = 0
-        for line in lines:
-            master = session.query(WeldingMaster).filter(
-                WeldingMaster.size == line.size,
-                WeldingMaster.joint_type == line.joint_type
-            ).order_by(WeldingMaster.version.desc()).first()
-            
-            if master and master.grinding_feet:
-                expected_grinding = float(line.quantity) * float(master.grinding_feet)
-                if line.grinding_feet != expected_grinding:
-                    line.grinding_feet = expected_grinding
-                    updated_count += 1
-                    
-        session.commit()
-        return {"success": True, "message": f"Successfully backfilled grinding feet for {updated_count} production lines."}
-    except Exception as e:
-        session.rollback()
-        return {"success": False, "message": str(e)}
-    finally:
-        session.close()
 
 def auto_sync_all_projects_with_master():
     from backend.services.db_service import SessionLocal, ProjectProductionLine, Project, ProjectResourceAssignment
@@ -192,7 +118,7 @@ def auto_sync_all_projects_with_master():
         db.close()
 
 @router.post("/sync/ej")
-def sync_ej_master_api():
+def sync_ej_master_api(current_user: dict = Depends(require_roles(MANAGEMENT))):
     success, msg = import_welding_master_from_disk()
     if not success:
         raise HTTPException(status_code=500, detail=msg)
@@ -200,7 +126,7 @@ def sync_ej_master_api():
     return {"success": True, "message": msg, "data": {}}
 
 @router.post("/sync/dj")
-def sync_dj_master_api():
+def sync_dj_master_api(current_user: dict = Depends(require_roles(MANAGEMENT))):
     success, msg = import_dismantling_joint_master()
     if not success:
         raise HTTPException(status_code=500, detail=msg)
@@ -234,7 +160,7 @@ def dj_import_api(
     return {"success": True, "message": msg, "data": {}}
 
 @router.post("/sync/all")
-def sync_all_master_api():
+def sync_all_master_api(current_user: dict = Depends(require_roles(MANAGEMENT))):
     s1, m1 = import_welding_master_from_disk()
     s2, m2 = import_dismantling_joint_master()
     if not s1 or not s2:
@@ -243,13 +169,13 @@ def sync_all_master_api():
     return {"success": True, "message": f"EJ: {m1} | DJ: {m2}", "data": {}}
 
 @router.get("/workforce")
-def get_workforce_api(db = Depends(get_db)):
+def get_workforce_api(db = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     from backend.services.db_service import WorkforceMaster
     wf = db.query(WorkforceMaster).order_by(WorkforceMaster.id).all()
     return {"success": True, "message": "Workforce retrieved", "data": [{"id": w.id, "resource_type": w.resource_type, "productivity": w.avg_productivity_per_day} for w in wf]}
 
 @router.put("/workforce/{wf_id}")
-def update_workforce_api(wf_id: int, req: WorkforceUpdate, db = Depends(get_db)):
+def update_workforce_api(wf_id: int, req: WorkforceUpdate, db = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
     from backend.services.db_service import WorkforceMaster
     w = db.query(WorkforceMaster).filter(WorkforceMaster.id == wf_id).first()
     if w:
@@ -258,7 +184,7 @@ def update_workforce_api(wf_id: int, req: WorkforceUpdate, db = Depends(get_db))
     return {"success": True, "message": "Workforce updated", "data": {}}
 
 @router.get("/pool")
-def get_pool_api(db = Depends(get_db)):
+def get_pool_api(db = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     from backend.services.db_service import CompanyResourcePool
     from backend.services.production_service import get_company_capacity_status
     pool = db.query(CompanyResourcePool).first()
@@ -280,7 +206,7 @@ def get_pool_api(db = Depends(get_db)):
     return {"success": True, "message": "Pool retrieved", "data": data}
 
 @router.put("/pool")
-def update_pool_api(req: PoolUpdate, db = Depends(get_db)):
+def update_pool_api(req: PoolUpdate, db = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
     from backend.services.db_service import CompanyResourcePool
     pool = db.query(CompanyResourcePool).first()
     if not pool:

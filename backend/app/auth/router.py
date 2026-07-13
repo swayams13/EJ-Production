@@ -10,9 +10,14 @@ from backend.app.auth.schemas import LoginRequest
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "supersecretkey_for_ej_production")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY environment variable is not set. Refusing to start "
+        "with a default secret — set it in .env / Railway variables."
+    )
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # one factory shift; no refresh tokens yet
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 

@@ -27,13 +27,25 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+# Role groups — the confirmed role matrix (2026-07-13). Use these instead of
+# ad-hoc lists so the matrix lives in one place.
+# Workers/Operators have NO API access: they don't log in; supervisors enter
+# progress on their behalf (entries carry operator_id for attribution).
+MANAGEMENT = ["Developer", "GM", "Admin", "Production Manager"]
+SUPERVISORS = MANAGEMENT + ["Supervisor"]
+USER_ADMINS = ["Developer", "GM", "Production Manager"]
+
 def require_roles(allowed_roles: list[str]):
     def role_checker(user: dict = Depends(get_current_user)):
-        # Temporarily bypass RBAC checks for all users as requested
-        # if user["role"] not in allowed_roles:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail="Operation not permitted"
-        #     )
+        role = user["role"]
+        # Employees synced from Excel get role "Operator"; endpoint role lists
+        # historically say "Worker". Treat them as the same role.
+        if role == "Operator":
+            role = "Worker"
+        if role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Operation not permitted"
+            )
         return user
     return role_checker

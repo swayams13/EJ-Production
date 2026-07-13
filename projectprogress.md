@@ -1,5 +1,39 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-13 (Session 12 — P0 security: RBAC re-enabled + full endpoint auth)
+
+### Role matrix decided (with user):
+- **MANAGEMENT** (Developer, GM, Admin, Production Manager): project create/edit/delete/hold, simulations, master uploads/sync, inventory mutations, workforce/pool edits.
+- **SUPERVISORS** (MANAGEMENT + Supervisor): ALL views (dashboards, projects, master, inventory, users list) AND all shop-floor entry (transactions, welding logs, paint, final checks, assembly steps).
+- **USER_ADMINS** (Developer, GM, Production Manager — NOT Admin): user create/edit/delete.
+- **Workers/Operators: NO API access.** They don't log in; supervisors/PM enter progress on their behalf. Entries already carry optional `operator_id` for attribution (backend validated+stored), but the entry page has no operator picker yet — queued as follow-up.
+- Audit logs: Developer only (unchanged).
+
+### What we did:
+1. `auth/rbac.py` — role check re-enabled (403), `Operator`→`Worker` normalization in checker, role group constants (MANAGEMENT/SUPERVISORS/USER_ADMINS).
+2. `auth/router.py` — JWT secret now fail-fast (`RuntimeError` if `JWT_SECRET_KEY` unset, no hardcoded fallback); expiry 24h → 12h (one shift; no refresh tokens yet).
+3. `main.py` — CORS origins from `FRONTEND_ORIGINS` env (comma-separated), default `http://localhost:3000`.
+4. Deleted 4 unauthenticated mutating debug endpoints: `projects/debug_reload_feet`, `master/dedupe-db`, `master/sync-dj-temp`, `master/backfill-grinding` (no frontend references — verified).
+5. Auth added to every previously-open endpoint: projects (12), master (12), users (4), inventory (5), dashboard (5); production's 8 lists swapped to SUPERVISORS (Worker removed).
+
+### Verified:
+- py_compile clean on all 9 touched files; all 11 router modules import cleanly.
+- Coverage count: 54/55 endpoints gated; only `/auth/login` public (correct).
+- RBAC unit checks pass (Supervisor allowed/blocked correctly, Worker/Operator blocked, Admin blocked from user mgmt).
+- Generated `JWT_SECRET_KEY` appended to local `.env` (gitignored).
+
+### ⚠️ BEFORE THIS DEPLOYS ON RAILWAY (demo):
+1. **Set `JWT_SECRET_KEY`** in the backend service variables — the app now refuses to start without it.
+2. **Set `FRONTEND_ORIGINS`** to the demo frontend URL (comma-separated if multiple).
+3. Smoke test: login as GM/PM/Dev works; Supervisor user can use Shop Floor Entry but gets 403 on project create; operator-role account gets 403 everywhere; dashboards load.
+
+### Follow-ups queued:
+- Operator-picker dropdown on Shop Floor Entry forms (supervisor attributes each entry to the worker who did the work) — backend `operator_id` already supported.
+- Frontend 403 handling: `apiFetch` only handles 401 (redirect to login); a supervisor hitting a management action sees a silent failure. Add a toast for 403.
+- Refresh tokens (then drop expiry from 12h).
+
+---
+
 ## Date: 2026-07-13 (Session 11 — Full senior-engineer architecture/security/ops review)
 
 ### What we did today:

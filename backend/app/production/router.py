@@ -6,13 +6,13 @@ from typing import Optional
 
 from backend.services.db_service import get_db, ProjectProductionLine, PartProcess, ProductionLog, User, AuditLog, JobFinalCheck, AssemblyStep
 from backend.app.production.schemas import TransactionCreate, FinalCheckUpdate
-from backend.app.auth.rbac import require_roles
+from backend.app.auth.rbac import require_roles, SUPERVISORS
 from backend.services import joint_catalog
 
 router = APIRouter(prefix="/api/v1/production", tags=["Production"])
 
 @router.get("/requirements/{project_id}")
-def get_requirements(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+def get_requirements(project_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     lines = db.query(ProjectProductionLine).filter_by(project_id=project_id).all()
     return {"success": True, "data": [{
         "id": l.id,
@@ -26,7 +26,7 @@ def get_requirements(project_id: int, db: Session = Depends(get_db), current_use
     } for l in lines]}
 
 @router.get("/parts/{req_id}")
-def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -82,7 +82,7 @@ def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_us
     }}
 
 @router.post("/processes/{process_id}/transactions")
-def add_transaction(process_id: int, tx: TransactionCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+def add_transaction(process_id: int, tx: TransactionCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     proc = db.query(PartProcess).filter_by(id=process_id).first()
     if not proc:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -135,7 +135,7 @@ class PaintStatusUpdate(BaseModel):
     status: str
 
 @router.put("/requirements/{req_id}/paint-status")
-def update_paint_status(req_id: int, body: PaintStatusUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+def update_paint_status(req_id: int, body: PaintStatusUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -147,7 +147,7 @@ def update_paint_status(req_id: int, body: PaintStatusUpdate, db: Session = Depe
 
 @router.put("/final-checks/{check_id}")
 def update_final_check(check_id: int, body: FinalCheckUpdate, db: Session = Depends(get_db),
-                       current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"]))):
+                       current_user: dict = Depends(require_roles(SUPERVISORS))):
     check = db.query(JobFinalCheck).filter_by(id=check_id).first()
     if not check:
         raise HTTPException(status_code=404, detail="Final check not found")
@@ -173,7 +173,7 @@ class AssemblyStepUpdate(BaseModel):
 
 @router.put("/assembly-steps/{step_id}")
 def update_assembly_step(step_id: int, body: AssemblyStepUpdate, db: Session = Depends(get_db),
-                         current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"]))):
+                         current_user: dict = Depends(require_roles(SUPERVISORS))):
     step = db.query(AssemblyStep).filter_by(id=step_id).first()
     if not step:
         raise HTTPException(status_code=404, detail="Assembly step not found")
@@ -193,7 +193,7 @@ from backend.app.production.schemas import WeldingLogCreate
 from backend.services.db_service import WeldingLog
 
 @router.get("/requirements/{req_id}/welding_summary")
-def get_welding_summary(req_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+def get_welding_summary(req_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -218,7 +218,7 @@ def get_welding_summary(req_id: int, db: Session = Depends(get_db), current_user
 VALID_WELDING_PROCESS_TYPES = ("TIG", "MIG", "Grinding")
 
 @router.post("/requirements/{req_id}/welding_logs")
-def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor", "Worker"]))):
+def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Requirement not found")

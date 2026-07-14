@@ -1,5 +1,37 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-14 (Session 14 — 403 toast + operator picker on Shop Floor Entry)
+
+### What we did:
+
+**Change 1 — Global 403 handling (`next-frontend/src/lib/api.ts`)**
+Exported a `ForbiddenError` class and added a 403 branch in `apiFetch` that reads the backend `detail` field and throws it. Previously `apiFetch` only handled 401 (redirect to login); 403 was silently swallowed on GET fetches and surfaced only if callers explicitly checked `!res.ok`. Now every caller across the entire app gets a typed error automatically.
+
+**Change 2 — 403 toast on Shop Floor Entry (`next-frontend/src/app/(main)/production/entry/page.tsx`)**
+All 5 submit handlers (`handleSubmitProcess`, `handleUpdateCheck`, `handleUpdateAssemblyStep`, `handleGlobalWeldingSubmit`, `handlePaintStatusChange`) now check `err instanceof ForbiddenError` in their catch blocks and call `showToast(err.message, "critical")` instead of setting the inline `errorMsg` Alert. Toasts render above the page via `{toasts}`. Also added `.catch(() => {})` to the 3 GET `useEffect` chains so a stray 403 on load doesn't produce unhandled rejections.
+
+**Change 3 — Operator picker on Shop Floor Entry**
+Added an "Operator (Optional)" 4th dropdown to the selector card (grid changed from `md:grid-cols-3` to `md:grid-cols-2 lg:grid-cols-4`). Fetches `/api/v1/users` on mount, filters to `role === "Operator"`. The selected `operator_id` is passed in the POST body for every process transaction (`handleSubmitProcess`) and every welding footage log (`handleGlobalWeldingSubmit`). Backend `operator_id: Optional[int]` was already supported in both schemas — no backend changes needed. Default option is "-- Supervisor Entry --" (no operator attribution).
+
+### Files changed (2):
+- `next-frontend/src/lib/api.ts` — `ForbiddenError` class + 403 throw
+- `next-frontend/src/app/(main)/production/entry/page.tsx` — useToast, operator state/fetch/dropdown, operator_id in POST bodies, 5 catch blocks updated
+
+### Verified:
+- `npm --prefix next-frontend run build` passes clean (all 22 routes, no TS errors).
+
+### ⚠️ Still pending:
+- Push to `demo` branch (user must run `git add`/`commit`/`push origin demo` from terminal per CLAUDE.md workflow).
+- User's own manual verification on Railway demo UI → explicit go-ahead → merge `demo` → `main`.
+
+### Queued follow-ups (still open from Session 12):
+- Refresh tokens (then raise JWT expiry back up from 12h).
+- Task 11: Gating logic for Shop Floor Entry tabs (material gate, sequential gate, sub-assembly gate — UI-only).
+- Task 9: WIP dashboard "current stage" column.
+- Task 13: Per-project daily feet target + month-wise welder breakdown on Planning dashboard.
+
+---
+
 ## Date: 2026-07-13 (Session 13 — RBAC smoke test PASSED locally)
 
 ### What we did:

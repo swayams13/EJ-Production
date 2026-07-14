@@ -1,8 +1,8 @@
 "use client";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ForbiddenError } from "@/lib/api";
 
 import { useState, useEffect } from "react";
-import { Card, Select, Label, Button, Input, Badge, Alert } from "@/components/ui";
+import { Card, Select, Label, Button, Input, Badge, Alert, useToast } from "@/components/ui";
 
 interface ProjectOption {
   id: number;
@@ -92,13 +92,25 @@ export default function OperatorEntry() {
   const [assemblySteps, setAssemblySteps] = useState<AssemblyStep[]>([]);
   const [activeTab, setActiveTab] = useState<"Material" | "Fabrication" | "Assembly" | "Welding" | "FinalChecks">("Material");
 
+  const { showToast, toasts } = useToast();
+  const [operators, setOperators] = useState<{ id: number; full_name: string }[]>([]);
+  const [operatorId, setOperatorId] = useState("");
+
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
   const isMaterialProcess = (name: string) => /^(PO|Material Received|Inward Insp)$/i.test(name);
 
   useEffect(() => {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
       .then((res) => res.json())
-      .then((resData) => setProjects((resData.data || []).filter((p: ProjectOption) => p.status !== "Completed")));
+      .then((resData) => setProjects((resData.data || []).filter((p: ProjectOption) => p.status !== "Completed")))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`)
+      .then((res) => res.json())
+      .then((d) => setOperators((d.data || []).filter((u: { role: string }) => u.role === "Operator")))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -109,7 +121,8 @@ export default function OperatorEntry() {
     }
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${projectId}`)
       .then((res) => res.json())
-      .then((resData) => setRequirements(resData.data || []));
+      .then((resData) => setRequirements(resData.data || []))
+      .catch(() => {});
   }, [projectId]);
 
   useEffect(() => {
@@ -133,7 +146,8 @@ export default function OperatorEntry() {
           setPaintStatus(resData.data.paint_status || "");
           setTagNo(resData.data.tag_no || resData.data.joint_type_code || null);
         }
-      });
+      })
+      .catch(() => {});
 
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/welding_summary`)
       .then((res) => res.json())
@@ -141,7 +155,8 @@ export default function OperatorEntry() {
         if (resData.success) {
           setWeldingSummary(resData.data);
         }
-      });
+      })
+      .catch(() => {});
   }, [requirementId]);
 
   // If the active tab is "Assembly" but the current requirement has no assembly
@@ -182,6 +197,7 @@ export default function OperatorEntry() {
           quantity_completed: qty,
           feet_completed: feet > 0 ? feet : null,
           po_number: qtyInputs[`po_${processId}`] || null,
+          operator_id: operatorId ? parseInt(operatorId) : null,
         }),
       });
 
@@ -200,7 +216,8 @@ export default function OperatorEntry() {
 
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      if (err instanceof ForbiddenError) showToast(err.message, "critical");
+      else setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -219,7 +236,8 @@ export default function OperatorEntry() {
       const reqId = requirementId; setRequirementId(""); setTimeout(() => setRequirementId(reqId), 50);
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      if (err instanceof ForbiddenError) showToast(err.message, "critical");
+      else setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally { setSubmitting(false); }
   };
 
@@ -236,7 +254,8 @@ export default function OperatorEntry() {
       const reqId = requirementId; setRequirementId(""); setTimeout(() => setRequirementId(reqId), 50);
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      if (err instanceof ForbiddenError) showToast(err.message, "critical");
+      else setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally { setSubmitting(false); }
   };
 
@@ -255,7 +274,7 @@ export default function OperatorEntry() {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/welding_logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ process_type: processType, feet_done: feet }),
+        body: JSON.stringify({ process_type: processType, feet_done: feet, operator_id: operatorId ? parseInt(operatorId) : null }),
       });
 
       if (!res.ok) {
@@ -274,7 +293,8 @@ export default function OperatorEntry() {
 
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      if (err instanceof ForbiddenError) showToast(err.message, "critical");
+      else setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -308,7 +328,8 @@ export default function OperatorEntry() {
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
       setPaintStatus(prev);
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      if (err instanceof ForbiddenError) showToast(err.message, "critical");
+      else setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -338,7 +359,7 @@ export default function OperatorEntry() {
           </Alert>
         )}
 
-        <Card className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
+        <Card className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label>Project</Label>
             <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
@@ -370,6 +391,18 @@ export default function OperatorEntry() {
               {parts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div>
+            <Label>Operator (Optional)</Label>
+            <Select value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
+              <option value="">-- Supervisor Entry --</option>
+              {operators.map((op) => (
+                <option key={op.id} value={op.id}>
+                  {op.full_name}
                 </option>
               ))}
             </Select>
@@ -846,6 +879,7 @@ export default function OperatorEntry() {
           </div>
         )}
       </div>
+      {toasts}
     </div>
   );
 }

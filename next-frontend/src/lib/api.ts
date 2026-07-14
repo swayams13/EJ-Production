@@ -1,3 +1,10 @@
+export class ForbiddenError extends Error {
+  status = 403;
+  constructor(detail = "You don't have permission to perform this action.") {
+    super(detail);
+  }
+}
+
 export const apiFetch = async (url: string, options: RequestInit = {}) => {
   const token = localStorage.getItem("jwt_token");
 
@@ -30,6 +37,11 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     // Optional: handle token expiration by redirecting to login
     localStorage.removeItem("jwt_token");
     window.location.href = "/login";
+  }
+
+  if (response.status === 403) {
+    const body = await response.json().catch(() => ({})) as { detail?: string };
+    throw new ForbiddenError(body.detail);
   }
 
   return response;

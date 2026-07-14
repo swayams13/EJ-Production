@@ -24,6 +24,7 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
+    to_encode["type"] = "access"
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -37,7 +38,7 @@ def create_refresh_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 @router.post("/refresh")
-def refresh(req: RefreshRequest):
+def refresh(req: RefreshRequest, db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(req.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("type") != "refresh":
@@ -48,6 +49,28 @@ def refresh(req: RefreshRequest):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     except jwt.PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+
+    # Re-check current authorization from DB (stale-authorization fix).
+    # Env-var users (DEV_USER, GM_USER, etc.) have no DB record; fall back to
+    # token role for them — env-var changes require a restart which invalidates all tokens.
+    db_user = db.query(User).filter(User.username == username).first()
+    if db_user:
+        role = db_user.role
+    user_id = db_user.id if db_user else None
+
+    try:
+        db.add(AuditLog(
+            user_id=user_id,
+            username=username,
+            action="TokenRefresh",
+            table_name="auth",
+            details=f"Access token refreshed for {username} (role: {role})",
+        ))
+        db.commit()
+    except Exception as e:
+        print(f"Failed to write refresh audit log: {e}")
+        db.rollback()
+
     access_token = create_access_token(
         data={"sub": username, "role": role},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),

@@ -42,7 +42,7 @@
 - `py_compile` clean on all backend files; `npm --prefix next-frontend run build` passes clean (22 routes).
 
 ### ⚠️ Still pending:
-- Push to `demo` branch (git add/commit/push origin demo from terminal).
+- ~~Push to `demo` branch~~ — done (4141f27).
 - User manual verification on Railway demo → explicit go-ahead → merge `demo` → `main`.
 
 ---
@@ -68,14 +68,51 @@ Added an "Operator (Optional)" 4th dropdown to the selector card (grid changed f
 - `npm --prefix next-frontend run build` passes clean (all 22 routes, no TS errors).
 
 ### ⚠️ Still pending:
-- Push to `demo` branch (user must run `git add`/`commit`/`push origin demo` from terminal per CLAUDE.md workflow).
-- User's own manual verification on Railway demo UI → explicit go-ahead → merge `demo` → `main`.
+- ~~Push to demo~~ — done (98248de).
+- User manual verification on Railway demo UI → explicit go-ahead → merge `demo` → `main`.
 
-### Queued follow-ups (still open from Session 12):
-- Refresh tokens (then raise JWT expiry back up from 12h).
-- Task 11: Gating logic for Shop Floor Entry tabs (material gate, sequential gate, sub-assembly gate — UI-only).
-- Task 9: WIP dashboard "current stage" column.
-- Task 13: Per-project daily feet target + month-wise welder breakdown on Planning dashboard.
+---
+
+## Date: 2026-07-14 (Session 14 — demo verification + JWT security fixes)
+
+### What we did:
+
+**Demo verification (commits 98248de → 4141f27)**
+- Ran full API verification against Railway demo `ej-production-demo-ca9e.up.railway.app`
+- Background security review flagged 3 JWT issues mid-verification; fixed all before completing the sweep
+
+**JWT security fixes (`b768408`, `backend/app/auth/router.py` + `backend/app/auth/rbac.py`)**
+1. **auth-token-confusion** — `create_access_token` now embeds `"type":"access"` claim; `get_current_user` in rbac.py rejects any token without `type=="access"` → refresh tokens can no longer be used as access tokens
+2. **stale-authorization** — `/refresh` endpoint now re-queries DB for the user's current role; DB role changes take effect immediately on next refresh; env-var users fall back to token role (restart invalidates tokens anyway)
+3. **audit-gap** — `/refresh` endpoint now writes `TokenRefresh` entry to `AuditLog`; refresh events are now auditable
+
+**Bug fix: `/wip/lines` 500 (`eb54b22`, `backend/app/dashboard/router.py`)**
+- `line.type` → `line.joint_type` (no `type` column on `ProjectProductionLine`; column is `joint_type`)
+- Endpoint now returns 200 with 10 rows on Railway demo
+
+### Verification results (Railway demo `eb54b22`):
+
+| Check | Result |
+|---|---|
+| `access_token` has `type:"access"` in JWT payload | ✅ |
+| Refresh token rejected on protected endpoint (401) | ✅ |
+| `/auth/refresh` issues new `type:"access"` token | ✅ |
+| `/wip/lines` → 200, 10 rows, `current_stage` populated | ✅ |
+| `/planning` pacing_metrics has `remaining_feet`, `days_to_deadline`, `monthly_feet` | ✅ |
+| `/users` → 57 operators available for operator picker | ✅ |
+| 403 toast on Shop Floor Entry | ⬜ needs browser — not verifiable via API |
+| Fabrication/assembly gating UI | ⬜ needs browser |
+
+### Files changed:
+- `backend/app/auth/router.py` — `type:"access"` in access tokens, /refresh re-queries DB, /refresh audit log
+- `backend/app/auth/rbac.py` — rejects non-access tokens in `get_current_user`
+- `backend/app/dashboard/router.py` — `line.type` → `line.joint_type`
+
+### ⚠️ Pending:
+- User to open Railway demo in browser and verify: 403 toast (try a forbidden action as Supervisor), operator dropdown visible, fabrication tab disabled when Material Received = 0
+- After manual OK → explicit go-ahead to merge `demo` → `main`
+
+**Note:** Adding `type:"access"` to access tokens invalidates any existing Railway demo sessions. Users need to log in once after this deploy.
 
 ---
 

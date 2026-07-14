@@ -33,9 +33,25 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     throw new Error(`Network request to ${url} failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  if (response.status === 401) {
-    // Optional: handle token expiration by redirecting to login
+  if (response.status === 401 && !url.includes("/auth/refresh")) {
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (refreshToken) {
+      const apiBase = url.startsWith("http") ? new URL(url).origin : window.location.origin;
+      const refreshRes = await fetch(`${apiBase}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        cache: "no-store",
+      }).catch(() => null);
+      if (refreshRes?.ok) {
+        const { access_token } = await refreshRes.json();
+        localStorage.setItem("jwt_token", access_token);
+        headers.set("Authorization", `Bearer ${access_token}`);
+        return fetch(liveUrl, { ...config, headers });
+      }
+    }
     localStorage.removeItem("jwt_token");
+    localStorage.removeItem("refresh_token");
     window.location.href = "/login";
   }
 

@@ -2,11 +2,21 @@
 import { apiFetch } from "@/lib/api";
 
 import { useEffect, useState } from "react";
-import { Card, ProgressBar, Spinner } from "@/components/ui";
+import { Card, ProgressBar, Spinner, Table, THead, TBody, Tr, Th, Td, Badge } from "@/components/ui";
 
 interface ShopWip {
   required: number;
   completed: number;
+}
+
+interface LineRow {
+  project_name: string;
+  quotation_no: string;
+  line_type: string;
+  size: string;
+  tag_no?: string | null;
+  qty: number;
+  current_stage: string;
 }
 
 const SHOP_TONES: Array<"brand" | "success" | "warning" | "critical"> = [
@@ -18,6 +28,7 @@ const SHOP_TONES: Array<"brand" | "success" | "warning" | "critical"> = [
 
 export default function WipDashboard() {
   const [wipData, setWipData] = useState<Record<string, ShopWip>>({});
+  const [lines, setLines] = useState<LineRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,6 +46,10 @@ export default function WipDashboard() {
     };
 
     fetchWip();
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/wip/lines`)
+      .then((res) => res.json())
+      .then((d) => setLines(d.data || []))
+      .catch(() => {});
     const interval = setInterval(fetchWip, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -94,6 +109,43 @@ export default function WipDashboard() {
           {Object.keys(wipData).length === 0 && (
             <p className="text-sm text-ink-soft">No active production data.</p>
           )}
+        </div>
+      )}
+
+      {lines.length > 0 && (
+        <div>
+          <h2 className="mb-4 text-xl font-bold text-ink">Current Stage by Line</h2>
+          <Card>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Project</Th>
+                  <Th>Type</Th>
+                  <Th>Size</Th>
+                  <Th numeric>Qty</Th>
+                  <Th>Current Stage</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {lines.map((row, i) => (
+                  <Tr key={i}>
+                    <Td>
+                      <span className="font-bold text-ink">{row.project_name}</span>
+                      {row.tag_no && <span className="ml-2 text-xs text-ink-soft">{row.tag_no}</span>}
+                    </Td>
+                    <Td>{row.line_type}</Td>
+                    <Td>{row.size}</Td>
+                    <Td numeric>{row.qty}</Td>
+                    <Td>
+                      <Badge tone={row.current_stage === "Complete" ? "success" : "neutral"}>
+                        {row.current_stage}
+                      </Badge>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </Card>
         </div>
       )}
     </div>

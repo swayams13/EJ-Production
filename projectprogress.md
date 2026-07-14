@@ -1,5 +1,52 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-14 (Session 14 — refresh tokens, gating logic, WIP current stage, planning targets)
+
+### What we did:
+
+**Refresh tokens (`backend/app/auth/router.py`, `backend/app/auth/schemas.py`, `next-frontend/src/app/page.tsx`, `next-frontend/src/lib/api.ts`)**
+- Stateless JWT refresh token (30-day, `type:"refresh"` claim) returned on login alongside access token
+- New `POST /api/v1/auth/refresh` endpoint: validates refresh token, issues new access token (no DB storage)
+- Access token raised back to 24h (was 12h)
+- `apiFetch` intercepts 401: attempts refresh, retries original request once with new token; clears both tokens + redirects to login only if refresh fails
+- Login page stores `refresh_token` in localStorage
+
+**Task 11 — Shop Floor Entry gating logic (`next-frontend/src/app/(main)/production/entry/page.tsx`)**
+- Helper functions: `getFabProcesses(part)`, `getMaterialReceivedQty(part)`
+- **Material gate**: fab steps disabled + "Awaiting material receipt" hint if Material Received qty = 0
+- **Sequential gate**: fab step N+1 disabled + hint if step N completed_qty = 0; `max` on input capped to prev step qty
+- **Assembly sequential gate**: assembly step N+1 disabled if step N completed_qty = 0; Save Qty input + Mark Ready button disabled
+- All UI-only; no backend enforcement
+
+**Task 9 — WIP dashboard current stage (`backend/app/dashboard/router.py`, `next-frontend/src/app/(main)/dashboard/wip/page.tsx`)**
+- New `GET /api/v1/dashboard/wip/lines` endpoint: iterates active/planning project lines, returns first non-complete process step per line as `current_stage`
+- WIP page: new "Current Stage by Line" table below shop cards — Project, Type, Size, Qty, Current Stage (Badge: success if Complete, neutral otherwise)
+
+**Task 13 — Planning dashboard per-project targets + month-wise breakdown (`backend/app/dashboard/router.py`, `next-frontend/src/app/(main)/dashboard/planning/page.tsx`)**
+- Backend extends `pacing_metrics` with: `project_name`, `remaining_feet`, `days_to_deadline`, `today_logged_ft` (queried from WeldingLog.date == today), `gap_today`, `monthly_feet` (3-element allocation)
+- Two new planning page sections:
+  - "Per-Project Feet Targets (Today)": remaining ft, days left (color-coded), required ft/day, today logged, gap badge
+  - "Month-wise Welder Demand by Project": matrix table with per-project monthly ft + total demand row
+
+### Files changed (9):
+- `backend/app/auth/router.py` — refresh token + endpoint + 24h expiry
+- `backend/app/auth/schemas.py` — RefreshRequest model
+- `backend/app/dashboard/router.py` — wip/lines endpoint + pacing_metrics extensions + monthly breakdown
+- `next-frontend/src/lib/api.ts` — 401 intercept with refresh + retry
+- `next-frontend/src/app/page.tsx` — store refresh_token on login
+- `next-frontend/src/app/(main)/production/entry/page.tsx` — gating logic (material + sequential + assembly)
+- `next-frontend/src/app/(main)/dashboard/wip/page.tsx` — current stage table
+- `next-frontend/src/app/(main)/dashboard/planning/page.tsx` — per-project targets + month-wise demand
+
+### Verified:
+- `py_compile` clean on all backend files; `npm --prefix next-frontend run build` passes clean (22 routes).
+
+### ⚠️ Still pending:
+- Push to `demo` branch (git add/commit/push origin demo from terminal).
+- User manual verification on Railway demo → explicit go-ahead → merge `demo` → `main`.
+
+---
+
 ## Date: 2026-07-14 (Session 14 — 403 toast + operator picker on Shop Floor Entry)
 
 ### What we did:

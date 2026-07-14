@@ -99,6 +99,11 @@ export default function OperatorEntry() {
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
   const isMaterialProcess = (name: string) => /^(PO|Material Received|Inward Insp)$/i.test(name);
 
+  const getFabProcesses = (part: PartRow) =>
+    part.processes.filter((p) => !isWeldingProcess(p.process_name) && !isMaterialProcess(p.process_name));
+  const getMaterialReceivedQty = (part: PartRow) =>
+    part.processes.find((p) => /^material received$/i.test(p.process_name))?.completed_qty ?? 0;
+
   useEffect(() => {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
       .then((res) => res.json())
@@ -553,12 +558,15 @@ export default function OperatorEntry() {
                       </div>
 
                       <div className="divide-y divide-line">
-                        {part.processes
-                          .filter((proc) => !isWeldingProcess(proc.process_name) && !isMaterialProcess(proc.process_name))
-                          .map((proc) => {
+                        {(() => {
+                          const fabProcs = getFabProcesses(part);
+                          const matQty = getMaterialReceivedQty(part);
+                          return fabProcs.map((proc, fabIdx) => {
                             const partTarget = part.total_qty ?? totalQty;
                             const pending = partTarget - proc.completed_qty;
                             const isComplete = pending <= 0;
+                            const maxQty = fabIdx === 0 ? matQty : (fabProcs[fabIdx - 1]?.completed_qty ?? 0);
+                            const isGated = !isComplete && maxQty === 0;
 
                             return (
                               <div key={proc.id} className={`flex flex-col gap-3 p-4 ${isComplete ? "bg-success-tint/40" : ""}`}>
@@ -576,18 +584,24 @@ export default function OperatorEntry() {
 
                                 {!isComplete && (
                                   <div className="mt-2 flex flex-col gap-2">
+                                    {isGated && (
+                                      <p className="text-xs italic text-ink-soft">
+                                        {fabIdx === 0 ? "Awaiting material receipt" : `Awaiting: ${fabProcs[fabIdx - 1].process_name}`}
+                                      </p>
+                                    )}
                                     <Input
                                       type="number"
                                       min="1"
-                                      max={pending}
+                                      max={Math.min(pending, maxQty || Infinity)}
                                       placeholder="Today's Qty"
                                       value={qtyInputs[proc.id] || ""}
                                       onChange={(e) => handleQtyChange(proc.id, e.target.value)}
+                                      disabled={isGated}
                                     />
                                     <Button
                                       variant="primary"
                                       className="w-full justify-center"
-                                      disabled={submitting || !qtyInputs[proc.id]}
+                                      disabled={submitting || isGated || !qtyInputs[proc.id]}
                                       onClick={() => handleSubmitProcess(proc.id, proc.process_name)}
                                     >
                                       Save
@@ -608,8 +622,9 @@ export default function OperatorEntry() {
                                 )}
                               </div>
                             );
-                          })}
-                        {part.processes.filter((proc) => !isWeldingProcess(proc.process_name) && !isMaterialProcess(proc.process_name)).length === 0 && (
+                          });
+                        })()}
+                        {getFabProcesses(part).length === 0 && (
                           <div className="p-4 text-center text-sm italic text-ink-soft">
                             No fabrication processes for this part.
                           </div>
@@ -634,8 +649,10 @@ export default function OperatorEntry() {
                 <div className="divide-y divide-line">
                   {[...assemblySteps]
                     .sort((a, b) => a.step_no - b.step_no)
-                    .map((step) => {
+                    .map((step, idx, sorted) => {
                       const stepPending = Math.max(0, totalQty - step.completed_qty);
+                      const maxQty = idx === 0 ? totalQty : (sorted[idx - 1]?.completed_qty ?? 0);
+                      const isGated = step.status !== "ready" && maxQty === 0;
                       const stepDone = step.completed_qty;
                       const inputKey = `assembly_${step.id}`;
                       return (
@@ -651,19 +668,25 @@ export default function OperatorEntry() {
                             <Badge tone="critical">Pend: {stepPending}</Badge>
                             <Badge tone="neutral">Target: {totalQty}</Badge>
                           </div>
+                          {isGated && (
+                            <p className="text-xs italic text-ink-soft">
+                              Awaiting: {sorted[idx - 1]?.label}
+                            </p>
+                          )}
                           <div className="flex flex-wrap items-center gap-2">
                             <Input
                               type="number"
                               min="1"
-                              max={stepPending}
+                              max={Math.min(stepPending, maxQty || Infinity)}
                               placeholder="Today's Qty"
                               value={qtyInputs[inputKey] || ""}
                               onChange={(e) => setQtyInputs({ ...qtyInputs, [inputKey]: e.target.value })}
                               className="w-36"
+                              disabled={isGated}
                             />
                             <Button
                               variant="secondary"
-                              disabled={submitting || !qtyInputs[inputKey]}
+                              disabled={submitting || isGated || !qtyInputs[inputKey]}
                               onClick={() => {
                                 const add = parseInt(qtyInputs[inputKey] || "0");
                                 if (add > 0) {
@@ -676,7 +699,7 @@ export default function OperatorEntry() {
                             </Button>
                             <Button
                               variant={step.status === "ready" ? "secondary" : "primary"}
-                              disabled={submitting}
+                              disabled={submitting || (isGated && step.status !== "ready")}
                               onClick={() => handleUpdateAssemblyStep(step.id, { status: step.status === "ready" ? "pending" : "ready", date_ready: new Date().toISOString().slice(0, 10) })}
                             >
                               {step.status === "ready" ? "Mark Pending" : "Mark Ready"}

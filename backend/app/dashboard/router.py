@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 from datetime import datetime
 import io
@@ -92,6 +93,50 @@ def get_wip_dashboard_api(db: Session = Depends(get_db), current_user: dict = De
     data = get_wip_dashboard(db)
     return {"success": True, "message": "WIP dashboard retrieved", "data": data}
 
+
+def _current_stage_for_line(line) -> str:
+    """Return the process_name of the first non-complete step across all parts."""
+    for part in sorted(line.parts, key=lambda p: p.id):
+        target = part.total_qty or line.quantity or 0
+        if not target:
+            continue
+        for proc in sorted(part.processes, key=lambda pr: pr.id):
+            if (proc.completed_qty or 0) < target:
+                return proc.process_name
+    return "Complete"
+
+
+@router.get("/wip/lines")
+def get_wip_lines(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
+    from sqlalchemy.orm import selectinload
+    from backend.services.db_service import Part
+
+    active_projects = (
+        db.query(Project)
+        .filter(Project.status.in_(["Active", "Planning"]))
+        .all()
+    )
+    rows = []
+    for p in active_projects:
+        lines = (
+            db.query(ProjectProductionLine)
+            .options(selectinload(ProjectProductionLine.parts).selectinload(Part.processes))
+            .filter_by(project_id=p.id)
+            .all()
+        )
+        for line in lines:
+            rows.append({
+                "project_name": p.project_name or p.quotation_no,
+                "quotation_no": p.quotation_no,
+                "line_type": line.type,
+                "size": line.size,
+                "tag_no": getattr(line, "joint_type_code", None),
+                "qty": line.quantity,
+                "current_stage": _current_stage_for_line(line),
+            })
+    return {"success": True, "data": rows}
+
+
 @router.get("/executive")
 def get_executive_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     total_active = db.query(Project).filter(Project.status == "Active").count()
@@ -175,31 +220,36 @@ def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = D
         progress_pct = MESService.calculate_project_progress(db, p.id)
         remaining_feet = total_feet * (1 - (progress_pct / 100))
         
+        days_to_deadline = (p.target_date - today).days if p.target_date else None
+        project_monthly = [0.0, 0.0, 0.0]
+
         if p.target_date:
-            days_away = (p.target_date - today).days
+            days_away = days_to_deadline
             if days_away < 0:
                 weekly_buckets[0]["demand"] += remaining_feet
                 monthly_buckets[0]["demand"] += remaining_feet
+                project_monthly[0] += remaining_feet
             else:
                 week_idx = days_away // 7
                 if week_idx > 3:
                     week_idx = 3
-                
+
                 available_weeks = week_idx + 1
                 weekly_portion = remaining_feet / available_weeks
                 for i in range(available_weeks):
                     if i < 4:
                         weekly_buckets[i]["demand"] += weekly_portion
-                
+
                 month_idx = days_away // 30
                 if month_idx > 2:
                     month_idx = 2
-                    
+
                 available_months = month_idx + 1
                 monthly_portion = remaining_feet / available_months
                 for i in range(available_months):
                     if i < 3:
                         monthly_buckets[i]["demand"] += monthly_portion
+                        project_monthly[i] += monthly_portion
         else:
             unscheduled_demand += remaining_feet
             
@@ -232,20 +282,35 @@ def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = D
         tig_req = today_requirement * (total_tig / total_feet) if total_feet > 0 else 0
         mig_req = today_requirement * (total_mig / total_feet) if total_feet > 0 else 0
         grind_req = today_requirement * (total_grind / total_feet) if total_feet > 0 else 0
-        
+
+        from backend.services.db_service import WeldingLog
+        today_logged_ft = (
+            db.query(sqlfunc.sum(WeldingLog.feet_done))
+            .join(ProjectProductionLine, WeldingLog.production_line_id == ProjectProductionLine.id)
+            .filter(ProjectProductionLine.project_id == p.id)
+            .filter(WeldingLog.date == today)
+            .scalar()
+        ) or 0.0
+
         pacing_metrics.append({
             "project_id": p.id,
             "project_number": p.quotation_no,
+            "project_name": p.project_name or p.quotation_no,
             "total_feet": round(total_feet, 1),
+            "remaining_feet": round(total_feet - actual_completed, 1),
+            "days_to_deadline": days_to_deadline,
             "base_daily_target": round(base_daily_target, 1),
             "days_elapsed": days_elapsed,
             "expected_completed": round(expected_completed, 1),
             "actual_completed": round(actual_completed, 1),
             "backlog": round(backlog, 1),
             "today_requirement": round(today_requirement, 1),
+            "today_logged_ft": round(today_logged_ft, 1),
+            "gap_today": round(today_requirement - today_logged_ft, 1),
             "tig_req": round(tig_req, 1),
             "mig_req": round(mig_req, 1),
-            "grind_req": round(grind_req, 1)
+            "grind_req": round(grind_req, 1),
+            "monthly_feet": [round(x, 1) for x in project_monthly],
         })
             
     # Clean up floats

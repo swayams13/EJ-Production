@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
 from backend.services.db_service import get_db, User, AuditLog
-from backend.app.auth.schemas import LoginRequest
+from backend.app.auth.schemas import LoginRequest, RefreshRequest
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -17,7 +17,8 @@ if not SECRET_KEY:
         "with a default secret — set it in .env / Railway variables."
     )
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # one factory shift; no refresh tokens yet
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24h; refresh tokens handle re-auth
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -30,6 +31,28 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def create_refresh_token(data: dict) -> str:
+    to_encode = {**data, "type": "refresh", "exp": datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+@router.post("/refresh")
+def refresh(req: RefreshRequest):
+    try:
+        payload = jwt.decode(req.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        username = payload.get("sub")
+        role = payload.get("role")
+        if not username or not role:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+    access_token = create_access_token(
+        data={"sub": username, "role": role},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -86,5 +109,6 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": req.username, "role": role}, expires_delta=access_token_expires
     )
-    
-    return {"access_token": access_token, "token_type": "bearer", "role": role}
+    refresh_token = create_refresh_token(data={"sub": req.username, "role": role})
+
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "role": role}

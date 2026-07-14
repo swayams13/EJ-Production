@@ -128,7 +128,7 @@ def get_wip_lines(db: Session = Depends(get_db), current_user: dict = Depends(re
             rows.append({
                 "project_name": p.project_name or p.quotation_no,
                 "quotation_no": p.quotation_no,
-                "line_type": line.type,
+                "line_type": line.joint_type,
                 "size": line.size,
                 "tag_no": getattr(line, "joint_type_code", None),
                 "qty": line.quantity,

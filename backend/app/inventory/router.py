@@ -3,17 +3,17 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.services.db_service import get_db, RawMaterialInventory, Project, ProjectProductionLine
-from backend.app.auth.rbac import require_roles
+from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT
 from backend.app.inventory.schemas import InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse, ShortageResponse
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["Inventory"])
 
 @router.get("", response_model=List[InventoryItemResponse])
-def get_inventory(db: Session = Depends(get_db)):
+def get_inventory(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     return db.query(RawMaterialInventory).all()
 
 @router.post("", response_model=InventoryItemResponse)
-def add_inventory_item(item: InventoryItemCreate, db: Session = Depends(get_db)):
+def add_inventory_item(item: InventoryItemCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
     # Check if item exists
     existing = db.query(RawMaterialInventory).filter_by(
         material_name=item.material_name,
@@ -35,7 +35,7 @@ def add_inventory_item(item: InventoryItemCreate, db: Session = Depends(get_db))
     return new_item
 
 @router.put("/{item_id}", response_model=InventoryItemResponse)
-def update_inventory_item(item_id: int, updates: InventoryItemUpdate, db: Session = Depends(get_db)):
+def update_inventory_item(item_id: int, updates: InventoryItemUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
     item = db.query(RawMaterialInventory).filter_by(id=item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -50,7 +50,7 @@ def update_inventory_item(item_id: int, updates: InventoryItemUpdate, db: Sessio
     return item
 
 @router.delete("/{item_id}")
-def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
+def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
     item = db.query(RawMaterialInventory).filter_by(id=item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -60,7 +60,7 @@ def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
     return {"success": True, "message": "Item deleted"}
 
 @router.get("/shortages", response_model=List[ShortageResponse])
-def get_material_shortages(db: Session = Depends(get_db)):
+def get_material_shortages(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     # Include Active, Hold, and Planning projects - only Completed projects have
     # no material demand left. Previously this only checked status == "Active",
     # so Hold/Planning projects' material needs never surfaced as shortages.
@@ -76,20 +76,33 @@ def get_material_shortages(db: Session = Depends(get_db)):
     shortages = []
 
     for project in relevant_projects:
-        for line in project.production_lines:
-            req_qty = line.quantity
-            current_stock = stock_map.get(("bellows", line.size, line.joint_type), 0)
-            
-            if req_qty > current_stock:
-                shortages.append(ShortageResponse(
-                    project_id=project.id,
-                    project_code=project.quotation_no,
-                    material_name="Bellows",
-                    size=line.size,
-                    joint_type=line.joint_type,
-                    required_qty=req_qty,
-                    current_stock=current_stock,
-                    deficit=req_qty - current_stock
-                ))
-                
+        try:
+            for line in project.production_lines:
+                try:
+                    for part in line.parts:
+                        required = getattr(part, 'total_qty', 0)
+                        if not required:
+                            continue
+                        key = (part.name.lower(), line.size, line.joint_type)
+                        if key not in stock_map:
+                            continue
+                        current = stock_map[key]
+                        if required > current:
+                            shortages.append(ShortageResponse(
+                                project_id=project.id,
+                                project_code=project.quotation_no,
+                                material_name=part.name,
+                                component_name=part.name,
+                                size=line.size,
+                                joint_type=line.joint_type,
+                                joint_category=getattr(line, 'joint_category', None),
+                                required_qty=required,
+                                current_stock=current,
+                                deficit=required - current
+                            ))
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
     return shortages

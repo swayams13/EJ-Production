@@ -20,11 +20,18 @@ import {
 interface PacingMetric {
   project_id: number;
   project_number: string;
+  project_name: string;
   total_feet: number;
+  remaining_feet: number;
+  days_to_deadline: number | null;
   backlog: number;
+  today_requirement: number;
+  today_logged_ft: number;
+  gap_today: number;
   tig_req: number;
   mig_req: number;
   grind_req: number;
+  monthly_feet: [number, number, number];
 }
 
 interface WeekForecast {
@@ -148,6 +155,99 @@ export default function PlanningDashboard() {
                     <Td numeric>{p.grind_req} ft</Td>
                   </Tr>
                 ))
+              )}
+            </TBody>
+          </Table>
+        </Card>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
+          Per-Project Feet Targets (Today)
+        </h2>
+        <Card>
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Project</Th>
+                <Th numeric>Remaining Ft</Th>
+                <Th numeric>Days Left</Th>
+                <Th numeric>Required ft/day</Th>
+                <Th numeric>Today Logged</Th>
+                <Th numeric>Gap Today</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {!metrics.pacing_metrics || metrics.pacing_metrics.length === 0 ? (
+                <Tr><Td colSpan={6} className="text-center text-ink-soft">No active projects.</Td></Tr>
+              ) : metrics.pacing_metrics.map((p) => {
+                const gap = p.gap_today;
+                return (
+                  <Tr key={p.project_id}>
+                    <Td className="font-bold text-ink">{p.project_name}</Td>
+                    <Td numeric>{p.remaining_feet} ft</Td>
+                    <Td numeric>
+                      {p.days_to_deadline === null ? (
+                        <span className="text-xs text-warning">Unscheduled</span>
+                      ) : p.days_to_deadline < 0 ? (
+                        <Badge tone="critical">{Math.abs(p.days_to_deadline)}d late</Badge>
+                      ) : (
+                        <span className={p.days_to_deadline <= 7 ? "font-bold text-critical" : ""}>{p.days_to_deadline}d</span>
+                      )}
+                    </Td>
+                    <Td numeric>{p.today_requirement} ft</Td>
+                    <Td numeric>{p.today_logged_ft} ft</Td>
+                    <Td numeric>
+                      {gap > 0 ? (
+                        <Badge tone="critical">-{gap} ft</Badge>
+                      ) : (
+                        <Badge tone="success">On Track</Badge>
+                      )}
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        </Card>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-bold uppercase tracking-wide text-ink">
+          Month-wise Welder Demand by Project
+        </h2>
+        <Card>
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Project</Th>
+                <Th numeric>Month 1</Th>
+                <Th numeric>Month 2</Th>
+                <Th numeric>Month 3</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {metrics.pacing_metrics.map((p) => (
+                <Tr key={p.project_id}>
+                  <Td className="font-bold text-ink">{p.project_name}</Td>
+                  {p.monthly_feet.map((ft, i) => (
+                    <Td key={i} numeric>{ft > 0 ? `${ft} ft` : <span className="text-ink-soft">—</span>}</Td>
+                  ))}
+                </Tr>
+              ))}
+              {metrics.monthly_forecast && metrics.monthly_forecast.length > 0 && (
+                <Tr className="border-t-2 border-line font-bold">
+                  <Td className="font-bold text-ink">Total Demand</Td>
+                  {(metrics.monthly_forecast as WeekForecast[]).map((m) => {
+                    const cap = metrics.factory_weekly_capacity * 4;
+                    const over = m.demand > cap;
+                    return (
+                      <Td key={m.id} numeric>
+                        <span className={over ? "font-bold text-critical" : ""}>{m.demand} ft</span>
+                      </Td>
+                    );
+                  })}
+                </Tr>
               )}
             </TBody>
           </Table>

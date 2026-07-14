@@ -1,10 +1,24 @@
 from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import date
 
 class TransactionCreate(BaseModel):
     operator_id: Optional[int] = None
     quantity_completed: int = Field(gt=0)
     feet_completed: Optional[float] = Field(default=None, ge=0)
+    date_ready: Optional[date] = None
+    po_number: Optional[str] = None
+
+class FinalCheckUpdate(BaseModel):
+    is_required: Optional[bool] = None
+    status: Optional[str] = None            # pending | required | in_process | ready
+    test_method: Optional[str] = None
+    paint_spec: Optional[str] = None
+    weight_kgs: Optional[float] = None
+    marking_type: Optional[str] = None
+    date_ready: Optional[date] = None
+    date_pending: Optional[date] = None
+    notes: Optional[str] = None
 
 class WeldingLogCreate(BaseModel):
     operator_id: Optional[int] = None

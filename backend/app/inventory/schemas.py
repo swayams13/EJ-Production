@@ -25,6 +25,8 @@ class ShortageResponse(BaseModel):
     project_id: int
     project_code: str
     material_name: str
+    component_name: Optional[str] = None
+    joint_category: Optional[str] = None
     size: int
     joint_type: str
     required_qty: int

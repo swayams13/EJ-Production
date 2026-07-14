@@ -42,10 +42,16 @@ app.include_router(projects_router)
 app.include_router(scheduler_router)
 app.include_router(inventory_router)
 
-# Configure CORS
+# Configure CORS — origins come from FRONTEND_ORIGINS (comma-separated),
+# e.g. "https://ej-demo.up.railway.app,https://ej.example.com".
+_origins = [
+    o.strip()
+    for o in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exactly Next.js domain
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -134,6 +140,53 @@ _run_startup_migration("attendance_logs dedupe", [
 _run_startup_migration("attendance_logs unique constraint", [
     "ALTER TABLE attendance_logs ADD CONSTRAINT uq_attendance_user_date UNIQUE (user_id, date)",
 ])
+
+_run_startup_migration("part_processes.itemwise fields", [
+    "ALTER TABLE part_processes ADD COLUMN status VARCHAR DEFAULT 'pending'",
+    "ALTER TABLE part_processes ADD COLUMN date_ready DATE",
+    "ALTER TABLE part_processes ADD COLUMN date_pending DATE",
+    "ALTER TABLE part_processes ADD COLUMN po_number VARCHAR",
+])
+
+_run_startup_migration("joint tag columns", [
+    "ALTER TABLE project_production_lines ADD COLUMN joint_category VARCHAR",
+    "ALTER TABLE project_production_lines ADD COLUMN joint_type_code VARCHAR",
+    "ALTER TABLE project_production_lines ADD COLUMN paint_status VARCHAR DEFAULT 'Yet to start'",
+    "ALTER TABLE project_production_lines ADD COLUMN variable_qtys_json TEXT",
+    "ALTER TABLE parts ADD COLUMN qty_per_unit DOUBLE PRECISION DEFAULT 1.0",
+    "ALTER TABLE parts ADD COLUMN total_qty INTEGER DEFAULT 0",
+])
+
+_run_startup_migration("job_final_checks table", [
+    """
+    CREATE TABLE IF NOT EXISTS job_final_checks (
+        id SERIAL PRIMARY KEY,
+        production_line_id INTEGER NOT NULL REFERENCES project_production_lines(id),
+        check_type VARCHAR NOT NULL,
+        is_required BOOLEAN DEFAULT TRUE,
+        test_method VARCHAR,
+        paint_spec TEXT,
+        weight_kgs DOUBLE PRECISION,
+        marking_type VARCHAR,
+        status VARCHAR DEFAULT 'pending',
+        date_ready DATE,
+        date_pending DATE,
+        notes TEXT,
+        updated_by INTEGER REFERENCES users(id),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT uq_final_check_line_type UNIQUE (production_line_id, check_type)
+    )
+    """,
+])
+
+_run_startup_migration("assembly_steps.completed_qty", [
+    "ALTER TABLE assembly_steps ADD COLUMN completed_qty INTEGER DEFAULT 0",
+])
+
+from backend.services.db_service import SessionLocal
+from backend.services.itemwise_backfill import backfill_itemwise
+backfill_itemwise(SessionLocal)
+
 # Dependency
 
 # Models

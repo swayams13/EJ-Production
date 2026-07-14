@@ -7,16 +7,16 @@ from passlib.context import CryptContext
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
-from backend.app.auth.rbac import require_roles
+from backend.app.auth.rbac import require_roles, SUPERVISORS, USER_ADMINS
 
 @router.get("")
-def get_users(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"]))):
+def get_users(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
     users = db.query(User).all()
     result = [{"id": u.id, "name": u.full_name, "role": u.role, "username": u.username, "experience": u.experience, "skill": u.skill, "department": u.department, "base_productivity": u.base_productivity} for u in users]
     return {"success": True, "message": "Users retrieved", "data": result}
 
 @router.post("")
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
+def create_user(user: UserCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(USER_ADMINS))):
     import uuid
     
     gen_username = user.username
@@ -46,7 +46,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     return {"success": True, "message": "User created successfully", "data": {"id": new_user.id}}
 
 @router.put("/{user_id}")
-def update_user(user_id: int, req: UserUpdate, db: Session = Depends(get_db)):
+def update_user(user_id: int, req: UserUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(USER_ADMINS))):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -70,7 +70,7 @@ def update_user(user_id: int, req: UserUpdate, db: Session = Depends(get_db)):
     return {"success": True, "message": "User updated successfully"}
 
 @router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(USER_ADMINS))):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

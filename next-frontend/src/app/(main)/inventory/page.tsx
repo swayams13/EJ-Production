@@ -30,7 +30,7 @@ export default function InventoryPage() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [newMaterial, setNewMaterial] = useState({
-    material_name: "Bellows",
+    material_name: "Element",
     size: 150,
     joint_type: "EJ",
     current_stock: 0,
@@ -130,9 +130,26 @@ export default function InventoryPage() {
                   value={newMaterial.material_name}
                   onChange={(e) => setNewMaterial({ ...newMaterial, material_name: e.target.value })}
                 >
-                  <option value="Bellows">Bellows</option>
+                  <option value="Element">Element</option>
                   <option value="Collar">Collar</option>
                   <option value="Flange">Flange</option>
+                  <option value="Weldend">Weldend</option>
+                  <option value="Spool">Spool</option>
+                  <option value="Liner">Liner</option>
+                  <option value="Lug">Lug</option>
+                  <option value="Limit rod">Limit rod</option>
+                  <option value="Matching Flanges">Matching Flanges</option>
+                  <option value="Bolts, Nuts">Bolts, Nuts</option>
+                  <option value="Gaskets">Gaskets</option>
+                  <option value="Pipe-1">Pipe-1</option>
+                  <option value="Pipe-2">Pipe-2</option>
+                  <option value="Stopper Patti">Stopper Patti</option>
+                  <option value="Pipe-1 flange">Pipe-1 flange</option>
+                  <option value="Pipe-2 flange">Pipe-2 flange</option>
+                  <option value="Stopper flange">Stopper flange</option>
+                  <option value="O-ring">O-ring</option>
+                  <option value="Studs Long">Studs Long</option>
+                  <option value="Studs Short">Studs Short</option>
                 </Select>
               </div>
               <div>
@@ -183,7 +200,9 @@ export default function InventoryPage() {
                 <div>
                   <div className="font-bold text-ink">{s.project_code}</div>
                   <div className="text-[13px] text-ink-soft">
-                    Requires <span className="font-bold text-ink">{s.required_qty}x</span> {s.material_name} {s.size} NB ({s.joint_type})
+                    Requires <span className="font-bold text-ink">{s.required_qty}x</span>{" "}
+                    {s.component_name || s.material_name} {s.size} NB ({s.joint_type})
+                    {s.joint_category && <span className="ml-1 text-ink-soft">— {s.joint_category}</span>}
                   </div>
                 </div>
                 <div className="text-right">

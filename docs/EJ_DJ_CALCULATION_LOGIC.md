@@ -1,5 +1,33 @@
 # EJ / DJ Welding & Resource Calculation Logic — Technical Reference
 
+## ⚠️ 2026-07-10 update: Joint → Type(tag) → per-tag BOM
+
+The joint model is no longer a binary `EJ`/`DJ` flag. A production line now carries a
+three-level identity: **Joint category** (`SIMPLE_EJ` / `UNIVERSAL_EJ` / `DJ`) →
+**Type (tag no.)** (e.g. `U-EJ-F-1MF-S-L`) → the tag's **BOM** (which components, at what
+per-unit quantity). The BOM lives in **`backend/services/joint_catalog.py`** (single source
+of truth; do NOT re-hardcode parts lists elsewhere — this is the direct successor to the old
+`templates.py` `TEMPLATES` duplication problem).
+
+Key rules:
+- Every BOM component quantity **scales by the line quantity n**: `Part.total_qty = qty_per_unit × n`.
+  Shop-floor progress and the material shortage calc measure against `Part.total_qty`, not the
+  joint count. Legacy (pre-tag) lines have `total_qty = 0` and fall back to `line.quantity`.
+- Component kinds: FIXED (constant), ENTER (user enters per-unit qty at order time; stored in
+  `ProjectProductionLine.variable_qtys_json`), DERIVED (`Lug = 2 × Limit rod`), STATUS (Paint —
+  a line-level status, not a quantity: Yet to start / Started / In progress / Completed).
+- **`joint_type` (the old EJ/DJ column) still exists and still drives welding feet** — it now
+  holds the tag's `weld_family`. Per the current requirement, **Simple AND Universal expansion
+  joints both use the EJ welding master (same feet per size), and Dismantling uses the DJ master.**
+  So `compute_master_feet` / `aggregate_line_feet` / the whole resource calc below are UNCHANGED —
+  Universal is not auto-doubled for welding. (Revisit if that changes.)
+- `templates.py` now exposes `PROCESS_ROUTES` (component → process steps) and `COMPONENT_WEIGHTS`
+  (normalized per line so weights still sum to 100 — the progress formula below depends on that).
+
+Everything below is unchanged and still accurate for the welding/resource math.
+
+---
+
 This is the canonical reference for how Expansion Joint (EJ) and Dismantling
 Joint (DJ) welding requirements, workforce productivity, and resource
 counts are calculated across the codebase. Read this before touching any

@@ -22,11 +22,54 @@ interface MasterSize {
   type: string;
 }
 
+interface JointComponent {
+  name: string;
+  kind: string;
+  qty: number;
+  factor: number;
+  source: string;
+}
+
+interface JointTypeOption {
+  tag_no: string;
+  description: string;
+  weld_family: string;
+  components: JointComponent[];
+  variable_components: string[];
+}
+
+interface JointCategoryGroup {
+  category: string;
+  label: string;
+  types: JointTypeOption[];
+}
+
 interface BellowRow {
+  joint_category: string;
+  joint_type_code: string;
+  pn_rating: string;
   size: string | number;
   qty: number;
-  type: string;
-  pn_rating: string;
+  variable_qtys: { [name: string]: number };
+  // Legacy (pre-tag) rows: the joint had no category/tag, only the old
+  // broad EJ/DJ flag. Kept so a legacy line isn't dropped/deleted on save
+  // and so the UI can show it as "Expansion Joint (Legacy)" / "Dismantling
+  // Joint (Legacy)" instead of a blank, unselected Joint/Type pair.
+  legacy_type?: string;
+  // True once the user clicks "Recategorize" on a legacy row — switches
+  // that row over to the normal Joint -> Type cascading selects so it can
+  // be assigned a real category + tag (and therefore a real BOM).
+  recategorize?: boolean;
+}
+
+interface BellowPayload {
+  size: number;
+  qty: number;
+  pn_rating?: string;
+  joint_category?: string;
+  joint_type_code?: string;
+  variable_qtys?: { [name: string]: number };
+  type?: string;
 }
 
 interface ProjectRow {
@@ -41,7 +84,13 @@ interface ProjectRow {
   assigned_tig?: number;
   assigned_mig?: number;
   assigned_grinders?: number;
-  bellows?: Array<{ size: number; quantity: number; type?: string; pn_rating?: string }>;
+  bellows?: Array<{
+    size: number;
+    quantity: number;
+    joint_category?: string;
+    joint_type_code?: string;
+    pn_rating?: string;
+  }>;
 }
 
 export default function EditProjects() {
@@ -64,6 +113,7 @@ export default function EditProjects() {
 
   const [bellows, setBellows] = useState<BellowRow[]>([]);
   const [masterData, setMasterData] = useState<MasterSize[]>([]);
+  const [catalog, setCatalog] = useState<JointCategoryGroup[]>([]);
   const [duration, setDuration] = useState<number | null>(null);
 
   const [customSizeModalOpen, setCustomSizeModalOpen] = useState(false);
@@ -73,6 +123,9 @@ export default function EditProjects() {
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  const [recategorizeModalOpen, setRecategorizeModalOpen] = useState(false);
+  const [recategorizeIndex, setRecategorizeIndex] = useState(-1);
 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
@@ -84,7 +137,57 @@ export default function EditProjects() {
       .then((json) => {
         setMasterData(json.data || []);
       });
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/master/joint-types`)
+      .then((res) => res.json())
+      .then((json) => {
+        setCatalog(json.data || []);
+      });
   }, []);
+
+  const weldFamilyFor = (tagNo: string): string => {
+    for (const cat of catalog) {
+      const found = cat.types.find((t) => t.tag_no === tagNo);
+      if (found) return found.weld_family;
+    }
+    return "EJ";
+  };
+
+  const getSelectedTag = (row: BellowRow): JointTypeOption | undefined => {
+    const cat = catalog.find((c) => c.category === row.joint_category);
+    return cat?.types.find((t) => t.tag_no === row.joint_type_code);
+  };
+
+  const isLegacyRow = (b: BellowRow): boolean => !!b.legacy_type && !b.joint_category && !b.joint_type_code;
+
+  // A row is submitted either as a full Joint/Type/BOM line (once category
+  // + tag are both chosen), or — for an untouched legacy row — using its
+  // original EJ/DJ flag so it keeps matching its existing production line
+  // instead of being dropped from the sync and deleted. A legacy row that's
+  // mid-recategorization (button clicked, selection not finished yet) still
+  // has no category/tag, so it still falls into the legacy branch here —
+  // it only stops being "legacy" once a real category + tag are picked.
+  const toBellowPayload = (b: BellowRow): BellowPayload | null => {
+    if (!b.size || Number(b.qty) <= 0) return null;
+    if (b.joint_category && b.joint_type_code) {
+      return {
+        size: Number(b.size),
+        qty: Number(b.qty),
+        pn_rating: b.pn_rating,
+        joint_category: b.joint_category,
+        joint_type_code: b.joint_type_code,
+        variable_qtys: b.variable_qtys,
+      };
+    }
+    if (b.legacy_type) {
+      return {
+        size: Number(b.size),
+        qty: Number(b.qty),
+        pn_rating: b.pn_rating,
+        type: b.legacy_type,
+      };
+    }
+    return null;
+  };
 
   const fetchProjects = () => {
     setLoading(true);
@@ -111,9 +214,37 @@ export default function EditProjects() {
         setAssignedTig(p.assigned_tig || 0);
         setAssignedMig(p.assigned_mig || 0);
         setAssignedGrinders(p.assigned_grinders || 0);
-        setBellows(
-          p.bellows?.map((b) => ({ size: b.size, qty: b.quantity, type: b.type || "EJ", pn_rating: b.pn_rating || "" })) || []
-        );
+        setBellows([]);
+        apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/${id}/bellows`)
+          .then((res) => res.json())
+          .then((json) => {
+            const detail = Array.isArray(json) ? json : json.data || [];
+            setBellows(
+              detail.map(
+                (b: {
+                  size: number;
+                  qty: number;
+                  type?: string;
+                  pn_rating?: string;
+                  joint_category?: string;
+                  joint_type_code?: string;
+                  variable_qtys?: { [name: string]: number };
+                }) => ({
+                  joint_category: b.joint_category || "",
+                  joint_type_code: b.joint_type_code || "",
+                  pn_rating: b.pn_rating || "",
+                  size: b.size,
+                  qty: b.qty,
+                  variable_qtys: b.variable_qtys || {},
+                  // No tag on this line means it predates the Joint/Type
+                  // upgrade — keep its old EJ/DJ flag so it renders as a
+                  // legacy row instead of a blank cascading select.
+                  legacy_type: !b.joint_type_code ? b.type || "EJ" : undefined,
+                })
+              )
+            );
+          })
+          .catch(() => setBellows([]));
         fetchDuration(id, p.assigned_tig || 0, p.assigned_mig || 0, p.assigned_grinders || 0);
       }
     } else {
@@ -143,9 +274,7 @@ export default function EditProjects() {
   }, [assignedTig, assignedMig, assignedGrinders, selectedProjectId]);
 
   useEffect(() => {
-    const validBellows = bellows
-      .filter((b) => b.size && b.qty > 0)
-      .map((b) => ({ size: Number(b.size), qty: Number(b.qty), type: b.type, pn_rating: b.pn_rating }));
+    const validBellows = bellows.map(toBellowPayload).filter((b): b is BellowPayload => b !== null);
 
     let tDate = targetDate;
     if (!tDate && selectedProjectId) {
@@ -172,22 +301,64 @@ export default function EditProjects() {
   }, [bellows, selectedProjectId, projects, targetDate]);
 
   const handleAddBellow = () => {
-    setBellows([...bellows, { size: "", qty: 1, type: "EJ", pn_rating: "" }]);
+    setBellows([...bellows, { joint_category: "", joint_type_code: "", pn_rating: "", size: "", qty: 1, variable_qtys: {} }]);
   };
 
   const handleRemoveBellow = (index: number) => {
     setBellows(bellows.filter((_, i) => i !== index));
   };
 
-  const handleBellowChange = (index: number, field: "size" | "qty" | "type" | "pn_rating", value: string | number) => {
+  const handleCategoryChange = (index: number, value: string) => {
+    const newBellows = [...bellows];
+    newBellows[index] = { ...newBellows[index], joint_category: value, joint_type_code: "", variable_qtys: {} };
+    setBellows(newBellows);
+  };
+
+  const handleTypeChange = (index: number, value: string) => {
+    const newBellows = [...bellows];
+    newBellows[index] = { ...newBellows[index], joint_type_code: value, variable_qtys: {} };
+    setBellows(newBellows);
+  };
+
+  const handleBellowChange = (index: number, field: "size" | "qty" | "pn_rating", value: string | number) => {
     if (field === "size" && value === "CUSTOM") {
+      const row = bellows[index];
+      const family = isLegacyRow(row) && !row.recategorize ? (row.legacy_type || "EJ") : weldFamilyFor(row.joint_type_code);
       setCustomSizeRowIndex(index);
-      setCustomSizeData({ size: "", tig_feet: "", mig_feet: "", grinding_feet: "", joint_type: bellows[index].type || "EJ" });
+      setCustomSizeData({ size: "", tig_feet: "", mig_feet: "", grinding_feet: "", joint_type: family });
       setCustomSizeModalOpen(true);
       return;
     }
     const newBellows = [...bellows];
     newBellows[index] = { ...newBellows[index], [field]: value };
+    setBellows(newBellows);
+  };
+
+  const handleStartRecategorize = (index: number) => {
+    setRecategorizeIndex(index);
+    setRecategorizeModalOpen(true);
+  };
+
+  const confirmRecategorize = () => {
+    const newBellows = [...bellows];
+    newBellows[recategorizeIndex] = { ...newBellows[recategorizeIndex], recategorize: true };
+    setBellows(newBellows);
+    setRecategorizeModalOpen(false);
+    setRecategorizeIndex(-1);
+  };
+
+  const handleCancelRecategorize = (index: number) => {
+    const newBellows = [...bellows];
+    // Revert to the legacy display — drop any in-progress category/tag
+    // selection so the row still submits under its original EJ/DJ flag.
+    newBellows[index] = { ...newBellows[index], recategorize: false, joint_category: "", joint_type_code: "", variable_qtys: {} };
+    setBellows(newBellows);
+  };
+
+  const handleVariableQtyChange = (index: number, name: string, value: number) => {
+    const newBellows = [...bellows];
+    const row = newBellows[index];
+    newBellows[index] = { ...row, variable_qtys: { ...row.variable_qtys, [name]: value } };
     setBellows(newBellows);
   };
 
@@ -246,9 +417,7 @@ export default function EditProjects() {
         }),
       });
 
-      const validBellows = bellows
-        .filter((b) => b.size && b.qty > 0)
-        .map((b) => ({ size: Number(b.size), qty: Number(b.qty), type: b.type, pn_rating: b.pn_rating }));
+      const validBellows = bellows.map(toBellowPayload).filter((b): b is BellowPayload => b !== null);
 
       await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/${selectedProjectId}/bellows`, {
         method: "PUT",
@@ -411,76 +580,158 @@ export default function EditProjects() {
                       + Add Row
                     </Button>
                   </div>
+                  {bellows.some((b) => isLegacyRow(b)) && (
+                    <p className="mb-3 text-xs italic text-ink-soft">
+                      Rows added before the Joint / Type upgrade show under their original Expansion Joint / Dismantling Joint label. Click &quot;Recategorize&quot; on a row to assign it a specific Joint, Type and BOM.
+                    </p>
+                  )}
 
                   <div className="flex flex-col gap-4">
-                    {bellows.map((bellow, index) => (
-                      <div key={index} className="flex items-end gap-4">
-                        <div className="w-12 text-center">
-                          <Label>Sr. No.</Label>
-                          <div className="py-2 text-sm font-semibold text-ink">{index + 1}</div>
+                    {bellows.map((bellow, index) => {
+                      const selectedTag = getSelectedTag(bellow);
+                      const variableComponents = selectedTag?.variable_components || [];
+                      const legacy = isLegacyRow(bellow);
+                      const showCascade = !legacy || bellow.recategorize;
+                      const legacyLabel = bellow.legacy_type === "DJ" ? "Dismantling Joint (Legacy)" : "Expansion Joint (Legacy)";
+                      const sizeWeldFamily = legacy && !bellow.recategorize ? (bellow.legacy_type || "EJ") : weldFamilyFor(bellow.joint_type_code);
+                      return (
+                        <div key={index} className="flex flex-col gap-3 border-b border-line pb-4 last:border-0 last:pb-0">
+                          <div className="flex items-end gap-4 overflow-x-auto pb-1">
+                            <div className="w-12 shrink-0 text-center">
+                              <Label>Sr. No.</Label>
+                              <div className="py-2 text-sm font-semibold text-ink">{index + 1}</div>
+                            </div>
+                            {showCascade ? (
+                              <>
+                                <div className="w-44 shrink-0">
+                                  <Label>Joint</Label>
+                                  <Select
+                                    value={bellow.joint_category}
+                                    onChange={(e) => handleCategoryChange(index, e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                                    required
+                                  >
+                                    <option value="">Select Joint</option>
+                                    {catalog.map((cat) => (
+                                      <option key={cat.category} value={cat.category}>
+                                        {cat.label}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                </div>
+                                <div className="w-56 shrink-0">
+                                  <Label>Type</Label>
+                                  <Select
+                                    value={bellow.joint_type_code}
+                                    onChange={(e) => handleTypeChange(index, e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                                    disabled={!bellow.joint_category}
+                                    required
+                                  >
+                                    <option value="">Select Type</option>
+                                    {(catalog.find((cat) => cat.category === bellow.joint_category)?.types || []).map((t) => (
+                                      <option key={t.tag_no} value={t.tag_no}>
+                                        {t.tag_no} — {t.description}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                  {legacy && bellow.recategorize && (
+                                    <button
+                                      type="button"
+                                      className="mt-1 text-xs text-ink-soft underline"
+                                      onClick={() => handleCancelRecategorize(index)}
+                                    >
+                                      Cancel — keep as legacy
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="w-[21rem] shrink-0">
+                                <Label>Joint</Label>
+                                <div className="flex items-center gap-2 py-1">
+                                  <span className="rounded-full bg-line px-3 py-1 text-xs font-medium text-ink-soft">
+                                    {legacyLabel}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="px-2 py-1 text-xs"
+                                    onClick={() => handleStartRecategorize(index)}
+                                  >
+                                    Recategorize
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            <div className="w-32 shrink-0">
+                              <Label>PN Rating</Label>
+                              <Select
+                                value={bellow.pn_rating || ""}
+                                onChange={(e) => handleBellowChange(index, "pn_rating", e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                              >
+                                <option value="">None</option>
+                                <option value="PN 6">PN 6</option>
+                                <option value="PN 10">PN 10</option>
+                                <option value="PN 16">PN 16</option>
+                                <option value="PN 20">PN 20</option>
+                                <option value="PN 25">PN 25</option>
+                              </Select>
+                            </div>
+                            <div className="min-w-[10rem] shrink-0 flex-1">
+                              <Label>Size (NB)</Label>
+                              <Select
+                                value={bellow.size}
+                                onChange={(e) => handleBellowChange(index, "size", e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                                required
+                              >
+                                <option value="">Select Size</option>
+                                {masterData.filter((m) => m.type === sizeWeldFamily).map((m) => (
+                                  <option key={`${m.size}-${m.type}`} value={m.size}>
+                                    {m.size} NB
+                                  </option>
+                                ))}
+                                <option value="CUSTOM">+ Add Custom Size</option>
+                              </Select>
+                            </div>
+                            <div className="w-32 shrink-0">
+                              <Label>Quantity</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                required
+                                value={bellow.qty}
+                                onChange={(e) => handleBellowChange(index, "qty", parseInt(e.target.value) || 0)}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                              />
+                            </div>
+                            <Button type="button" variant="ghost" className="shrink-0 text-critical hover:bg-critical-tint" onClick={() => handleRemoveBellow(index)}>
+                              Remove
+                            </Button>
+                          </div>
+                          {variableComponents.length > 0 && (
+                            <div className="ml-16 grid grid-cols-2 gap-4 rounded-md border border-line bg-paper p-3 sm:grid-cols-3 md:grid-cols-4">
+                              {variableComponents.map((name) => (
+                                <div key={name}>
+                                  <Label>{name}</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    value={bellow.variable_qtys[name] ?? ""}
+                                    onChange={(e) => handleVariableQtyChange(index, name, parseInt(e.target.value) || 0)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="w-48">
-                          <Label>Type</Label>
-                          <Select
-                            value={bellow.type}
-                            onChange={(e) => handleBellowChange(index, "type", e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                            required
-                          >
-                            <option value="EJ">Expansion Joint</option>
-                            <option value="DJ">Dismantling Joint</option>
-                          </Select>
-                        </div>
-                        <div className="w-32">
-                          <Label>PN Rating</Label>
-                          <Select
-                            value={bellow.pn_rating || ""}
-                            onChange={(e) => handleBellowChange(index, "pn_rating", e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                          >
-                            <option value="">None</option>
-                            <option value="PN 6">PN 6</option>
-                            <option value="PN 10">PN 10</option>
-                            <option value="PN 16">PN 16</option>
-                            <option value="PN 20">PN 20</option>
-                            <option value="PN 25">PN 25</option>
-                          </Select>
-                        </div>
-                        <div className="flex-1">
-                          <Label>Size (NB)</Label>
-                          <Select
-                            value={bellow.size}
-                            onChange={(e) => handleBellowChange(index, "size", e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                            required
-                          >
-                            <option value="">Select Size</option>
-                            {masterData.filter((m) => m.type === bellow.type).map((m) => (
-                              <option key={`${m.size}-${m.type}`} value={m.size}>
-                                {m.size} NB
-                              </option>
-                            ))}
-                            <option value="CUSTOM">+ Add Custom Size</option>
-                          </Select>
-                        </div>
-                        <div className="w-32">
-                          <Label>Quantity</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            required
-                            value={bellow.qty}
-                            onChange={(e) => handleBellowChange(index, "qty", parseInt(e.target.value) || 0)}
-                            onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                          />
-                        </div>
-                        <Button type="button" variant="ghost" className="text-critical hover:bg-critical-tint" onClick={() => handleRemoveBellow(index)}>
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {bellows.length === 0 && (
-                      <p className="text-sm italic text-ink-soft">No expansion joints added to this project yet.</p>
+                      <p className="text-sm italic text-ink-soft">No joints added to this project yet.</p>
                     )}
                   </div>
                 </div>
@@ -595,6 +846,22 @@ export default function EditProjects() {
               {savingCustomSize ? "Saving…" : "Save Custom Size"}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={recategorizeModalOpen}
+        onClose={() => setRecategorizeModalOpen(false)}
+        title="Recategorize this joint?"
+        description="This line predates the Joint / Type upgrade and is currently tracked under its old broad Expansion Joint / Dismantling Joint label. Assigning it a specific Joint, Type and tag will move it onto the new per-tag BOM — fabrication progress already recorded against its old generic parts list will not carry over, since the new tag has its own parts list. This does not affect any other project."
+      >
+        <div className="flex w-full justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={() => setRecategorizeModalOpen(false)}>
+            Cancel
+          </Button>
+          <Button type="button" variant="primary" onClick={confirmRecategorize}>
+            Recategorize
+          </Button>
         </div>
       </Modal>
 

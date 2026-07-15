@@ -8,6 +8,7 @@ from backend.services.db_service import get_db, ProjectProductionLine, PartProce
 from backend.app.production.schemas import TransactionCreate, FinalCheckUpdate
 from backend.app.auth.rbac import require_roles, SUPERVISORS
 from backend.services import joint_catalog
+from backend.services.templates import route_for
 
 router = APIRouter(prefix="/api/v1/production", tags=["Production"])
 
@@ -34,7 +35,8 @@ def get_requirement_parts(req_id: int, db: Session = Depends(get_db), current_us
     for part in line.parts:
         part_target = getattr(part, 'total_qty', 0) or line.quantity
         proc_data = []
-        for proc in sorted(part.processes, key=lambda p: p.id):
+        _route = route_for(part.name)
+        for proc in sorted(part.processes, key=lambda p: _route.index(p.process_name) if p.process_name in _route else 999):
             proc_data.append({
                 "id": proc.id,
                 "process_name": proc.process_name,

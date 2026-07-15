@@ -56,8 +56,19 @@ def backfill_itemwise(SessionLocal):
                 db.add(PartProcess(part_id=new_part.id, process_name=pname, completed_qty=0))
             added_bp += 1
 
+        # Backfill SF Cutting for Element parts on EJ lines (added to process route per GM spec)
+        added_sf = 0
+        for line in lines:
+            for part in line.parts:
+                if part.name != "Element":
+                    continue
+                existing = {proc.process_name for proc in part.processes}
+                if "Forming" in existing and "SF Cutting" not in existing:
+                    db.add(PartProcess(part_id=part.id, process_name="SF Cutting", completed_qty=0, status="pending"))
+                    added_sf += 1
+
         db.commit()
-        logger.info("itemwise backfill: added %d missing steps across %d lines; Box Packing added to %d tagged lines", added_steps, len(lines), added_bp)
+        logger.info("itemwise backfill: added %d missing steps across %d lines; Box Packing added to %d tagged lines; SF Cutting added to %d Element parts", added_steps, len(lines), added_bp, added_sf)
     except Exception as e:
         db.rollback()
         logger.warning("itemwise backfill skipped/failed: %s", e)

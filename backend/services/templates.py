@@ -17,7 +17,7 @@
 # --------------------------------------------------------------------------
 PROCESS_ROUTES = {
     # Expansion-joint components
-    "Element":          ["Material Received", "Cutting", "Welding", "DP test", "Forming", "Ready"],
+    "Element":          ["Material Received", "Cutting", "Welding", "DP test", "Forming", "SF Cutting", "Ready"],
     "Collar":           ["Material Received", "Cutting", "Welding", "DP test", "Ready"],
     "Weldend":          ["Material Received", "Cutting", "Bending", "Welding", "Re-Rolling", "DP test", "SF Cutting", "Ready"],
     "Spool":            ["Material Received", "Cutting", "Bending", "Welding", "Re-Rolling", "DP test", "Ready"],

@@ -102,7 +102,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 1), _f("Collar", 2), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1),
-            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _f("Gaskets", 2), _f("Box Packing", 1), _s("Paint"),
+            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -113,7 +113,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 1), _f("Collar", 2), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1),
-            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _f("Gaskets", 2), _f("Box Packing", 1), _s("Paint"),
+            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -145,7 +145,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 2), _f("Collar", 4), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 2),
-            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _f("Gaskets", 2), _f("Box Packing", 1), _s("Paint"),
+            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -156,7 +156,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 2), _f("Collar", 4), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 2),
-            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _f("Gaskets", 2), _f("Box Packing", 1), _s("Paint"),
+            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {

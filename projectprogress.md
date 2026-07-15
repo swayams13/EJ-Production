@@ -1,5 +1,31 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-15 (Session 17 — GM spec changes applied)
+
+### What was done:
+Applied two changes from the GM-approved review file (`EJ_DJ_Full_Spec_GM_Review (2).xlsx`), changes marked in red:
+
+**1. `backend/services/joint_catalog.py` — Gaskets kind: FIXED → ENTER (4 tags)**
+GM explicitly marked Gaskets as "Enter (user-supplied)" (red cells E26, E37, E63, E74) for all four MF-variant EJ tags:
+- `S-EJ-F-1MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+- `S-EJ-F-2MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+- `U-EJ-F-1MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+- `U-EJ-F-2MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+
+**2. `backend/services/templates.py` — Element process route: add "SF Cutting"**
+GM marked "SF Cutting" in red as a step for Element across all 9 EJ tags. Added after "Forming":
+`["Material Received", "Cutting", "Welding", "DP test", "Forming", "SF Cutting", "Ready"]`
+
+### Verified: `py_compile` clean on both files.
+
+### Open question (not in red, not changed):
+- `U-EJ-W-S-L` Gaskets: our code has `_f("Gaskets", 2)` but spec Component sheet omits Gaskets; Process sheet includes it. GM left unmarked. Needs explicit confirm before changing.
+
+### Status:
+Changes on `demo` branch (not yet committed). `main` untouched.
+
+---
+
 ## Date: 2026-07-15 (Session 16 — Procurement Module complete: Tasks 1-14)
 
 ### What was built:

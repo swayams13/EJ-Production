@@ -70,6 +70,11 @@ export default function AddProjects() {
   const [assignedMig, setAssignedMig] = useState<number>(0);
   const [assignedGrinders, setAssignedGrinders] = useState<number>(0);
 
+  const [priority, setPriority] = useState<string>("");
+  const [orderValue, setOrderValue] = useState<string>("");
+  const [advanceReceived, setAdvanceReceived] = useState<string>("0");
+  const [committedDispatchDate, setCommittedDispatchDate] = useState<string>("");
+
   const [simulation, setSimulation] = useState<Simulation | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
 
@@ -282,6 +287,10 @@ export default function AddProjects() {
           assigned_tig: assignedTig,
           assigned_mig: assignedMig,
           assigned_grinders: assignedGrinders,
+          priority: priority || null,
+          order_value: orderValue ? Number(orderValue) : null,
+          advance_received: Number(advanceReceived) || 0,
+          committed_dispatch_date: committedDispatchDate || null,
         }),
       });
 
@@ -324,6 +333,27 @@ export default function AddProjects() {
             <div>
               <Label>Target Deadline</Label>
               <Input type="date" required value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+            </div>
+            <div>
+              <Label>Priority</Label>
+              <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                <option value="">Auto (from deadline)</option>
+                <option value="P1">P1 — High</option>
+                <option value="P2">P2 — Medium</option>
+                <option value="P3">P3 — Low</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Order Value (₹)</Label>
+              <Input type="number" min="0" placeholder="Quotation value" value={orderValue} onChange={(e) => setOrderValue(e.target.value)} />
+            </div>
+            <div>
+              <Label>Advance Received (%)</Label>
+              <Input type="number" min="0" max="100" value={advanceReceived} onChange={(e) => setAdvanceReceived(e.target.value)} />
+            </div>
+            <div>
+              <Label>Client Dispatch Commitment</Label>
+              <Input type="date" value={committedDispatchDate} onChange={(e) => setCommittedDispatchDate(e.target.value)} />
             </div>
           </CardBody>
         </Card>

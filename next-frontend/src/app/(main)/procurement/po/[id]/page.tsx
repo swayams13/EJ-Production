@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
@@ -70,6 +70,7 @@ export default function PODetailPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
   const [expandedLines, setExpandedLines] = useState<Set<number>>(new Set());
+  const [vendors, setVendors] = useState<{id: number; name: string}[]>([]);
 
   // Receipt form state
   const [showReceipt, setShowReceipt] = useState(false);
@@ -91,6 +92,12 @@ export default function PODetailPage() {
       } else {
         const b = await res.json().catch(() => ({})) as { detail?: string };
         setFetchError(b.detail || "PO not found.");
+      }
+
+      // Fetch vendors for name resolution
+      const vendorRes = await apiFetch(`${API}/api/v1/procurement/vendors`);
+      if (vendorRes.ok) {
+        setVendors(await vendorRes.json());
       }
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Network error.");
@@ -186,6 +193,7 @@ export default function PODetailPage() {
 
   const isTerminal = po.status === "received" || po.status === "cancelled";
   const nextStatus = NEXT_STATUS[po.status];
+  const vendorName = vendors.find(v => v.id === po.vendor_id)?.name ?? (po.vendor_id ? `Vendor #${po.vendor_id}` : null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -202,8 +210,8 @@ export default function PODetailPage() {
             <Badge tone={STATUS_TONE[po.status] ?? "neutral"}>
               {po.status.replace(/_/g, " ")}
             </Badge>
-            {po.vendor_id && (
-              <span className="text-sm text-ink-soft">Vendor ID: {po.vendor_id}</span>
+            {vendorName && (
+              <span className="text-sm text-ink-soft">{vendorName}</span>
             )}
           </div>
         </div>
@@ -337,8 +345,8 @@ export default function PODetailPage() {
           </THead>
           <TBody>
             {po.lines.map(line => (
-              <>
-                <Tr key={line.id}>
+              <React.Fragment key={line.id}>
+                <Tr>
                   <Td className="font-semibold text-ink">{line.material_name}</Td>
                   <Td className="font-data">{line.size} NB</Td>
                   <Td>{line.joint_type}</Td>
@@ -376,7 +384,7 @@ export default function PODetailPage() {
                     <Td colSpan={3} />
                   </Tr>
                 ))}
-              </>
+              </React.Fragment>
             ))}
             {po.lines.length === 0 && (
               <Tr>

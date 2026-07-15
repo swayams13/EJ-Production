@@ -70,7 +70,10 @@ def get_projects(db: Session = Depends(get_db), current_user: dict = Depends(req
             "assigned_mig": assign.assigned_mig_welders if assign else 0,
             "assigned_grinders": assign.assigned_grinders if assign else 0,
             "bellows": bellows,
-            "progress_percentage": round(progress, 2)
+            "progress_percentage": round(progress, 2),
+            "order_value": getattr(p, "order_value", None),
+            "advance_received": getattr(p, "advance_received", 0.0),
+            "committed_dispatch_date": str(p.committed_dispatch_date) if getattr(p, "committed_dispatch_date", None) else None,
         })
     return {"success": True, "message": "Projects retrieved", "data": results}
 

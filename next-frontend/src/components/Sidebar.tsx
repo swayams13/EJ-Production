@@ -55,8 +55,17 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Master Data & Admin",
     items: [
       { name: "Production & Capacity Master", href: "/master" },
-      { name: "Material Intelligence", href: "/inventory" },
       { name: "System Audit Logs", href: "/audit", hideForRoles: ["Production Manager", "GM"] },
+    ],
+  },
+  {
+    label: "Procurement",
+    items: [
+      { name: "Dashboard", href: "/procurement" },
+      { name: "Purchase Orders", href: "/procurement/po" },
+      { name: "Vendors", href: "/procurement/vendors" },
+      { name: "Warehouse Stock", href: "/procurement/stock" },
+      { name: "Settings", href: "/procurement/settings" },
     ],
   },
 ];

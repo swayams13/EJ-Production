@@ -30,7 +30,7 @@ from backend.app.dashboard.router import router as dashboard_router
 from backend.app.master.router import router as master_router
 from backend.app.projects.router import router as projects_router
 from backend.app.scheduler.router import router as scheduler_router
-from backend.app.inventory.router import router as inventory_router
+from backend.app.procurement.router import router as procurement_router
 
 app = FastAPI(title="EJ Production Tracker API", version="1.0.0")
 
@@ -40,7 +40,7 @@ app.include_router(dashboard_router)
 app.include_router(master_router)
 app.include_router(projects_router)
 app.include_router(scheduler_router)
-app.include_router(inventory_router)
+app.include_router(procurement_router)
 
 # Configure CORS — origins come from FRONTEND_ORIGINS (comma-separated),
 # e.g. "https://ej-demo.up.railway.app,https://ej.example.com".

@@ -259,7 +259,7 @@ export default function ProcurementDashboard() {
         </Card>
         <Card>
           <CardBody className="p-4 text-center">
-            <div className="font-data text-3xl font-extrabold text-ink">{green.length}</div>
+            <div className="font-data text-3xl font-extrabold text-success">{green.length}</div>
             <div className="mt-1 text-xs text-ink-soft">This Week</div>
           </CardBody>
         </Card>

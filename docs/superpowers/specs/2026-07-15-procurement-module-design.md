@@ -198,8 +198,8 @@ On `GoodsReceiptLine` save:
 1. Update `PurchaseOrderLine.received_qty` = sum of all receipts for that line
 2. For each `PurchaseOrderLineAllocation` on that line:
    - Find `PartProcess(process_name="Material Received")` for `allocation.part_id`
-   - `part_share = allocation.allocated_qty / sum(all allocated_qty for this po_line)`
-   - `completed_qty += round(qty_received × part_share)` — proportional split when one PO line covers multiple parts
+   - Allocations are fulfilled FIFO by `PurchaseOrderLineAllocation.id` (insertion order)
+   - Fill first allocation fully before moving to next: `remaining = qty_received`; for each allocation in order → `fill = min(remaining, allocation.allocated_qty - already_received_for_this_allocation)`; `completed_qty += fill`; `remaining -= fill`; stop when `remaining == 0`
 3. If vendor PO (not warehouse allocation): `WarehouseStock.qty_on_hand += qty_received` then `qty_on_hand -= qty` as material moves to floor
 4. Update `PurchaseOrderLine.status` → `partially_received` or `received`
 5. Update `PurchaseOrder.status` accordingly

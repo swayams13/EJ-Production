@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -122,7 +122,7 @@ def compute_priority_score(
     days_to_dispatch = (dispatch_date - today).days if dispatch_date else None
 
     lt = _lead_time(db, part.name)
-    order_by = (project.target_date - __import__("datetime").timedelta(days=lt)) if project.target_date else None
+    order_by = (project.target_date - timedelta(days=lt)) if project.target_date else None
     days_overdue = max(0, (today - order_by).days) if order_by else 0
 
     # Production completion
@@ -133,9 +133,6 @@ def compute_priority_score(
     else:
         pct = 0.0
 
-    # Remaining welding feet ratio
-    total_feet = (line.tig_feet or 0) + (line.mig_feet or 0) + (line.grinding_feet or 0)  # ponytail: kept for future use
-    # Approximate remaining via completion pct
     remaining_feet_ratio = 1.0 - min(pct, 1.0)
 
     order_value = getattr(project, "order_value", None) or 0.0
@@ -147,7 +144,22 @@ def compute_priority_score(
     advance_pct = getattr(project, "advance_received", 0.0) or 0.0
     repeat_bonus = 50 if is_repeat else 0
 
-    vendor_penalty = 0.0  # populated by caller if vendor known
+    # Look up vendor from most recent completed PO for this material/size/joint_type
+    vendor_penalty = 0.0
+    recent_po = (
+        db.query(PurchaseOrder)
+        .join(PurchaseOrderLine, PurchaseOrderLine.purchase_order_id == PurchaseOrder.id)
+        .filter(
+            PurchaseOrderLine.material_name == part.name,
+            PurchaseOrderLine.size == line.size,
+            PurchaseOrderLine.joint_type == line.joint_type,
+            PurchaseOrder.status == "received",
+        )
+        .order_by(PurchaseOrder.id.desc())
+        .first()
+    )
+    if recent_po and recent_po.vendor_id:
+        vendor_penalty = _vendor_avg_days_late(db, recent_po.vendor_id) * -8
 
     score = (
         tier
@@ -206,7 +218,7 @@ def get_morning_list(db: Session) -> list:
 
                 priority = _get_effective_priority(project)
                 lt = _lead_time(db, part.name)
-                order_by = (project.target_date - __import__("datetime").timedelta(days=lt)) if project.target_date else None
+                order_by = (project.target_date - timedelta(days=lt)) if project.target_date else None
                 days_to_order_by = (order_by - today).days if order_by else 999
                 days_overdue = max(0, -days_to_order_by)
                 bucket = _bucket(days_to_order_by, priority)

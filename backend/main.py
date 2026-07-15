@@ -183,6 +183,135 @@ _run_startup_migration("assembly_steps.completed_qty", [
     "ALTER TABLE assembly_steps ADD COLUMN completed_qty INTEGER DEFAULT 0",
 ])
 
+_run_startup_migration("procurement: vendor + po tables", [
+    """
+    CREATE TABLE IF NOT EXISTS vendors (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR NOT NULL,
+        contact_person VARCHAR,
+        phone VARCHAR,
+        email VARCHAR,
+        gstin VARCHAR,
+        payment_terms VARCHAR,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS purchase_orders (
+        id SERIAL PRIMARY KEY,
+        po_number VARCHAR UNIQUE NOT NULL,
+        vendor_id INTEGER REFERENCES vendors(id),
+        po_date DATE,
+        expected_delivery_date DATE,
+        status VARCHAR DEFAULT 'draft',
+        raised_by INTEGER REFERENCES users(id),
+        total_value DOUBLE PRECISION,
+        delay_reason TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS purchase_order_lines (
+        id SERIAL PRIMARY KEY,
+        purchase_order_id INTEGER NOT NULL REFERENCES purchase_orders(id),
+        material_name VARCHAR NOT NULL,
+        size INTEGER NOT NULL,
+        joint_type VARCHAR NOT NULL,
+        ordered_qty INTEGER NOT NULL DEFAULT 0,
+        unit_price DOUBLE PRECISION,
+        received_qty INTEGER DEFAULT 0,
+        status VARCHAR DEFAULT 'pending'
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS purchase_order_line_allocations (
+        id SERIAL PRIMARY KEY,
+        po_line_id INTEGER NOT NULL REFERENCES purchase_order_lines(id),
+        part_id INTEGER NOT NULL REFERENCES parts(id),
+        allocated_qty INTEGER NOT NULL,
+        already_received INTEGER DEFAULT 0
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS goods_receipts (
+        id SERIAL PRIMARY KEY,
+        purchase_order_id INTEGER NOT NULL REFERENCES purchase_orders(id),
+        receipt_date DATE DEFAULT CURRENT_DATE,
+        received_by INTEGER REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS goods_receipt_lines (
+        id SERIAL PRIMARY KEY,
+        receipt_id INTEGER NOT NULL REFERENCES goods_receipts(id),
+        po_line_id INTEGER NOT NULL REFERENCES purchase_order_lines(id),
+        qty_received INTEGER NOT NULL
+    )
+    """,
+])
+
+_run_startup_migration("procurement: warehouse_stock + lead_times", [
+    """
+    CREATE TABLE IF NOT EXISTS warehouse_stock (
+        id SERIAL PRIMARY KEY,
+        material_name VARCHAR NOT NULL,
+        size INTEGER NOT NULL,
+        joint_type VARCHAR NOT NULL,
+        qty_on_hand INTEGER DEFAULT 0,
+        reserved_qty INTEGER DEFAULT 0,
+        minimum_stock INTEGER DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT uq_warehouse_stock UNIQUE (material_name, size, joint_type)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS material_lead_times (
+        id SERIAL PRIMARY KEY,
+        material_name VARCHAR UNIQUE NOT NULL,
+        lead_time_days INTEGER NOT NULL DEFAULT 5
+    )
+    """,
+])
+
+_run_startup_migration("procurement: migrate raw_material_inventory → warehouse_stock", [
+    """
+    INSERT INTO warehouse_stock (material_name, size, joint_type, qty_on_hand, minimum_stock)
+    SELECT material_name, size, joint_type, current_stock, minimum_required_stock
+    FROM raw_material_inventory
+    WHERE NOT EXISTS (
+        SELECT 1 FROM warehouse_stock ws
+        WHERE ws.material_name = raw_material_inventory.material_name
+          AND ws.size = raw_material_inventory.size
+          AND ws.joint_type = raw_material_inventory.joint_type
+    )
+    """,
+])
+
+_run_startup_migration("procurement: seed material_lead_times defaults", [
+    """
+    INSERT INTO material_lead_times (material_name, lead_time_days) VALUES
+        ('Element', 5), ('Collar', 5), ('Weldend', 5), ('Spool', 5),
+        ('Flange', 7), ('Matching Flanges', 7), ('Liner', 4), ('Lug', 4),
+        ('Limit rod', 5), ('Bolts, Nuts', 3), ('Gaskets', 4),
+        ('Pipe-1', 5), ('Pipe-2', 5), ('Stopper Patti', 5),
+        ('Pipe-1 flange', 7), ('Pipe-2 flange', 7), ('Stopper flange', 7),
+        ('O-ring', 5), ('Studs Long', 4), ('Studs Short', 4), ('Box Packing', 3)
+    ON CONFLICT (material_name) DO NOTHING
+    """,
+])
+
+_run_startup_migration("projects: priority + order_value + advance + dispatch", [
+    "ALTER TABLE projects ADD COLUMN priority VARCHAR",
+    "ALTER TABLE projects ADD COLUMN order_value DOUBLE PRECISION",
+    "ALTER TABLE projects ADD COLUMN advance_received DOUBLE PRECISION DEFAULT 0.0",
+    "ALTER TABLE projects ADD COLUMN committed_dispatch_date DATE",
+])
+
 from backend.services.db_service import SessionLocal
 from backend.services.itemwise_backfill import backfill_itemwise
 backfill_itemwise(SessionLocal)

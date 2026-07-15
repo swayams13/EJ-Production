@@ -1,5 +1,60 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-15 (Session 16 — Procurement Module complete: Tasks 1-14)
+
+### What was built:
+
+**Full Procurement Module (Tasks 1–14)**
+
+A complete procurement sub-system was designed and shipped across 14 tasks on the `demo` branch. Nothing touches `main` — awaiting PM manual QA before merge.
+
+**Backend:**
+- **8 new ORM models** in `db_service.py`: `Vendor`, `WarehouseStock`, `MaterialLeadTime`, `PurchaseOrder`, `POLineItem`, `GoodsReceipt`, `GoodsReceiptLineItem`, `ProcurementDelayReason`
+- **Startup migrations** in `main.py`: `RawMaterialInventory → WarehouseStock` data copy (original table not dropped — safe for Railway), lead-time seed defaults for all standard components
+- **`backend/services/procurement_service.py`**: 13-factor priority score engine, FIFO stock allocation, morning-list bucketing (RED/ORANGE/GREEN), vendor average-days-late from receipt history, PO lifecycle state machine (draft → raised → sent → partially_received → received → cancelled)
+- **`backend/app/procurement/`**: 15 API routes covering vendors, stock, lead times, PO CRUD, goods receipt, morning list; RBAC: view=SUPERVISORS, write=MANAGEMENT
+- **4 new Project fields**: `order_value`, `advance_received`, `committed_dispatch_date`, `priority_score_override` on `Project` model + startup ALTER TABLE migrations
+- **`test_priority_score.py`**: 5 self-contained unit tests for the priority engine (no external deps)
+
+**Frontend (6 new pages):**
+- `/procurement` — Morning dashboard with RED/ORANGE/GREEN priority buckets
+- `/procurement/po` — PO list with status badges and filtering
+- `/procurement/po/[id]` — PO detail: line items, goods receipt form, lifecycle actions
+- `/procurement/vendors` — Vendor management (CRUD)
+- `/procurement/stock` — Warehouse stock levels
+- `/procurement/settings` — Lead times configuration
+
+**Sidebar:** `/inventory` removed, Procurement section added.
+
+**Key design decisions:**
+- FIFO allocation: goods receipts are applied to the oldest outstanding PO line items first
+- Priority score: 13 factors including days-to-deadline, advance-received ratio, order value, vendor penalty (avg_days_late from recent POs), delay reason presence
+- Vendor penalty: computed at query time from GoodsReceipt history — no denormalized column needed
+- Enterprise PO entity model: PO → POLineItem → GoodsReceipt → GoodsReceiptLineItem (supports partial receipts)
+- On-cancel: reserved stock released, PO parts reappear in morning list
+- On-raised: PartProcess("PO") auto-marked ready for shop-floor visibility
+- Delay reason removes item from hard-red bucket (postpones without losing context)
+
+### Validation results (2026-07-15):
+| Check | Result |
+|---|---|
+| `py_compile` on 8 backend files | PASS |
+| `python test_priority_score.py` (5 tests) | PASS — "All priority score tests passed." |
+| `npm run build` | PASS — 25 routes, 0 TS errors |
+| Branch | `demo` (15 procurement commits, `main` untouched) |
+
+### Status:
+On `demo` branch. Needs PM manual QA (especially morning dashboard with real data, lead times tuning per PM input) before merge to `main`.
+
+### What's next:
+- PM to open Railway demo, verify morning dashboard with live project data
+- Lead times to be adjusted per PM input (seed defaults are approximations)
+- Explicit go-ahead from PM/user → merge `demo` → `main`
+- Consider: vendor performance chart on procurement dashboard once sufficient receipt history exists
+
+---
+
+
 ## Date: 2026-07-14 (Session 15 — Task 10: Box Packing added to all 12 tags)
 
 ### What we did:

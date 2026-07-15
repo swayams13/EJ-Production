@@ -1,5 +1,34 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-14 (Session 15 — Task 10: Box Packing added to all 12 tags)
+
+### What we did:
+
+**Task 10 — Box Packing on all tags (`backend/services/joint_catalog.py`, `backend/services/templates.py`, `backend/services/itemwise_backfill.py`)**
+
+Verified that the other parts listed in Task 10 (FP1/FP2/FS flanges, Studs, O-rings) were already incorporated in Session 7 under their current names (`Pipe-1 flange`, `Pipe-2 flange`, `Stopper flange`, `O-ring`, `Studs Long`, `Studs Short`). The only genuinely missing piece was **Box Packing**.
+
+- Added `_f("Box Packing", 1)` to all 12 tags in `joint_catalog.py` (9 EJ + 3 DJ), positioned before `_s("Paint")`.
+- Added `"Box Packing": ["PO", "Material Received", "Inward Insp", "Ready"]` to `PROCESS_ROUTES` in `templates.py`.
+- Added `"Box Packing": 1.0` to `COMPONENT_WEIGHTS` in `templates.py`.
+- Extended `itemwise_backfill.py` to add Box Packing to existing tagged lines on next startup (additive only — skips lines that already have it, does not touch legacy/untagged lines). Also imports `route_for` from templates (previously only `TEMPLATES` was imported).
+
+### Files changed (3):
+- `backend/services/joint_catalog.py` — Box Packing FIXED(1) added to all 12 tags
+- `backend/services/templates.py` — route + weight for Box Packing
+- `backend/services/itemwise_backfill.py` — Box Packing backfill pass for existing tagged lines
+
+### Verified:
+- `py_compile` clean on all 3 files.
+- `grep` confirms exactly 12 occurrences of Box Packing in `joint_catalog.py`.
+
+### ⚠️ Still pending:
+- Commit + push to `demo` branch.
+- CF flag (Companion Flanges placement in DJ) still open — skipped as instructed.
+- User browser verification of demo still pending (from Sessions 12–14).
+
+---
+
 ## Date: 2026-07-14 (Session 14 — refresh tokens, gating logic, WIP current stage, planning targets)
 
 ### What we did:

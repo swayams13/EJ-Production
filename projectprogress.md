@@ -1,5 +1,115 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-15 (Session 17 — GM spec changes applied)
+
+### What was done:
+Applied two changes from the GM-approved review file (`EJ_DJ_Full_Spec_GM_Review (2).xlsx`), changes marked in red:
+
+**1. `backend/services/joint_catalog.py` — Gaskets kind: FIXED → ENTER (4 tags)**
+GM explicitly marked Gaskets as "Enter (user-supplied)" (red cells E26, E37, E63, E74) for all four MF-variant EJ tags:
+- `S-EJ-F-1MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+- `S-EJ-F-2MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+- `U-EJ-F-1MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+- `U-EJ-F-2MF-S-L`: `_f("Gaskets", 2)` → `_e("Gaskets")`
+
+**2. `backend/services/templates.py` — Element process route: add "SF Cutting"**
+GM marked "SF Cutting" in red as a step for Element across all 9 EJ tags. Added after "Forming":
+`["Material Received", "Cutting", "Welding", "DP test", "Forming", "SF Cutting", "Ready"]`
+
+### Verified: `py_compile` clean on both files.
+
+### Open question (not in red, not changed):
+- `U-EJ-W-S-L` Gaskets: our code has `_f("Gaskets", 2)` but spec Component sheet omits Gaskets; Process sheet includes it. GM left unmarked. Needs explicit confirm before changing.
+
+### Status:
+Changes on `demo` branch (not yet committed). `main` untouched.
+
+---
+
+## Date: 2026-07-15 (Session 16 — Procurement Module complete: Tasks 1-14)
+
+### What was built:
+
+**Full Procurement Module (Tasks 1–14)**
+
+A complete procurement sub-system was designed and shipped across 14 tasks on the `demo` branch. Nothing touches `main` — awaiting PM manual QA before merge.
+
+**Backend:**
+- **8 new ORM models** in `db_service.py`: `Vendor`, `WarehouseStock`, `MaterialLeadTime`, `PurchaseOrder`, `POLineItem`, `GoodsReceipt`, `GoodsReceiptLineItem`, `ProcurementDelayReason`
+- **Startup migrations** in `main.py`: `RawMaterialInventory → WarehouseStock` data copy (original table not dropped — safe for Railway), lead-time seed defaults for all standard components
+- **`backend/services/procurement_service.py`**: 13-factor priority score engine, FIFO stock allocation, morning-list bucketing (RED/ORANGE/GREEN), vendor average-days-late from receipt history, PO lifecycle state machine (draft → raised → sent → partially_received → received → cancelled)
+- **`backend/app/procurement/`**: 15 API routes covering vendors, stock, lead times, PO CRUD, goods receipt, morning list; RBAC: view=SUPERVISORS, write=MANAGEMENT
+- **4 new Project fields**: `order_value`, `advance_received`, `committed_dispatch_date`, `priority_score_override` on `Project` model + startup ALTER TABLE migrations
+- **`test_priority_score.py`**: 5 self-contained unit tests for the priority engine (no external deps)
+
+**Frontend (6 new pages):**
+- `/procurement` — Morning dashboard with RED/ORANGE/GREEN priority buckets
+- `/procurement/po` — PO list with status badges and filtering
+- `/procurement/po/[id]` — PO detail: line items, goods receipt form, lifecycle actions
+- `/procurement/vendors` — Vendor management (CRUD)
+- `/procurement/stock` — Warehouse stock levels
+- `/procurement/settings` — Lead times configuration
+
+**Sidebar:** `/inventory` removed, Procurement section added.
+
+**Key design decisions:**
+- FIFO allocation: goods receipts are applied to the oldest outstanding PO line items first
+- Priority score: 13 factors including days-to-deadline, advance-received ratio, order value, vendor penalty (avg_days_late from recent POs), delay reason presence
+- Vendor penalty: computed at query time from GoodsReceipt history — no denormalized column needed
+- Enterprise PO entity model: PO → POLineItem → GoodsReceipt → GoodsReceiptLineItem (supports partial receipts)
+- On-cancel: reserved stock released, PO parts reappear in morning list
+- On-raised: PartProcess("PO") auto-marked ready for shop-floor visibility
+- Delay reason removes item from hard-red bucket (postpones without losing context)
+
+### Validation results (2026-07-15):
+| Check | Result |
+|---|---|
+| `py_compile` on 8 backend files | PASS |
+| `python test_priority_score.py` (5 tests) | PASS — "All priority score tests passed." |
+| `npm run build` | PASS — 25 routes, 0 TS errors |
+| Branch | `demo` (15 procurement commits, `main` untouched) |
+
+### Status:
+On `demo` branch. Needs PM manual QA (especially morning dashboard with real data, lead times tuning per PM input) before merge to `main`.
+
+### What's next:
+- PM to open Railway demo, verify morning dashboard with live project data
+- Lead times to be adjusted per PM input (seed defaults are approximations)
+- Explicit go-ahead from PM/user → merge `demo` → `main`
+- Consider: vendor performance chart on procurement dashboard once sufficient receipt history exists
+
+---
+
+
+## Date: 2026-07-14 (Session 15 — Task 10: Box Packing added to all 12 tags)
+
+### What we did:
+
+**Task 10 — Box Packing on all tags (`backend/services/joint_catalog.py`, `backend/services/templates.py`, `backend/services/itemwise_backfill.py`)**
+
+Verified that the other parts listed in Task 10 (FP1/FP2/FS flanges, Studs, O-rings) were already incorporated in Session 7 under their current names (`Pipe-1 flange`, `Pipe-2 flange`, `Stopper flange`, `O-ring`, `Studs Long`, `Studs Short`). The only genuinely missing piece was **Box Packing**.
+
+- Added `_f("Box Packing", 1)` to all 12 tags in `joint_catalog.py` (9 EJ + 3 DJ), positioned before `_s("Paint")`.
+- Added `"Box Packing": ["PO", "Material Received", "Inward Insp", "Ready"]` to `PROCESS_ROUTES` in `templates.py`.
+- Added `"Box Packing": 1.0` to `COMPONENT_WEIGHTS` in `templates.py`.
+- Extended `itemwise_backfill.py` to add Box Packing to existing tagged lines on next startup (additive only — skips lines that already have it, does not touch legacy/untagged lines). Also imports `route_for` from templates (previously only `TEMPLATES` was imported).
+
+### Files changed (3):
+- `backend/services/joint_catalog.py` — Box Packing FIXED(1) added to all 12 tags
+- `backend/services/templates.py` — route + weight for Box Packing
+- `backend/services/itemwise_backfill.py` — Box Packing backfill pass for existing tagged lines
+
+### Verified:
+- `py_compile` clean on all 3 files.
+- `grep` confirms exactly 12 occurrences of Box Packing in `joint_catalog.py`.
+
+### ⚠️ Still pending:
+- Commit + push to `demo` branch.
+- CF flag (Companion Flanges placement in DJ) still open — skipped as instructed.
+- User browser verification of demo still pending (from Sessions 12–14).
+
+---
+
 ## Date: 2026-07-14 (Session 14 — refresh tokens, gating logic, WIP current stage, planning targets)
 
 ### What we did:

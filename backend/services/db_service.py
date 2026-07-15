@@ -66,7 +66,11 @@ class Project(Base):
     target_date = Column(Date, nullable=True)
     payroll = Column(String, default="Company", nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+    priority = Column(String, nullable=True)                   # P1|P2|P3 — null = auto-compute from deadline
+    order_value = Column(Float, nullable=True)                 # quotation value ₹
+    advance_received = Column(Float, default=0.0)              # % advance paid
+    committed_dispatch_date = Column(Date, nullable=True)      # client-committed date
+
     production_lines = relationship("ProjectProductionLine", back_populates="project", cascade="all, delete-orphan")
     resource_assignment = relationship("ProjectResourceAssignment", uselist=False, back_populates="project", cascade="all, delete-orphan")
 
@@ -212,6 +216,115 @@ class RawMaterialInventory(Base):
     current_stock = Column(Integer, default=0, nullable=False)
     minimum_required_stock = Column(Integer, default=0, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Vendor(Base):
+    __tablename__ = "vendors"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    contact_person = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    gstin = Column(String, nullable=True)
+    payment_terms = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    purchase_orders = relationship("PurchaseOrder", back_populates="vendor")
+
+
+class PurchaseOrder(Base):
+    __tablename__ = "purchase_orders"
+    id = Column(Integer, primary_key=True, index=True)
+    po_number = Column(String, unique=True, nullable=False, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    po_date = Column(Date, nullable=True)
+    expected_delivery_date = Column(Date, nullable=True)
+    status = Column(String, default="draft")  # draft|raised|sent|partially_received|received|cancelled
+    raised_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    total_value = Column(Float, nullable=True)
+    delay_reason = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    vendor = relationship("Vendor", back_populates="purchase_orders")
+    lines = relationship("PurchaseOrderLine", back_populates="purchase_order", cascade="all, delete-orphan")
+    receipts = relationship("GoodsReceipt", back_populates="purchase_order", cascade="all, delete-orphan")
+
+
+class PurchaseOrderLine(Base):
+    __tablename__ = "purchase_order_lines"
+    id = Column(Integer, primary_key=True, index=True)
+    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False)
+    material_name = Column(String, nullable=False)
+    size = Column(Integer, nullable=False)
+    joint_type = Column(String, nullable=False)  # EJ | DJ
+    ordered_qty = Column(Integer, nullable=False, default=0)
+    unit_price = Column(Float, nullable=True)
+    received_qty = Column(Integer, default=0)  # aggregate; updated on each receipt
+    status = Column(String, default="pending")  # pending|partially_received|received
+
+    purchase_order = relationship("PurchaseOrder", back_populates="lines")
+    allocations = relationship("PurchaseOrderLineAllocation", back_populates="po_line", cascade="all, delete-orphan")
+    receipt_lines = relationship("GoodsReceiptLine", back_populates="po_line")
+
+
+class PurchaseOrderLineAllocation(Base):
+    __tablename__ = "purchase_order_line_allocations"
+    id = Column(Integer, primary_key=True, index=True)
+    po_line_id = Column(Integer, ForeignKey("purchase_order_lines.id"), nullable=False)
+    part_id = Column(Integer, ForeignKey("parts.id"), nullable=False)
+    allocated_qty = Column(Integer, nullable=False)
+    already_received = Column(Integer, default=0)  # tracks FIFO fill progress per allocation
+
+    po_line = relationship("PurchaseOrderLine", back_populates="allocations")
+    part = relationship("Part")
+
+
+class GoodsReceipt(Base):
+    __tablename__ = "goods_receipts"
+    id = Column(Integer, primary_key=True, index=True)
+    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False)
+    receipt_date = Column(Date, default=date.today)
+    received_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    purchase_order = relationship("PurchaseOrder", back_populates="receipts")
+    lines = relationship("GoodsReceiptLine", back_populates="receipt", cascade="all, delete-orphan")
+
+
+class GoodsReceiptLine(Base):
+    __tablename__ = "goods_receipt_lines"
+    id = Column(Integer, primary_key=True, index=True)
+    receipt_id = Column(Integer, ForeignKey("goods_receipts.id"), nullable=False)
+    po_line_id = Column(Integer, ForeignKey("purchase_order_lines.id"), nullable=False)
+    qty_received = Column(Integer, nullable=False)
+
+    receipt = relationship("GoodsReceipt", back_populates="lines")
+    po_line = relationship("PurchaseOrderLine", back_populates="receipt_lines")
+
+
+class WarehouseStock(Base):
+    __tablename__ = "warehouse_stock"
+    id = Column(Integer, primary_key=True, index=True)
+    material_name = Column(String, nullable=False, index=True)
+    size = Column(Integer, nullable=False, index=True)
+    joint_type = Column(String, nullable=False)
+    qty_on_hand = Column(Integer, default=0)
+    reserved_qty = Column(Integer, default=0)
+    minimum_stock = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("material_name", "size", "joint_type", name="uq_warehouse_stock"),)
+
+
+class MaterialLeadTime(Base):
+    __tablename__ = "material_lead_times"
+    id = Column(Integer, primary_key=True, index=True)
+    material_name = Column(String, unique=True, nullable=False)
+    lead_time_days = Column(Integer, nullable=False, default=5)
+
 
 class WorkforceMaster(Base):
     __tablename__ = "workforce_master"

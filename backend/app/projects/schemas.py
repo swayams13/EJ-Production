@@ -22,6 +22,10 @@ class ProjectCreate(BaseModel):
     assigned_tig: Optional[int] = 0
     assigned_mig: Optional[int] = 0
     assigned_grinders: Optional[int] = 0
+    priority: Optional[str] = None           # P1 | P2 | P3
+    order_value: Optional[float] = None
+    advance_received: Optional[float] = 0.0
+    committed_dispatch_date: Optional[date] = None
 
 class ProjectUpdate(BaseModel):
     status: Optional[str] = None
@@ -33,6 +37,10 @@ class ProjectUpdate(BaseModel):
     assigned_tig: Optional[int] = None
     assigned_mig: Optional[int] = None
     assigned_grinders: Optional[int] = None
+    priority: Optional[str] = None
+    order_value: Optional[float] = None
+    advance_received: Optional[float] = None
+    committed_dispatch_date: Optional[date] = None
 
 class SimulationRequest(BaseModel):
     target_days: int

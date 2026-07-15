@@ -84,6 +84,10 @@ interface ProjectRow {
   assigned_tig?: number;
   assigned_mig?: number;
   assigned_grinders?: number;
+  priority?: string;
+  order_value?: number;
+  advance_received?: number;
+  committed_dispatch_date?: string;
   bellows?: Array<{
     size: number;
     quantity: number;
@@ -110,6 +114,11 @@ export default function EditProjects() {
   const [statusNote, setStatusNote] = useState<string>("");
   const [holdType, setHoldType] = useState<string>("");
   const [holdUntilDate, setHoldUntilDate] = useState<string>("");
+
+  const [priority, setPriority] = useState<string>("");
+  const [orderValue, setOrderValue] = useState<string>("");
+  const [advanceReceived, setAdvanceReceived] = useState<string>("0");
+  const [committedDispatchDate, setCommittedDispatchDate] = useState<string>("");
 
   const [bellows, setBellows] = useState<BellowRow[]>([]);
   const [masterData, setMasterData] = useState<MasterSize[]>([]);
@@ -214,6 +223,10 @@ export default function EditProjects() {
         setAssignedTig(p.assigned_tig || 0);
         setAssignedMig(p.assigned_mig || 0);
         setAssignedGrinders(p.assigned_grinders || 0);
+        setPriority(p.priority || "");
+        setOrderValue(p.order_value != null ? String(p.order_value) : "");
+        setAdvanceReceived(p.advance_received != null ? String(p.advance_received) : "0");
+        setCommittedDispatchDate(p.committed_dispatch_date ? p.committed_dispatch_date.split("T")[0] : "");
         setBellows([]);
         apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects/${id}/bellows`)
           .then((res) => res.json())
@@ -253,6 +266,10 @@ export default function EditProjects() {
       setTargetDate("");
       setStatusNote("");
       setHoldUntilDate("");
+      setPriority("");
+      setOrderValue("");
+      setAdvanceReceived("0");
+      setCommittedDispatchDate("");
     }
   };
 
@@ -414,6 +431,10 @@ export default function EditProjects() {
           assigned_tig: assignedTig,
           assigned_mig: assignedMig,
           assigned_grinders: assignedGrinders,
+          priority: priority || null,
+          order_value: orderValue ? Number(orderValue) : null,
+          advance_received: Number(advanceReceived) || 0,
+          committed_dispatch_date: committedDispatchDate || null,
         }),
       });
 
@@ -510,6 +531,31 @@ export default function EditProjects() {
                       <option value="Company">Company</option>
                       <option value="Contractor">Contractor</option>
                     </Select>
+                  </div>
+
+                  <div>
+                    <Label>Priority</Label>
+                    <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                      <option value="">Auto (from deadline)</option>
+                      <option value="P1">P1 — High</option>
+                      <option value="P2">P2 — Medium</option>
+                      <option value="P3">P3 — Low</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Order Value (₹)</Label>
+                    <Input type="number" min="0" placeholder="Quotation value" value={orderValue} onChange={(e) => setOrderValue(e.target.value)} />
+                  </div>
+
+                  <div>
+                    <Label>Advance Received (%)</Label>
+                    <Input type="number" min="0" max="100" value={advanceReceived} onChange={(e) => setAdvanceReceived(e.target.value)} />
+                  </div>
+
+                  <div>
+                    <Label>Client Dispatch Commitment</Label>
+                    <Input type="date" value={committedDispatchDate} onChange={(e) => setCommittedDispatchDate(e.target.value)} />
                   </div>
 
                   {status === "Hold" && (

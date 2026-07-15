@@ -81,7 +81,7 @@ JOINT_TYPES = [
         "weld_family": "EJ",
         "description": "Single with Flange End",
         "components": [
-            _f("Element", 1), _f("Collar", 2), _f("Flange", 2), _s("Paint"),
+            _f("Element", 1), _f("Collar", 2), _f("Flange", 2), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -91,7 +91,7 @@ JOINT_TYPES = [
         "description": "Single with Flange End, Lugs & Limit Rods",
         "components": [
             _f("Element", 1), _f("Collar", 2), _f("Flange", 2), _f("Weldend", 2),
-            _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1), _s("Paint"),
+            _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -102,7 +102,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 1), _f("Collar", 2), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1),
-            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _f("Gaskets", 2), _s("Paint"),
+            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -113,7 +113,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 1), _f("Collar", 2), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1),
-            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _f("Gaskets", 2), _s("Paint"),
+            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -123,7 +123,7 @@ JOINT_TYPES = [
         "description": "Single with Weld End, Lugs & Limit Rods",
         "components": [
             _f("Element", 1), _f("Collar", 2), _f("Weldend", 2),
-            _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1), _s("Paint"),
+            _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 1), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     # ---------------- UNIVERSAL JOINTS (weld_family EJ) --------------------
@@ -134,7 +134,7 @@ JOINT_TYPES = [
         "description": "Universal with Flange End, Lugs & Limit Rods",
         "components": [
             _f("Element", 2), _f("Collar", 4), _f("Flange", 2), _f("Weldend", 2),
-            _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 2), _s("Paint"),
+            _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 2), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -145,7 +145,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 2), _f("Collar", 4), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 2),
-            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _f("Gaskets", 2), _s("Paint"),
+            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -156,7 +156,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 2), _f("Collar", 4), _f("Flange", 2), _f("Weldend", 2),
             _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 2),
-            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _f("Gaskets", 2), _s("Paint"),
+            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -167,7 +167,7 @@ JOINT_TYPES = [
         "components": [
             _f("Element", 2), _f("Collar", 4), _f("Flange", 2), _f("Weldend", 2),
             _f("Spool", 1), _e("Limit rod"), _d("Lug", 2, "Limit rod"), _f("Liner", 2),
-            _f("Gaskets", 2), _s("Paint"),
+            _f("Gaskets", 2), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     # ---------------- DISMANTLING JOINTS (weld_family DJ) -----------------
@@ -179,7 +179,7 @@ JOINT_TYPES = [
         "components": [
             _f("Pipe-1", 1), _f("Pipe-2", 1), _f("Stopper Patti", 1),
             _f("Pipe-1 flange", 1), _f("Pipe-2 flange", 1), _f("Stopper flange", 1),
-            _f("O-ring", 2), _e("Studs Long"), _e("Studs Short"), _s("Paint"),
+            _f("O-ring", 2), _e("Studs Long"), _e("Studs Short"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -191,7 +191,7 @@ JOINT_TYPES = [
             _f("Pipe-1", 1), _f("Pipe-2", 1), _f("Stopper Patti", 1),
             _f("Pipe-1 flange", 1), _f("Pipe-2 flange", 1), _f("Stopper flange", 1),
             _f("O-ring", 2), _e("Studs Long"), _e("Studs Short"),
-            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _e("Gaskets"), _s("Paint"),
+            _f("Matching Flanges", 1), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
     {
@@ -203,7 +203,7 @@ JOINT_TYPES = [
             _f("Pipe-1", 1), _f("Pipe-2", 1), _f("Stopper Patti", 1),
             _f("Pipe-1 flange", 1), _f("Pipe-2 flange", 1), _f("Stopper flange", 1),
             _f("O-ring", 2), _e("Studs Long"), _e("Studs Short"),
-            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _e("Gaskets"), _s("Paint"),
+            _f("Matching Flanges", 2), _e("Bolts, Nuts"), _e("Gaskets"), _f("Box Packing", 1), _s("Paint"),
         ],
     },
 ]

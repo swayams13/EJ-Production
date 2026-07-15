@@ -70,7 +70,10 @@ def get_projects(db: Session = Depends(get_db), current_user: dict = Depends(req
             "assigned_mig": assign.assigned_mig_welders if assign else 0,
             "assigned_grinders": assign.assigned_grinders if assign else 0,
             "bellows": bellows,
-            "progress_percentage": round(progress, 2)
+            "progress_percentage": round(progress, 2),
+            "order_value": getattr(p, "order_value", None),
+            "advance_received": getattr(p, "advance_received", 0.0),
+            "committed_dispatch_date": str(p.committed_dispatch_date) if getattr(p, "committed_dispatch_date", None) else None,
         })
     return {"success": True, "message": "Projects retrieved", "data": results}
 
@@ -109,7 +112,11 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db), current_us
         target_date=req.target_date,
         payroll=req.payroll,
         created_at=datetime.utcnow(),
-        status="Active"
+        status="Active",
+        priority=req.priority,
+        order_value=req.order_value,
+        advance_received=req.advance_received or 0.0,
+        committed_dispatch_date=req.committed_dispatch_date,
     )
     db.add(new_proj)
     db.commit()
@@ -199,7 +206,16 @@ def update_project(project_id: int, req: ProjectUpdate, db: Session = Depends(ge
         
     if req.payroll is not None:
         proj.payroll = req.payroll
-        
+
+    if req.priority is not None:
+        proj.priority = req.priority
+    if req.order_value is not None:
+        proj.order_value = req.order_value
+    if req.advance_received is not None:
+        proj.advance_received = req.advance_received
+    if req.committed_dispatch_date is not None:
+        proj.committed_dispatch_date = req.committed_dispatch_date
+
     assign = db.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == project_id).first()
     if assign:
         if req.assigned_tig is not None:

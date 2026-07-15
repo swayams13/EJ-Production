@@ -17,7 +17,7 @@
 # --------------------------------------------------------------------------
 PROCESS_ROUTES = {
     # Expansion-joint components
-    "Element":          ["Material Received", "Cutting", "Welding", "DP test", "Forming", "Ready"],
+    "Element":          ["Material Received", "Cutting", "Welding", "DP test", "Forming", "SF Cutting", "Ready"],
     "Collar":           ["Material Received", "Cutting", "Welding", "DP test", "Ready"],
     "Weldend":          ["Material Received", "Cutting", "Bending", "Welding", "Re-Rolling", "DP test", "SF Cutting", "Ready"],
     "Spool":            ["Material Received", "Cutting", "Bending", "Welding", "Re-Rolling", "DP test", "Ready"],
@@ -38,6 +38,7 @@ PROCESS_ROUTES = {
     "O-ring":           ["PO", "Material Received", "Inward Insp", "Ready"],
     "Studs Long":       ["PO", "Material Received", "Inward Insp", "Ready"],
     "Studs Short":      ["PO", "Material Received", "Inward Insp", "Ready"],
+    "Box Packing":      ["PO", "Material Received", "Inward Insp", "Ready"],
 }
 
 # Any component without an explicit route gets a minimal one.
@@ -53,6 +54,7 @@ COMPONENT_WEIGHTS = {
     "Pipe-1": 10.0, "Pipe-2": 10.0, "Stopper Patti": 5.0,
     "Pipe-1 flange": 10.0, "Pipe-2 flange": 10.0, "Stopper flange": 10.0,
     "O-ring": 2.0, "Studs Long": 2.0, "Studs Short": 2.0,
+    "Box Packing": 1.0,
 }
 DEFAULT_WEIGHT = 5.0
 

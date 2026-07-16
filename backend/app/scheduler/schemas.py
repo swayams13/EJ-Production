@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 class SimpleUser(BaseModel):
     id: int
-    full_name: Optional[str]
+    full_name: Optional[str] = None
     base_productivity: Optional[float] = None
 
     class Config:
@@ -31,8 +31,8 @@ class SimplePartProcess(BaseModel):
 
 class SimpleProductionLine(BaseModel):
     id: int
-    size: Optional[int]
-    joint_type: Optional[str]
+    size: Optional[int] = None
+    joint_type: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -85,15 +85,15 @@ class WorkOrderResponse(BaseModel):
     id: int
     project_id: int
     user_id: int
-    part_id: Optional[int]
+    part_id: Optional[int] = None
     date: date
     process_type: str
     target_feet: float
-    actual_feet: Optional[float]
+    actual_feet: Optional[float] = None
     is_overtime: bool
     status: str
-    completed_part_process_id: Optional[int]
-    notes: Optional[str]
+    completed_part_process_id: Optional[int] = None
+    notes: Optional[str] = None
     created_at: datetime
     user: Optional[SimpleUser] = None
     project: Optional[SimpleProject] = None
@@ -123,15 +123,15 @@ class ChangeRequestCreate(BaseModel):
 class ChangeRequestResponse(BaseModel):
     id: int
     subject_type: str
-    subject_id: Optional[int]
-    target_date: Optional[date]
+    subject_id: Optional[int] = None
+    target_date: Optional[date] = None
     proposed_by: int
-    approved_by: Optional[int]
+    approved_by: Optional[int] = None
     status: str
     changes_json: str
-    rejection_note: Optional[str]
+    rejection_note: Optional[str] = None
     created_at: datetime
-    resolved_at: Optional[datetime]
+    resolved_at: Optional[datetime] = None
     proposer: Optional[SimpleUser] = None
 
     class Config:

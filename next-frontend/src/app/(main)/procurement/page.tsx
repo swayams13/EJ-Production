@@ -34,18 +34,16 @@ function daysLeftClass(days: number): string {
 interface MorningListItem {
   part_id: number;
   project_name: string;
-  project_priority: string;
-  deadline: string;
-  days_to_deadline: number;
+  priority: string;
+  target_date: string | null;
+  days_to_order_by: number;
   material_name: string;
   size: number;
   joint_type: string;
-  qty_needed: number;
+  still_needs_ordering: number;
   priority_score: number;
   bucket: string;
-  has_delay_reason: boolean;
   delay_reason: string | null;
-  open_po_count: number;
 }
 
 function SectionTable({
@@ -84,28 +82,28 @@ function SectionTable({
           <Tr key={item.part_id} className={dimmed ? "opacity-75" : ""}>
             <Td>
               <div className="font-semibold text-ink">{item.project_name}</div>
-              {item.has_delay_reason && item.delay_reason && (
+              {item.delay_reason && (
                 <div className="mt-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
                   {item.delay_reason}
                 </div>
               )}
             </Td>
             <Td>
-              <Badge tone={PRIORITY_TONE[item.project_priority] ?? "neutral"}>
-                {item.project_priority}
+              <Badge tone={PRIORITY_TONE[item.priority] ?? "neutral"}>
+                {item.priority}
               </Badge>
             </Td>
-            <Td className="font-data text-sm">{item.deadline}</Td>
+            <Td className="font-data text-sm">{item.target_date ?? "—"}</Td>
             <Td numeric>
-              <span className={daysLeftClass(item.days_to_deadline)}>
-                {item.days_to_deadline}
+              <span className={daysLeftClass(item.days_to_order_by)}>
+                {item.days_to_order_by}
               </span>
             </Td>
             <Td>{item.material_name}</Td>
             <Td numeric>{item.size}</Td>
-            <Td numeric>{item.qty_needed}</Td>
+            <Td numeric>{item.still_needs_ordering}</Td>
             {showOrderBy && (
-              <Td className="font-data text-sm text-ink-soft">{item.deadline}</Td>
+              <Td className="font-data text-sm text-ink-soft">{item.target_date ?? "—"}</Td>
             )}
             {showActions && (
               <Td numeric>
@@ -113,7 +111,7 @@ function SectionTable({
                   <Button variant="primary" onClick={() => onCreatePO(item)}>
                     Create PO
                   </Button>
-                  {!item.has_delay_reason && (
+                  {!item.delay_reason && (
                     <Button variant="ghost" onClick={() => onLogReason(item)}>
                       Log Reason
                     </Button>
@@ -212,8 +210,8 @@ export default function ProcurementDashboard() {
   );
 
   // Bucket the flat list client-side
-  const redCritical = items.filter(i => i.bucket === "RED" && !i.has_delay_reason);
-  const redDelayed = items.filter(i => i.bucket === "RED" && i.has_delay_reason);
+  const redCritical = items.filter(i => i.bucket === "RED" && !i.delay_reason);
+  const redDelayed = items.filter(i => i.bucket === "RED" && !!i.delay_reason);
   const orange = items.filter(i => i.bucket === "ORANGE");
   const green = items.filter(i => i.bucket === "GREEN");
 

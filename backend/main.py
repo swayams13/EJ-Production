@@ -157,6 +157,17 @@ _run_startup_migration("joint tag columns", [
     "ALTER TABLE parts ADD COLUMN total_qty INTEGER DEFAULT 0",
 ])
 
+_run_startup_migration("parts: backfill total_qty=0 from line quantity for legacy parts", [
+    """
+    UPDATE parts p
+    SET total_qty = ppl.quantity
+    FROM project_production_lines ppl
+    WHERE p.production_line_id = ppl.id
+      AND p.total_qty = 0
+      AND ppl.quantity > 0
+    """,
+])
+
 _run_startup_migration("job_final_checks table", [
     """
     CREATE TABLE IF NOT EXISTS job_final_checks (
@@ -303,6 +314,17 @@ _run_startup_migration("procurement: seed material_lead_times defaults", [
         ('O-ring', 5), ('Studs Long', 4), ('Studs Short', 4), ('Box Packing', 3)
     ON CONFLICT (material_name) DO NOTHING
     """,
+])
+
+_run_startup_migration("warehouse_stock: normalize legacy material names to catalog names", [
+    "UPDATE warehouse_stock SET material_name = 'Element'      WHERE LOWER(material_name) IN ('bellows', 'bellows (b)', 'element bellows')",
+    "UPDATE warehouse_stock SET material_name = 'Limit rod'    WHERE LOWER(material_name) IN ('limit rods', 'limit rods (lr)', 'limit rod (lr)')",
+    "UPDATE warehouse_stock SET material_name = 'Bolts, Nuts'  WHERE LOWER(material_name) IN ('mat. bolts, nut, washer set', 'bolts', 'bolts nuts', 'bolts & nuts', 'bolts,nuts')",
+    "UPDATE warehouse_stock SET material_name = 'Gaskets'      WHERE LOWER(material_name) IN ('gasket', 'gasket (g)', 'gaskets (g)')",
+    "UPDATE warehouse_stock SET material_name = 'Lug'          WHERE LOWER(material_name) IN ('lugs', 'lugs (l)', 'lug (l)')",
+    "UPDATE warehouse_stock SET material_name = 'Liner'        WHERE LOWER(material_name) IN ('internal sleeve', 'internal sleeve (is)', 'liner (is)')",
+    "UPDATE warehouse_stock SET material_name = 'Stopper Patti' WHERE LOWER(material_name) IN ('stopper', 'stopper (s)')",
+    "UPDATE warehouse_stock SET material_name = 'Flange'       WHERE LOWER(material_name) IN ('compensator flanges', 'compensator flanges (f)', 'flange (f)')",
 ])
 
 _run_startup_migration("projects: priority + order_value + advance + dispatch", [

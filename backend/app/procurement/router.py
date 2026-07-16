@@ -357,9 +357,4 @@ def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVIS
     for item in items:
         item["delay_reason"] = part_delay_map.get(item["part_id"])
 
-    return {
-        "red": [i for i in items if i["bucket"] == "RED" and not i["delay_reason"]],
-        "red_delayed": [i for i in items if i["bucket"] == "RED" and i["delay_reason"]],
-        "orange": [i for i in items if i["bucket"] == "ORANGE"],
-        "green": [i for i in items if i["bucket"] == "GREEN"],
-    }
+    return items

@@ -117,7 +117,7 @@ def compute_priority_score(
     active_bonus = 200 if is_active else 0
 
     today = date.today()
-    days_to_target = (project.target_date - today).days if project.target_date else 999
+    days_to_target = (project.target_date - today).days if project.target_date else 30
     dispatch_date = getattr(project, "committed_dispatch_date", None)
     days_to_dispatch = (dispatch_date - today).days if dispatch_date else None
 
@@ -219,7 +219,8 @@ def get_morning_list(db: Session) -> list:
                 priority = _get_effective_priority(project)
                 lt = _lead_time(db, part.name)
                 order_by = (project.target_date - timedelta(days=lt)) if project.target_date else None
-                days_to_order_by = (order_by - today).days if order_by else 999
+                # ponytail: no target_date → show in GREEN (needs planning, urgency unknown)
+                days_to_order_by = (order_by - today).days if order_by else 7
                 days_overdue = max(0, -days_to_order_by)
                 bucket = _bucket(days_to_order_by, priority)
 

@@ -1053,3 +1053,74 @@ contract, then reviewed/compiled on Opus. All backend files `py_compile` clean.
 - Execute Phase 6 (Hold Management System) - *Note: We have already completed a large chunk of this in earlier sessions, just need to finalize tracking material holds.*
 - Execute Phase 7 (Material Intelligence Engine).
 - Finalize the Quality & Efficiency score calculation logic with exact formulas.
+
+---
+
+## Date: 2026-07-16 (Session 19 — Work Assignment Feature)
+
+### What was decided:
+- Build a full WorkOrder + ChangeRequest system replacing the old DailyTaskAssignment scheduler view.
+- WorkOrder is per (worker, project, process_type, day) — same granularity as DailyTaskAssignment but adds `part_id` for material-gate context.
+- Material gate is **advisory**: if no matching stock found, WorkOrder still created with `part_id=null` and a ⚠ No Stock badge on the frontend. Pacing continuity takes precedence over hard blocking.
+- Supervisor-proposes / PM-approves workflow for: (a) daily plan overrides (exclude workers, capacity changes) and (b) employee profile edits (skills, pace/day, active).
+- The old `/scheduler` page is fully replaced; `DailyTaskAssignment` + `/auto-assign` endpoints left in place as legacy (not shown in new UI).
+
+### What was done:
+
+**Backend (`backend/services/db_service.py`)**
+- Added `WorkOrder` model (table: `work_orders`) with indexes on (date, user_id) and (date, project_id).
+- Added `ChangeRequest` model (table: `change_requests`) with two subject types: `daily_plan_override` and `employee_profile`.
+
+**Backend (`backend/app/scheduler/schemas.py`)**
+- Full replacement with 12 Pydantic v1 schema classes: SimpleUser, SimpleProject, SimplePartProcess, SimpleProductionLine, SimplePartWithProcesses, TaskAssignmentCreate (legacy), TaskAssignmentResponse (legacy), WorkOrderResponse, WorkOrderComplete, ChangeRequestCreate, ChangeRequestResponse, ChangeRequestReject.
+
+**Backend (`backend/app/scheduler/router.py`)**
+- Import block upgraded: added `json`, `joinedload`, `nullslast`, all new schema + db symbols.
+- Added `PROCESS_TYPE_TO_STEPS` constant mapping process type → PartProcess step names.
+- Added `_available_stock_local()` helper (warehouse gate: `qty_on_hand - reserved_qty`).
+- Added `find_available_part()` helper (returns first Part with available stock + unready matching process step).
+- Added `POST /generate-work-orders` (PM-only): clears existing WOs for date, applies approved ChangeRequest overrides, assigns by skill tier (0→3) + overtime, records `part_id` via material gate, returns `no_stock_projects` list.
+- Added `GET /work-orders` with joinedload chain (user, project, part→processes, part→production_line).
+- Added `PATCH /work-orders/{id}` (complete a WO, optionally mark PartProcess step ready).
+- Added `GET /employees` (workforce management data).
+- Added `POST /change-requests`, `GET /change-requests`, `PATCH /change-requests/{id}/approve`, `PATCH /change-requests/{id}/reject`.
+- Priority ordering fix: `nullslast(asc(Project.priority))` so P1 < P2 < P3 < null.
+
+**Tests (`test_work_orders.py`)**
+- 5 self-contained tests: WorkOrder field construction, ChangeRequest field construction, find_available_part with empty project, employee_profile JSON structure, daily_plan_override JSON structure. All pass.
+
+**Frontend (`next-frontend/src/app/(main)/scheduler/page.tsx`)**
+- Full replacement: 807-line Work Orders page with two tabs (Work Orders, Pending Approvals), 4 modals (Complete WO, Manage Workforce, Override Today's Plan, Reject), role-aware UI (isManager check), no-stock warning banner.
+
+**Frontend (`next-frontend/src/components/Sidebar.tsx`)**
+- Renamed "Daily Scheduler" → "Work Orders" in sidebar nav.
+
+### Commits (on demo branch, 9 commits, `047be3d..cd0f83b`):
+- `93a1995` — feat(scheduler): add WorkOrder and ChangeRequest DB models
+- `f43d816` — feat(scheduler): add WorkOrder and ChangeRequest Pydantic schemas
+- `dd73be6` — fix(schemas): add = None defaults to all Optional fields
+- `c113a19` — feat(scheduler): add generate-work-orders endpoint with material gate
+- `5218bb7` — fix(scheduler): sort projects nullslast so P1<P2<P3<null
+- `9c4333b` — feat(scheduler): add GET/PATCH work-orders and GET employees endpoints
+- `89f586d` — feat(scheduler): add ChangeRequest CRUD endpoints
+- `54abd42` — test(scheduler): add work order self-contained tests
+- `cd0f83b` — feat(scheduler): replace Daily Scheduler with Work Orders page
+
+### What to verify on Railway (demo):
+1. DB migrations: `work_orders` and `change_requests` tables created on startup (SQLAlchemy `create_all`).
+2. PM can click "Generate Work Orders" for today's date — orders appear in table.
+3. Worker with `part_id=null` shows ⚠ No Stock badge and triggers the warning banner.
+4. Clicking "Complete" opens modal, actual feet saves, status changes to Completed.
+5. Supervisor can click "Manage Workforce" → edit skills/pace → "Propose Changes" → PM sees in Pending Approvals tab → Approve applies to Employee record.
+6. Supervisor can "Override Today's Plan" → exclude a worker → PM approves → next Generate respects it.
+
+### Open questions to confirm with GM:
+- **PROCESS_TYPE_TO_STEPS mapping**: currently `TIG→["Welding"]`, `MIG→["Welding"]`, `Grinding→["Grinding","DP test"]`. Confirm these are the right PartProcess step names for material gating.
+- Should the "No Stock" advisory ever become a hard block (refuse to create WO if no stock)?
+
+### What needs to be done next session:
+- Test Work Orders feature live on Railway with real operators and real projects.
+- Confirm PROCESS_TYPE_TO_STEPS mapping with GM.
+- Execute Phase 6 (Hold Management System finalization).
+- Execute Phase 7 (Material Intelligence Engine).
+- Finalize the Quality & Efficiency score calculation logic with exact formulas.

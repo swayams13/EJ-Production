@@ -614,8 +614,9 @@ export default function SchedulerPage() {
         open={workforceOpen}
         onClose={() => setWorkforceOpen(false)}
         title="Manage Workforce"
+        size="xl"
       >
-        <div className="w-full overflow-x-auto pb-4">
+        <div className="w-full overflow-x-auto">
           {employees.length === 0 ? (
             <Spinner label="Loading employees…" />
           ) : (
@@ -676,20 +677,22 @@ export default function SchedulerPage() {
             </table>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="mt-4 flex justify-between gap-2 border-t border-line pt-4">
           <Button variant="secondary" onClick={() => { setOverrideOpen(true); }}>
             Override Today&apos;s Plan
           </Button>
-          <Button variant="secondary" onClick={() => setWorkforceOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            disabled={Object.keys(editedEmployees).length === 0}
-            onClick={handleProposeEmployeeChanges}
-          >
-            Propose Changes ({Object.keys(editedEmployees).length})
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setWorkforceOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={Object.keys(editedEmployees).length === 0}
+              onClick={handleProposeEmployeeChanges}
+            >
+              Propose Changes ({Object.keys(editedEmployees).length})
+            </Button>
+          </div>
         </div>
       </Modal>
 

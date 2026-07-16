@@ -14,6 +14,8 @@ interface WorkerMetric {
   reliability_score: number;
 }
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+
 export default function WorkforceDashboard() {
   const { showToast, toasts } = useToast();
   const [metrics, setMetrics] = useState<WorkerMetric[]>([]);
@@ -21,6 +23,7 @@ export default function WorkforceDashboard() {
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [attendanceStatus, setAttendanceStatus] = useState("Present");
   const [submitting, setSubmitting] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const fetchMetrics = () => {
     setLoading(true);
@@ -39,6 +42,21 @@ export default function WorkforceDashboard() {
   useEffect(() => {
     fetchMetrics();
   }, []);
+
+  const handleGenerateWorkOrders = () => {
+    setGenerating(true);
+    const today = new Date().toISOString().split("T")[0];
+    apiFetch(`${API}/api/v1/scheduler/generate-work-orders?target_date=${today}`, { method: "POST" })
+      .then((res) => res.json())
+      .then((data) => {
+        setGenerating(false);
+        showToast(data.message || "Work orders generated!", "success");
+      })
+      .catch(() => {
+        setGenerating(false);
+        showToast("Failed to generate work orders.", "critical");
+      });
+  };
 
   const handleAttendanceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +125,12 @@ export default function WorkforceDashboard() {
                 {submitting ? "Saving…" : "Record Attendance"}
               </Button>
             </form>
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="mb-2 text-xs text-ink-soft">After marking all attendance, generate today&apos;s work orders:</p>
+              <Button variant="secondary" className="w-full justify-center" disabled={generating} onClick={handleGenerateWorkOrders}>
+                {generating ? "Generating…" : "Generate Work Orders"}
+              </Button>
+            </div>
           </CardBody>
         </Card>
 

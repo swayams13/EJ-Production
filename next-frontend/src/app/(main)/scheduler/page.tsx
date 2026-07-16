@@ -132,7 +132,7 @@ export default function SchedulerPage() {
 
   useEffect(() => { setUserRole(getRole()); }, []);
 
-  const isManager = ["Developer", "GM", "Admin", "Production Manager"].includes(userRole);
+  const isManager = ["Developer", "GM", "Admin", "Production Manager", "Supervisor"].includes(userRole);
 
   useEffect(() => {
     fetchOrders();

@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import asc, nullslast
+from sqlalchemy import asc, func, nullslast
 from sqlalchemy.orm import Session, joinedload
 
 from backend.app.auth.rbac import require_roles
@@ -67,7 +67,7 @@ def find_available_part(db: Session, project: Project, process_type: str):
 def generate_work_orders(
     target_date: date,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"])),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
 ):
     from backend.services.mes_service import MESService
     from backend.services.production_service import aggregate_line_feet
@@ -75,6 +75,7 @@ def generate_work_orders(
     db.query(WorkOrder).filter(WorkOrder.date == target_date).delete()
     db.commit()
 
+    # ── Step 1: present workers ───────────────────────────────────────────────
     any_logs = db.query(AttendanceLog).filter(AttendanceLog.date == target_date).first()
     if any_logs:
         present_logs = db.query(AttendanceLog).filter(
@@ -93,14 +94,12 @@ def generate_work_orders(
         if not workers:
             return {"success": False, "message": "No operators found.", "orders_created": 0}
 
-    workers.sort(key=lambda w: w.base_productivity or 0, reverse=True)
-
+    # ── Step 2: approved daily-plan overrides ─────────────────────────────────
     overrides = db.query(ChangeRequest).filter_by(
         subject_type="daily_plan_override",
         target_date=target_date,
         status="approved",
     ).all()
-
     exclude_ids: set = set()
     capacity_overrides: dict = {}
     for cr in overrides:
@@ -113,33 +112,58 @@ def generate_work_orders(
     if not workers:
         return {"success": False, "message": "All workers excluded by approved overrides.", "orders_created": 0}
 
+    # ── Step 3: accuracy scores from historical work orders ───────────────────
+    accuracy_rows = db.query(
+        WorkOrder.user_id,
+        func.avg(WorkOrder.actual_feet / WorkOrder.target_feet),
+    ).filter(
+        WorkOrder.status == "Completed",
+        WorkOrder.actual_feet.isnot(None),
+        WorkOrder.target_feet > 0,
+    ).group_by(WorkOrder.user_id).all()
+    accuracy_map = {uid: min(float(acc), 1.5) for uid, acc in accuracy_rows if acc}
+
+    # ── Step 4: build worker list with priority scores ────────────────────────
     employees = db.query(Employee).all()
     emp_map = {e.name: e for e in employees}
 
-    worker_map: dict = {}
-    worker_skills_map: dict = {}
+    worker_list = []
     for w in workers:
         emp = emp_map.get(w.full_name)
-        target = capacity_overrides.get(w.id, w.base_productivity or 50.0)
+        target = capacity_overrides.get(w.id, None)
         skills = []
+        experience_years = 0
 
         if emp:
             raw_skills = [emp.skill_1, emp.skill_2, emp.skill_3, emp.skill_4]
             skills = [(i, s) for i, s in enumerate(raw_skills) if s]
-            if w.id not in capacity_overrides:
-                target = emp.target_per_day
-        elif w.skill:
-            skills = [(0, w.skill)]
+            experience_years = emp.experience_years or 0
+            if target is None:
+                target = emp.target_per_day or w.base_productivity or 50.0
+        else:
+            if w.skill:
+                skills = [(0, w.skill)]
+            if target is None:
+                target = w.base_productivity or 50.0
 
-        worker_map[w.id] = {
+        accuracy = accuracy_map.get(w.id, 0.8)          # default 80% if no history
+        exp_score = min(experience_years / 20.0, 1.0)   # cap at 20 yrs
+        eff_score = min(target / 100.0, 1.0)            # cap at 100 ft/day
+
+        # Higher accuracy + more experience + higher efficiency → gets first pick
+        priority_score = accuracy * 0.4 + exp_score * 0.3 + eff_score * 0.3
+
+        worker_list.append({
             "user_id": w.id,
-            "base_productivity": target,
-            "remaining_capacity": target,
-            "assigned_feet": 0.0,
-            "ot_remaining_capacity": target * 0.5,
-        }
-        worker_skills_map[w.id] = skills
+            "target_feet": target,
+            "skills": skills,           # [(tier, skill_str), ...]
+            "priority_score": priority_score,
+        })
 
+    # Best workers get first pick of projects
+    worker_list.sort(key=lambda w: w["priority_score"], reverse=True)
+
+    # ── Step 5: project pacing requirements ───────────────────────────────────
     projects = db.query(Project).filter(
         Project.status == "Active",
         Project.hold_until_date == None,
@@ -150,7 +174,8 @@ def generate_work_orders(
     ).all()
 
     if not projects:
-        return {"success": True, "message": "No active projects.", "orders_created": 0, "workers_assigned": len(worker_map), "no_stock_projects": []}
+        return {"success": True, "message": "No active projects.", "orders_created": 0,
+                "workers_assigned": len(worker_list), "no_stock_projects": []}
 
     today = date.today()
     project_requirements = []
@@ -163,7 +188,7 @@ def generate_work_orders(
             continue
 
         assignment = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
-        target_days = (assignment.target_days if assignment and assignment.target_days else 15)
+        target_days = assignment.target_days if assignment and assignment.target_days else 15
         base_daily_target = total_feet / target_days
 
         created_date = p.created_at.date() if hasattr(p.created_at, "date") else p.created_at
@@ -179,47 +204,45 @@ def generate_work_orders(
 
         project_requirements.append({
             "project": p,
-            "remaining_TIG": today_req * (total_tig / total_feet),
-            "remaining_MIG": today_req * (total_mig / total_feet),
+            "remaining_TIG":      today_req * (total_tig   / total_feet),
+            "remaining_MIG":      today_req * (total_mig   / total_feet),
             "remaining_GRINDING": today_req * (total_grind / total_feet),
         })
 
     if not project_requirements:
-        return {"success": True, "message": "No pacing requirements today.", "orders_created": 0, "workers_assigned": len(worker_map), "no_stock_projects": []}
+        return {"success": True, "message": "No pacing requirements today.", "orders_created": 0,
+                "workers_assigned": len(worker_list), "no_stock_projects": []}
 
-    orders_created = 0
-    process_order = [
+    # ── Step 6: assign each worker exactly ONE work order ─────────────────────
+    # Process priority within a worker: MIG → TIG → Grinding
+    SKILL_TO_PROCESS = [
         ("MIG",   "remaining_MIG",      "MIG"),
         ("TIG",   "remaining_TIG",      "TIG"),
         ("GRIND", "remaining_GRINDING", "Grinding"),
     ]
 
-    for skill_keyword, req_key, process_type in process_order:
-        for tier in range(4):
-            tier_workers = [
-                worker_map[uid]
-                for uid, skills in worker_skills_map.items()
-                for lvl, s in skills
-                if lvl == tier and skill_keyword in s.upper()
-            ]
-            tier_workers.sort(key=lambda w: w["remaining_capacity"], reverse=True)
-            req_index = 0
+    orders_created = 0
 
-            for w in tier_workers:
-                while w["remaining_capacity"] > 0 and req_index < len(project_requirements):
-                    req = project_requirements[req_index]
+    for worker in worker_list:
+        assigned = False
+        # Try each skill tier (0=primary first) and each matching process type
+        for _tier, skill_str in sorted(worker["skills"], key=lambda x: x[0]):
+            if assigned:
+                break
+            for skill_kw, req_key, process_type in SKILL_TO_PROCESS:
+                if skill_kw not in skill_str.upper():
+                    continue
+                # Assign to the highest-priority project that still needs this process
+                for req in project_requirements:
                     if req[req_key] <= 0:
-                        req_index += 1
                         continue
-
-                    assigned_feet = min(w["remaining_capacity"], req[req_key])
+                    assigned_feet = min(worker["target_feet"], req[req_key])
                     part = find_available_part(db, req["project"], process_type)
                     if part is None and req["project"].quotation_no not in no_stock_projects:
                         no_stock_projects.append(req["project"].quotation_no)
-
                     db.add(WorkOrder(
                         project_id=req["project"].id,
-                        user_id=w["user_id"],
+                        user_id=worker["user_id"],
                         part_id=part.id if part else None,
                         date=target_date,
                         process_type=process_type,
@@ -228,47 +251,11 @@ def generate_work_orders(
                         status="Pending",
                     ))
                     orders_created += 1
-                    w["assigned_feet"] += assigned_feet
-                    w["remaining_capacity"] -= assigned_feet
                     req[req_key] -= assigned_feet
-                    if req[req_key] <= 0:
-                        req_index += 1
-
-        has_pending = any(req[req_key] > 0 for req in project_requirements)
-        if has_pending:
-            ot_workers = [
-                worker_map[uid]
-                for uid, skills in worker_skills_map.items()
-                if any(skill_keyword in s.upper() for _, s in skills)
-            ]
-            ot_workers.sort(key=lambda w: w["base_productivity"], reverse=True)
-            req_index = 0
-
-            for w in ot_workers:
-                while w["ot_remaining_capacity"] > 0 and req_index < len(project_requirements):
-                    req = project_requirements[req_index]
-                    if req[req_key] <= 0:
-                        req_index += 1
-                        continue
-
-                    assigned_ot = min(w["ot_remaining_capacity"], req[req_key])
-                    part = find_available_part(db, req["project"], process_type)
-
-                    db.add(WorkOrder(
-                        project_id=req["project"].id,
-                        user_id=w["user_id"],
-                        part_id=part.id if part else None,
-                        date=target_date,
-                        process_type=process_type,
-                        target_feet=assigned_ot,
-                        is_overtime=True,
-                        status="Pending",
-                    ))
-                    orders_created += 1
-                    w["ot_remaining_capacity"] -= assigned_ot
-                    req[req_key] -= assigned_ot
-                    if req[req_key] <= 0:
-                        req_index += 1
+                    assigned = True
+                    break
+                if assigned:
+                    break
 
     db.commit()
     return {

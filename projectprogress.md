@@ -1,5 +1,53 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-16 (Session 18 — Procurement fixes + material name alignment)
+
+### What was done:
+
+**1. Material name alignment across systems (`backend/main.py`, `backend/app/inventory/router.py`)**
+- Audited all component name usage: `joint_catalog.py` → `PROCESS_ROUTES` → `COMPONENT_WEIGHTS` → lead time seed → `procurement_service.py` were already consistent.
+- Legacy templates (`EXPANSION_JOINT_TEMPLATE` / `DISMANTLING_JOINT_TEMPLATE`) use verbose names ("Bellows (B)", "Limit Rods (LR)", etc.) — left as-is (fallback only, only affects unrecategorized lines).
+- Added startup migration in `main.py` to normalize 8 known old aliases in `warehouse_stock` to catalog names (Bellows→Element, Limit Rods→Limit rod, Lugs→Lug, Internal Sleeve→Liner, Stopper→Stopper Patti, GASKET→Gaskets, MAT. BOLTS→Bolts, Nuts, Compensator Flanges→Flange).
+- `inventory/router.py` shortages endpoint: switched from old `raw_material_inventory` table (`.lower()` match) to `WarehouseStock` (exact match, `qty_on_hand - reserved_qty`), consistent with `procurement_service.py`.
+
+**2. Procurement dashboard crash fix (`backend/app/procurement/router.py`, `next-frontend/src/app/(main)/procurement/page.tsx`)**
+- Root crash: `/morning-list` returned `{red: [], orange: [], green: [], red_delayed: []}` but frontend did `setItems(await res.json())` treating it as an array. `items.filter()` on an object → `TypeError` → "This page couldn't load".
+- Backend changed to return the flat sorted list (frontend already buckets client-side).
+- Frontend `MorningListItem` interface and all field references corrected: `project_priority→priority`, `deadline→target_date`, `days_to_deadline→days_to_order_by`, `qty_needed→still_needs_ordering`, `has_delay_reason→!!delay_reason`.
+
+**3. Morning list empty fix — no target_date (`backend/services/procurement_service.py`)**
+- Projects without `target_date` got `days_to_order_by=999` → `_bucket()` returned "NONE" → all parts skipped → 0 entries.
+- Changed fallback from 999 to 7 so no-deadline projects appear in GREEN bucket (show, urgency unknown).
+
+**4. Morning list empty fix — `total_qty=0` on legacy parts (`backend/main.py`)**
+- The `total_qty` column was added in Session 7 with `DEFAULT 0`. All parts created before that migration kept `total_qty=0`.
+- `_uncovered_qty` saw `remaining = 0 - 0 = 0` → returned 0 → `still_needs=0` → score=-9999 → every item skipped.
+- Added startup migration: `UPDATE parts SET total_qty = ppl.quantity FROM project_production_lines WHERE total_qty=0 AND ppl.quantity>0`.
+
+### Commits (all on demo, then merged to main):
+- `405c9af` — fix(procurement): dashboard crash + field name alignment
+- `831262a` — fix(procurement): morning list for projects without target date
+- `eda38f0` — fix(procurement): backfill parts.total_qty=0 for legacy parts
+- `39e2504` — Merged demo → main. Railway deploying.
+
+### Verified:
+- `py_compile` clean on all changed backend files.
+- `npm run build` — 25 routes, 0 TS errors.
+- User confirmed procurement dashboard loading and showing items on demo, then approved merge to main.
+
+### Open items carried forward:
+- **U-EJ-W-S-L Gaskets** — still needs explicit GM confirm (`_f("Gaskets", 2)` vs omit). Do not change until confirmed.
+- **Work Assignment Feature** — flow agreed this session (PM updates procurement → engine checks material availability + priority → assigns work orders to present workers by skill). Prerequisites (name alignment, WarehouseStock as source of truth) are now done. Ready to build next session.
+- **Lead times** — procurement seed defaults are approximations; PM to review via `/procurement/settings`.
+- **Root cleanup** — debug/scratch scripts (`debug_*.py`, `append_progress.py`, etc.) untracked since Session 4.
+
+### What to do next session:
+1. Build the Work Assignment Feature: `WorkOrder` table, `/scheduler/generate-work-orders` endpoint, supervisor daily work-order view.
+2. Get GM confirm on U-EJ-W-S-L Gaskets.
+3. Lead time tuning with PM.
+
+---
+
 ## Date: 2026-07-15 (Session 17 — GM spec changes applied)
 
 ### What was done:

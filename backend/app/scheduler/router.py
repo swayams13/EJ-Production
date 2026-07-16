@@ -548,3 +548,71 @@ def auto_assign_tasks(
                         
     db.commit()
     return {"success": True, "message": f"Successfully assigned target tracking plans to {len(worker_map)} workers for today."}
+
+
+@router.get("/work-orders", response_model=List[WorkOrderResponse])
+def get_work_orders(
+    target_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    query = db.query(WorkOrder).options(
+        joinedload(WorkOrder.user),
+        joinedload(WorkOrder.project),
+        joinedload(WorkOrder.part).joinedload(Part.processes),
+        joinedload(WorkOrder.part).joinedload(Part.production_line),
+    )
+    if target_date:
+        query = query.filter(WorkOrder.date == target_date)
+    return query.order_by(asc(WorkOrder.user_id), asc(WorkOrder.process_type)).all()
+
+
+@router.patch("/work-orders/{work_order_id}", response_model=WorkOrderResponse)
+def complete_work_order(
+    work_order_id: int,
+    payload: WorkOrderComplete,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
+    if not wo:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    wo.actual_feet = payload.actual_feet
+    wo.status = payload.status
+    if payload.notes is not None:
+        wo.notes = payload.notes
+
+    if payload.mark_step_ready and payload.part_process_id:
+        proc = db.query(PartProcess).filter(PartProcess.id == payload.part_process_id).first()
+        if proc:
+            proc.status = "ready"
+            proc.date_ready = date.today()
+            wo.completed_part_process_id = payload.part_process_id
+
+    db.commit()
+    db.refresh(wo)
+    return wo
+
+
+@router.get("/employees")
+def get_employees(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    employees = db.query(Employee).order_by(Employee.name).all()
+    return [
+        {
+            "id": e.id,
+            "emp_id": e.emp_id,
+            "name": e.name,
+            "company": e.company,
+            "skill_1": e.skill_1,
+            "skill_2": e.skill_2,
+            "skill_3": e.skill_3,
+            "skill_4": e.skill_4,
+            "target_per_day": e.target_per_day,
+            "active": e.active,
+        }
+        for e in employees
+    ]

@@ -614,6 +614,16 @@ def complete_work_order(
         raise HTTPException(status_code=404, detail="Work order not found")
 
     wo.actual_feet = payload.actual_feet
+
+    # If welding logs have been linked to this work order, their sum is authoritative
+    from sqlalchemy import func as sa_func
+    from backend.services.db_service import WeldingLog
+    linked_sum = db.query(sa_func.sum(WeldingLog.feet_done)).filter(
+        WeldingLog.work_order_id == wo.id
+    ).scalar()
+    if linked_sum is not None:
+        wo.actual_feet = round(linked_sum, 2)
+
     wo.status = payload.status
     if payload.notes is not None:
         wo.notes = payload.notes

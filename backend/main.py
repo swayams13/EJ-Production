@@ -334,6 +334,10 @@ _run_startup_migration("projects: priority + order_value + advance + dispatch", 
     "ALTER TABLE projects ADD COLUMN committed_dispatch_date DATE",
 ])
 
+_run_startup_migration("welding_logs: work_order_id FK", [
+    "ALTER TABLE welding_logs ADD COLUMN IF NOT EXISTS work_order_id INTEGER REFERENCES work_orders(id);",
+])
+
 from backend.services.db_service import SessionLocal
 from backend.services.itemwise_backfill import backfill_itemwise
 backfill_itemwise(SessionLocal)

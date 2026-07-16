@@ -1,17 +1,284 @@
+import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import asc
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
-from backend.services.db_service import get_db, DailyTaskAssignment, Project, User, AttendanceLog
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import asc
+from sqlalchemy.orm import Session, joinedload
+
 from backend.app.auth.rbac import require_roles
-from backend.app.scheduler.schemas import TaskAssignmentCreate, TaskAssignmentResponse
+from backend.app.scheduler.schemas import (
+    TaskAssignmentCreate, TaskAssignmentResponse,
+    WorkOrderResponse, WorkOrderComplete,
+    ChangeRequestCreate, ChangeRequestResponse, ChangeRequestReject,
+)
+from backend.services.db_service import (
+    get_db,
+    AttendanceLog, ChangeRequest, DailyTaskAssignment, Employee,
+    Part, PartProcess, Project, ProjectResourceAssignment,
+    User, WarehouseStock, WorkOrder,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/scheduler", tags=["Scheduler"])
+
+# ponytail: strawman mapping — confirm with GM before changing.
+PROCESS_TYPE_TO_STEPS = {
+    "TIG":      ["Welding"],
+    "MIG":      ["Welding"],
+    "Grinding": ["Grinding", "DP test"],
+}
+
+
+def _available_stock_local(db: Session, material_name: str, size: int, joint_type: str) -> int:
+    """Return warehouse available qty (on_hand - reserved). 0 if no record found."""
+    stock = db.query(WarehouseStock).filter_by(
+        material_name=material_name,
+        size=size,
+        joint_type=joint_type,
+    ).first()
+    if not stock:
+        return 0
+    return max(0, stock.qty_on_hand - stock.reserved_qty)
+
+
+def find_available_part(db: Session, project: Project, process_type: str):
+    """
+    Return the first Part in the project that has available warehouse stock
+    and at least one PartProcess step matching process_type that is not yet 'ready'.
+    Returns None if no such part exists (work order still created, part_id=None).
+    """
+    relevant_steps = PROCESS_TYPE_TO_STEPS.get(process_type, [])
+    for line in project.production_lines:
+        size = line.size or 0
+        joint_type = line.joint_type or ""
+        for part in line.parts:
+            avail = _available_stock_local(db, part.name, size, joint_type)
+            if avail > 0:
+                for proc in part.processes:
+                    if proc.process_name in relevant_steps and proc.status != "ready":
+                        return part
+    return None
+
+
+@router.post("/generate-work-orders")
+def generate_work_orders(
+    target_date: date,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"])),
+):
+    from backend.services.mes_service import MESService
+    from backend.services.production_service import aggregate_line_feet
+
+    db.query(WorkOrder).filter(WorkOrder.date == target_date).delete()
+    db.commit()
+
+    any_logs = db.query(AttendanceLog).filter(AttendanceLog.date == target_date).first()
+    if any_logs:
+        present_logs = db.query(AttendanceLog).filter(
+            AttendanceLog.date == target_date,
+            AttendanceLog.status.in_(["Present", "Overtime"]),
+        ).all()
+        present_user_ids = [log.user_id for log in present_logs]
+        if not present_user_ids:
+            return {"success": False, "message": "Attendance marked but no workers present.", "orders_created": 0}
+        workers = db.query(User).filter(
+            User.id.in_(present_user_ids),
+            User.role == "Operator",
+        ).all()
+    else:
+        workers = db.query(User).filter(User.role == "Operator").all()
+        if not workers:
+            return {"success": False, "message": "No operators found.", "orders_created": 0}
+
+    workers.sort(key=lambda w: w.base_productivity or 0, reverse=True)
+
+    overrides = db.query(ChangeRequest).filter_by(
+        subject_type="daily_plan_override",
+        target_date=target_date,
+        status="approved",
+    ).all()
+
+    exclude_ids: set = set()
+    capacity_overrides: dict = {}
+    for cr in overrides:
+        changes = json.loads(cr.changes_json)
+        exclude_ids.update(changes.get("exclude_user_ids", []))
+        for uid_str, cap in changes.get("capacity_overrides", {}).items():
+            capacity_overrides[int(uid_str)] = float(cap)
+
+    workers = [w for w in workers if w.id not in exclude_ids]
+    if not workers:
+        return {"success": False, "message": "All workers excluded by approved overrides.", "orders_created": 0}
+
+    employees = db.query(Employee).all()
+    emp_map = {e.name: e for e in employees}
+
+    worker_map: dict = {}
+    worker_skills_map: dict = {}
+    for w in workers:
+        emp = emp_map.get(w.full_name)
+        target = capacity_overrides.get(w.id, w.base_productivity or 50.0)
+        skills = []
+
+        if emp:
+            raw_skills = [emp.skill_1, emp.skill_2, emp.skill_3, emp.skill_4]
+            skills = [(i, s) for i, s in enumerate(raw_skills) if s]
+            if w.id not in capacity_overrides:
+                target = emp.target_per_day
+        elif w.skill:
+            skills = [(0, w.skill)]
+
+        worker_map[w.id] = {
+            "user_id": w.id,
+            "base_productivity": target,
+            "remaining_capacity": target,
+            "assigned_feet": 0.0,
+            "ot_remaining_capacity": target * 0.5,
+        }
+        worker_skills_map[w.id] = skills
+
+    projects = db.query(Project).filter(
+        Project.status == "Active",
+        Project.hold_until_date == None,
+    ).order_by(
+        asc(Project.priority),
+        asc(Project.target_date),
+        asc(Project.created_at),
+    ).all()
+
+    if not projects:
+        return {"success": True, "message": "No active projects.", "orders_created": 0, "workers_assigned": len(worker_map), "no_stock_projects": []}
+
+    today = date.today()
+    project_requirements = []
+    no_stock_projects: list = []
+
+    for p in projects:
+        total_tig, total_mig, total_grind = aggregate_line_feet(p.production_lines)
+        total_feet = total_tig + total_mig + total_grind
+        if total_feet == 0:
+            continue
+
+        assignment = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
+        target_days = (assignment.target_days if assignment and assignment.target_days else 15)
+        base_daily_target = total_feet / target_days
+
+        created_date = p.created_at.date() if hasattr(p.created_at, "date") else p.created_at
+        days_elapsed = max(0, (today - created_date).days)
+        expected_completed = min(total_feet, base_daily_target * days_elapsed)
+        progress_pct = MESService.calculate_project_progress(db, p.id)
+        actual_completed = total_feet * (progress_pct / 100)
+        backlog = max(0, expected_completed - actual_completed)
+        today_req = base_daily_target + backlog
+
+        if today_req <= 0:
+            continue
+
+        project_requirements.append({
+            "project": p,
+            "remaining_TIG": today_req * (total_tig / total_feet),
+            "remaining_MIG": today_req * (total_mig / total_feet),
+            "remaining_GRINDING": today_req * (total_grind / total_feet),
+        })
+
+    if not project_requirements:
+        return {"success": True, "message": "No pacing requirements today.", "orders_created": 0, "workers_assigned": len(worker_map), "no_stock_projects": []}
+
+    orders_created = 0
+    process_order = [
+        ("MIG",   "remaining_MIG",      "MIG"),
+        ("TIG",   "remaining_TIG",      "TIG"),
+        ("GRIND", "remaining_GRINDING", "Grinding"),
+    ]
+
+    for skill_keyword, req_key, process_type in process_order:
+        for tier in range(4):
+            tier_workers = [
+                worker_map[uid]
+                for uid, skills in worker_skills_map.items()
+                for lvl, s in skills
+                if lvl == tier and skill_keyword in s.upper()
+            ]
+            tier_workers.sort(key=lambda w: w["remaining_capacity"], reverse=True)
+            req_index = 0
+
+            for w in tier_workers:
+                while w["remaining_capacity"] > 0 and req_index < len(project_requirements):
+                    req = project_requirements[req_index]
+                    if req[req_key] <= 0:
+                        req_index += 1
+                        continue
+
+                    assigned_feet = min(w["remaining_capacity"], req[req_key])
+                    part = find_available_part(db, req["project"], process_type)
+                    if part is None and req["project"].quotation_no not in no_stock_projects:
+                        no_stock_projects.append(req["project"].quotation_no)
+
+                    db.add(WorkOrder(
+                        project_id=req["project"].id,
+                        user_id=w["user_id"],
+                        part_id=part.id if part else None,
+                        date=target_date,
+                        process_type=process_type,
+                        target_feet=assigned_feet,
+                        is_overtime=False,
+                        status="Pending",
+                    ))
+                    orders_created += 1
+                    w["assigned_feet"] += assigned_feet
+                    w["remaining_capacity"] -= assigned_feet
+                    req[req_key] -= assigned_feet
+                    if req[req_key] <= 0:
+                        req_index += 1
+
+        has_pending = any(req[req_key] > 0 for req in project_requirements)
+        if has_pending:
+            ot_workers = [
+                worker_map[uid]
+                for uid, skills in worker_skills_map.items()
+                if any(skill_keyword in s.upper() for _, s in skills)
+            ]
+            ot_workers.sort(key=lambda w: w["base_productivity"], reverse=True)
+            req_index = 0
+
+            for w in ot_workers:
+                while w["ot_remaining_capacity"] > 0 and req_index < len(project_requirements):
+                    req = project_requirements[req_index]
+                    if req[req_key] <= 0:
+                        req_index += 1
+                        continue
+
+                    assigned_ot = min(w["ot_remaining_capacity"], req[req_key])
+                    part = find_available_part(db, req["project"], process_type)
+
+                    db.add(WorkOrder(
+                        project_id=req["project"].id,
+                        user_id=w["user_id"],
+                        part_id=part.id if part else None,
+                        date=target_date,
+                        process_type=process_type,
+                        target_feet=assigned_ot,
+                        is_overtime=True,
+                        status="Pending",
+                    ))
+                    orders_created += 1
+                    w["ot_remaining_capacity"] -= assigned_ot
+                    req[req_key] -= assigned_ot
+                    if req[req_key] <= 0:
+                        req_index += 1
+
+    db.commit()
+    return {
+        "success": True,
+        "message": f"Generated {orders_created} work orders for {len(worker_map)} workers.",
+        "orders_created": orders_created,
+        "workers_assigned": len(worker_map),
+        "no_stock_projects": no_stock_projects,
+    }
+
 
 @router.get("/assignments", response_model=List[TaskAssignmentResponse])
 def get_assignments(

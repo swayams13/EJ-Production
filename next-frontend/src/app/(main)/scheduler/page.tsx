@@ -245,6 +245,44 @@ export default function SchedulerPage() {
     }));
   };
 
+  const handleSaveEmployees = async () => {
+    const entries = Object.entries(editedEmployees);
+    if (!entries.length) return;
+    let saved = 0;
+    for (const [empIdStr, changes] of entries) {
+      const res = await apiFetch(`${API}/api/v1/scheduler/employees/${empIdStr}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(changes),
+      });
+      if (res.ok) { saved++; }
+    }
+    if (saved === entries.length) {
+      showToast(`${saved} employee(s) updated`, "success");
+      setEditedEmployees({});
+      fetchEmployees();
+    } else {
+      showToast(`${saved}/${entries.length} saved — some failed`, "critical");
+    }
+  };
+
+  const handleDeleteEmployee = async (empId: number, name: string) => {
+    const ok = await confirm({
+      title: `Delete ${name}?`,
+      description: "This permanently removes the employee record. Work orders already assigned will not be affected.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const res = await apiFetch(`${API}/api/v1/scheduler/employees/${empId}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast(`${name} deleted`, "success");
+      setEmployees(prev => prev.filter(e => e.id !== empId));
+    } else {
+      showToast("Failed to delete employee", "critical");
+    }
+  };
+
   const handleProposeEmployeeChanges = async () => {
     const entries = Object.entries(editedEmployees);
     if (!entries.length) { showToast("No changes to propose", "critical"); return; }
@@ -616,15 +654,15 @@ export default function SchedulerPage() {
         title="Manage Workforce"
         size="xl"
       >
-        <div className="w-full overflow-x-auto">
+        <div className="max-h-[60vh] overflow-y-auto overflow-x-auto">
           {employees.length === 0 ? (
             <Spinner label="Loading employees…" />
           ) : (
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 bg-paper-raised">
                 <tr className="border-b border-line text-left text-ink-soft">
-                  {["Name", "Co.", "Skill 1", "Skill 2", "Skill 3", "Skill 4", "Tgt/Day", "Active"].map(h => (
-                    <th key={h} className="pb-2 pr-2 font-medium">{h}</th>
+                  {["Name", "Emp ID", "Co.", "Skill 1", "Skill 2", "Skill 3", "Skill 4", "Tgt/Day", "Active", ""].map(h => (
+                    <th key={h} className="pb-2 pr-2 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -632,9 +670,10 @@ export default function SchedulerPage() {
                 {employees.map(emp => {
                   const edits = editedEmployees[emp.id] ?? {};
                   return (
-                    <tr key={emp.id} className="border-b border-line">
-                      <td className="py-1 pr-2 font-medium">{emp.name}</td>
-                      <td className="py-1 pr-2 text-ink-soft">{emp.company}</td>
+                    <tr key={emp.id} className="border-b border-line hover:bg-surface">
+                      <td className="py-1 pr-3 font-medium whitespace-nowrap">{emp.name}</td>
+                      <td className="py-1 pr-3 text-ink-soft text-xs">{emp.emp_id}</td>
+                      <td className="py-1 pr-3 text-ink-soft">{emp.company}</td>
                       {(["skill_1", "skill_2", "skill_3", "skill_4"] as const).map(f => (
                         <td key={f} className="py-1 pr-2">
                           <Input
@@ -647,28 +686,28 @@ export default function SchedulerPage() {
                       <td className="py-1 pr-2">
                         <Input
                           type="number"
-                          value={
-                            edits.target_per_day !== undefined
-                              ? String(edits.target_per_day)
-                              : String(emp.target_per_day)
-                          }
-                          onChange={e =>
-                            handleEmployeeEdit(emp.id, "target_per_day", parseFloat(e.target.value))
-                          }
+                          value={edits.target_per_day !== undefined ? String(edits.target_per_day) : String(emp.target_per_day)}
+                          onChange={e => handleEmployeeEdit(emp.id, "target_per_day", parseFloat(e.target.value))}
                           className="w-16 text-xs"
                         />
                       </td>
-                      <td className="py-1">
+                      <td className="py-1 pr-2">
                         <Select
                           value={String(edits.active !== undefined ? edits.active : emp.active)}
-                          onChange={e =>
-                            handleEmployeeEdit(emp.id, "active", e.target.value === "true")
-                          }
+                          onChange={e => handleEmployeeEdit(emp.id, "active", e.target.value === "true")}
                           className="w-16 text-xs"
                         >
                           <option value="true">Yes</option>
                           <option value="false">No</option>
                         </Select>
+                      </td>
+                      <td className="py-1">
+                        <button
+                          className="rounded px-2 py-1 text-xs text-critical hover:bg-critical/10"
+                          onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                        >
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   );
@@ -678,7 +717,7 @@ export default function SchedulerPage() {
           )}
         </div>
         <div className="mt-4 flex justify-between gap-2 border-t border-line pt-4">
-          <Button variant="secondary" onClick={() => { setOverrideOpen(true); }}>
+          <Button variant="secondary" onClick={() => setOverrideOpen(true)}>
             Override Today&apos;s Plan
           </Button>
           <div className="flex gap-2">
@@ -688,9 +727,9 @@ export default function SchedulerPage() {
             <Button
               variant="primary"
               disabled={Object.keys(editedEmployees).length === 0}
-              onClick={handleProposeEmployeeChanges}
+              onClick={handleSaveEmployees}
             >
-              Propose Changes ({Object.keys(editedEmployees).length})
+              Save Changes ({Object.keys(editedEmployees).length})
             </Button>
           </div>
         </div>

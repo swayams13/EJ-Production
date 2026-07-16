@@ -605,6 +605,38 @@ def get_employees(
     ]
 
 
+@router.patch("/employees/{emp_id}")
+def update_employee(
+    emp_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    allowed = {"skill_1", "skill_2", "skill_3", "skill_4", "target_per_day", "active", "experience_years"}
+    for field, value in payload.items():
+        if field in allowed:
+            setattr(emp, field, value)
+    db.commit()
+    return {"success": True, "id": emp.id}
+
+
+@router.delete("/employees/{emp_id}")
+def delete_employee(
+    emp_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    db.delete(emp)
+    db.commit()
+    return {"success": True}
+
+
 @router.post("/change-requests", response_model=ChangeRequestResponse)
 def create_change_request(
     payload: ChangeRequestCreate,

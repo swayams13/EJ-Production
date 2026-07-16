@@ -616,3 +616,96 @@ def get_employees(
         }
         for e in employees
     ]
+
+
+@router.post("/change-requests", response_model=ChangeRequestResponse)
+def create_change_request(
+    payload: ChangeRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    cr = ChangeRequest(
+        subject_type=payload.subject_type,
+        subject_id=payload.subject_id,
+        target_date=payload.target_date,
+        proposed_by=current_user["id"],
+        changes_json=payload.changes_json,
+        status="pending_approval",
+    )
+    db.add(cr)
+    db.commit()
+    db.refresh(cr)
+    return cr
+
+
+@router.get("/change-requests", response_model=List[ChangeRequestResponse])
+def get_change_requests(
+    status: Optional[str] = "pending_approval",
+    target_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    query = db.query(ChangeRequest).options(joinedload(ChangeRequest.proposer))
+
+    if current_user.get("role") == "Supervisor":
+        query = query.filter(ChangeRequest.proposed_by == current_user["id"])
+
+    if status:
+        query = query.filter(ChangeRequest.status == status)
+    if target_date:
+        query = query.filter(ChangeRequest.target_date == target_date)
+
+    return query.order_by(ChangeRequest.created_at.desc()).all()
+
+
+@router.patch("/change-requests/{cr_id}/approve", response_model=ChangeRequestResponse)
+def approve_change_request(
+    cr_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"])),
+):
+    cr = db.query(ChangeRequest).filter(ChangeRequest.id == cr_id).first()
+    if not cr:
+        raise HTTPException(status_code=404, detail="Change request not found")
+    if cr.status != "pending_approval":
+        raise HTTPException(status_code=400, detail="Change request is not pending")
+
+    cr.status = "approved"
+    cr.approved_by = current_user["id"]
+    cr.resolved_at = datetime.utcnow()
+
+    if cr.subject_type == "employee_profile" and cr.subject_id:
+        emp = db.query(Employee).filter(Employee.id == cr.subject_id).first()
+        if emp:
+            changes = json.loads(cr.changes_json).get("changes", {})
+            allowed = {"skill_1", "skill_2", "skill_3", "skill_4", "target_per_day", "active"}
+            for field, value in changes.items():
+                if field in allowed:
+                    setattr(emp, field, value)
+
+    db.commit()
+    db.refresh(cr)
+    return cr
+
+
+@router.patch("/change-requests/{cr_id}/reject", response_model=ChangeRequestResponse)
+def reject_change_request(
+    cr_id: int,
+    payload: ChangeRequestReject,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"])),
+):
+    cr = db.query(ChangeRequest).filter(ChangeRequest.id == cr_id).first()
+    if not cr:
+        raise HTTPException(status_code=404, detail="Change request not found")
+    if cr.status != "pending_approval":
+        raise HTTPException(status_code=400, detail="Change request is not pending")
+
+    cr.status = "rejected"
+    cr.approved_by = current_user["id"]
+    cr.rejection_note = payload.rejection_note
+    cr.resolved_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(cr)
+    return cr

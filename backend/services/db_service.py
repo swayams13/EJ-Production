@@ -188,13 +188,15 @@ class WeldingLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     production_line_id = Column(Integer, ForeignKey("project_production_lines.id"), nullable=False)
     operator_id = Column(Integer, ForeignKey("users.id"))
+    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
     process_type = Column(String, nullable=False) # "TIG", "MIG", "Grinding"
     feet_done = Column(Float, nullable=False)
     date = Column(Date, default=date.today)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     production_line = relationship("ProjectProductionLine")
-    operator = relationship("User")
+    operator = relationship("User", foreign_keys=[operator_id])
+    work_order = relationship("WorkOrder", back_populates="welding_logs")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -407,6 +409,7 @@ class WorkOrder(Base):
     user = relationship("User")
     part = relationship("Part")
     completed_part_process = relationship("PartProcess")
+    welding_logs = relationship("WeldingLog", back_populates="work_order")
 
     __table_args__ = (
         Index("ix_work_orders_date_user", "date", "user_id"),

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from backend.services.db_service import get_db, RawMaterialInventory, Project, ProjectProductionLine
+from backend.services.db_service import get_db, RawMaterialInventory, WarehouseStock, Project, ProjectProductionLine
 from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT
 from backend.app.inventory.schemas import InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse, ShortageResponse
 
@@ -67,11 +67,11 @@ def get_material_shortages(db: Session = Depends(get_db), current_user: dict = D
     relevant_projects = db.query(Project).filter(
         (Project.status != "Completed") | (Project.status == None)
     ).all()
-    inventory = db.query(RawMaterialInventory).all()
-
+    # Use WarehouseStock (procurement system) as the single source of truth.
+    # available_qty = qty_on_hand - reserved_qty (same as procurement_service._available_stock)
     stock_map = {}
-    for inv in inventory:
-        stock_map[(inv.material_name.lower(), inv.size, inv.joint_type)] = inv.current_stock
+    for ws in db.query(WarehouseStock).all():
+        stock_map[(ws.material_name, ws.size, ws.joint_type)] = max(0, ws.qty_on_hand - ws.reserved_qty)
 
     shortages = []
 
@@ -83,7 +83,7 @@ def get_material_shortages(db: Session = Depends(get_db), current_user: dict = D
                         required = getattr(part, 'total_qty', 0)
                         if not required:
                             continue
-                        key = (part.name.lower(), line.size, line.joint_type)
+                        key = (part.name, line.size, line.joint_type)
                         if key not in stock_map:
                             continue
                         current = stock_map[key]

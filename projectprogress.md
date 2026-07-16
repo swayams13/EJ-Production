@@ -21,8 +21,13 @@ GM marked "SF Cutting" in red as a step for Element across all 9 EJ tags. Added 
 ### Open question (not in red, not changed):
 - `U-EJ-W-S-L` Gaskets: our code has `_f("Gaskets", 2)` but spec Component sheet omits Gaskets; Process sheet includes it. GM left unmarked. Needs explicit confirm before changing.
 
-### Status:
-Changes on `demo` branch (not yet committed). `main` untouched.
+### Also done this session:
+- Backfill: `itemwise_backfill.py` — adds SF Cutting to existing Element parts on startup (idempotent, guarded by `"Forming" in existing`)
+- Sort fix: `production/router.py` — processes now sorted by template route order (not insert ID), so backfilled steps display in correct position
+- Merged `demo` → `main` (commit `a7c6b56`). Railway deploying to production.
+
+### Open question (not in red, not changed):
+- `U-EJ-W-S-L` Gaskets: code has `_f("Gaskets", 2)` but GM spec Component sheet omits it; Process sheet includes it. Needs explicit GM confirm before changing kind.
 
 ---
 

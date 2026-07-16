@@ -45,7 +45,7 @@ export default function Modal({
           </h4>
           {description && <p className="text-sm text-ink-soft">{description}</p>}
         </div>
-        <div className="flex justify-end gap-2 p-4">{children}</div>
+        <div className="p-4">{children}</div>
       </div>
     </div>,
     document.body

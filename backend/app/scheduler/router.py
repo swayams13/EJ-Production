@@ -260,9 +260,9 @@ def generate_work_orders(
     db.commit()
     return {
         "success": True,
-        "message": f"Generated {orders_created} work orders for {len(worker_map)} workers.",
+        "message": f"Generated {orders_created} work orders for {len(worker_list)} workers.",
         "orders_created": orders_created,
-        "workers_assigned": len(worker_map),
+        "workers_assigned": len(worker_list),
         "no_stock_projects": no_stock_projects,
     }
 

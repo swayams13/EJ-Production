@@ -595,16 +595,18 @@ export default function SchedulerPage() {
             />
           </div>
         </div>
-        <Button variant="secondary" onClick={() => setCompleteWO(null)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          onClick={handleComplete}
-          disabled={!actualFeet || isNaN(parseFloat(actualFeet))}
-        >
-          Save
-        </Button>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={() => setCompleteWO(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleComplete}
+            disabled={!actualFeet || isNaN(parseFloat(actualFeet))}
+          >
+            Save
+          </Button>
+        </div>
       </Modal>
 
       {/* Manage Workforce Modal */}
@@ -741,8 +743,10 @@ export default function SchedulerPage() {
             />
           </div>
         </div>
-        <Button variant="secondary" onClick={() => setOverrideOpen(false)}>Cancel</Button>
-        <Button variant="primary" onClick={handleSubmitOverride}>Submit for Approval</Button>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={() => setOverrideOpen(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSubmitOverride}>Submit for Approval</Button>
+        </div>
       </Modal>
 
       {/* Reject Modal */}
@@ -759,14 +763,16 @@ export default function SchedulerPage() {
             rows={3}
           />
         </div>
-        <Button variant="secondary" onClick={() => setRejectCR(null)}>Cancel</Button>
-        <Button
-          variant="danger"
-          onClick={handleReject}
-          disabled={!rejectNote.trim()}
-        >
-          Reject
-        </Button>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={() => setRejectCR(null)}>Cancel</Button>
+          <Button
+            variant="danger"
+            onClick={handleReject}
+            disabled={!rejectNote.trim()}
+          >
+            Reject
+          </Button>
+        </div>
       </Modal>
 
       {dialog}

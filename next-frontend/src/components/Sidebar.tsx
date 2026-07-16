@@ -31,7 +31,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "All Projects", href: "/projects" },
       { name: "Add Project", href: "/projects/add" },
       { name: "Edit Project", href: "/projects/edit" },
-      { name: "Daily Scheduler", href: "/scheduler" },
+      { name: "Work Orders", href: "/scheduler" },
       { name: "Hold Center", href: "/dashboard/holds" },
     ],
   },

@@ -759,7 +759,7 @@ export default function OperatorEntry() {
                                     >
                                       <option value="">-- Select Worker --</option>
                                       {workers.map((wo) => (
-                                        <option key={wo.user_id} value={wo.user_id}>
+                                        <option key={wo.id} value={wo.user_id}>
                                           {wo.user?.full_name ?? `Worker #${wo.user_id}`} — {wo.target_feet.toFixed(1)} ft target
                                         </option>
                                       ))}

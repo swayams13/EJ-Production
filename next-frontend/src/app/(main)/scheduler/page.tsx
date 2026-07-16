@@ -133,6 +133,7 @@ export default function SchedulerPage() {
   useEffect(() => { setUserRole(getRole()); }, []);
 
   const isManager = ["Developer", "GM", "Admin", "Production Manager", "Supervisor"].includes(userRole);
+  const canEditEmployees = ["Developer", "GM", "Admin", "Production Manager"].includes(userRole);
 
   useEffect(() => {
     fetchOrders();
@@ -702,12 +703,14 @@ export default function SchedulerPage() {
                         </Select>
                       </td>
                       <td className="py-1">
-                        <button
-                          className="rounded px-2 py-1 text-xs text-critical hover:bg-critical/10"
-                          onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                        >
-                          Delete
-                        </button>
+                        {canEditEmployees && (
+                          <button
+                            className="rounded px-2 py-1 text-xs text-critical hover:bg-critical/10"
+                            onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -724,13 +727,15 @@ export default function SchedulerPage() {
             <Button variant="secondary" onClick={() => setWorkforceOpen(false)}>
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              disabled={Object.keys(editedEmployees).length === 0}
-              onClick={handleSaveEmployees}
-            >
-              Save Changes ({Object.keys(editedEmployees).length})
-            </Button>
+            {canEditEmployees && (
+              <Button
+                variant="primary"
+                disabled={Object.keys(editedEmployees).length === 0}
+                onClick={handleSaveEmployees}
+              >
+                Save Changes ({Object.keys(editedEmployees).length})
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

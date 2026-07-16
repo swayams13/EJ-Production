@@ -21,6 +21,6 @@ class FinalCheckUpdate(BaseModel):
     notes: Optional[str] = None
 
 class WeldingLogCreate(BaseModel):
-    operator_id: Optional[int] = None
-    process_type: str # TIG, MIG, Grinding
+    operator_id: int          # required — must match a work order for today
+    process_type: str         # TIG | MIG | Grinding
     feet_done: float = Field(gt=0)

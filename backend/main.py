@@ -157,6 +157,17 @@ _run_startup_migration("joint tag columns", [
     "ALTER TABLE parts ADD COLUMN total_qty INTEGER DEFAULT 0",
 ])
 
+_run_startup_migration("parts: backfill total_qty=0 from line quantity for legacy parts", [
+    """
+    UPDATE parts p
+    SET total_qty = ppl.quantity
+    FROM project_production_lines ppl
+    WHERE p.production_line_id = ppl.id
+      AND p.total_qty = 0
+      AND ppl.quantity > 0
+    """,
+])
+
 _run_startup_migration("job_final_checks table", [
     """
     CREATE TABLE IF NOT EXISTS job_final_checks (

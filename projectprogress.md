@@ -1,5 +1,107 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-16 (Session 20 — Worker Productivity Tracking feature)
+
+### What was done:
+
+**Worker Productivity Tracking (new feature)**
+
+Single entry point: supervisor logs welding feet on Shop Floor Entry → auto-updates assigned worker's WorkOrder → live progress visible in Scheduler → aggregate dashboard for GM/CEO/MD.
+
+1. **DB (`backend/services/db_service.py`)**: Added `work_order_id` nullable FK on `WeldingLog` → `work_orders.id` with back-reference. `WorkOrder` got `welding_logs` back-ref. Migration added to `backend/main.py` startup block (`ADD COLUMN IF NOT EXISTS`, idempotent).
+
+2. **Backend — welding log (`backend/app/production/router.py`, `schemas.py`)**: `operator_id` made required in `WeldingLogCreate`. `add_welding_log` now auto-matches the `WorkOrder` for `(operator_id, project_id, process_type, today)` and recomputes `actual_feet = SUM(WeldingLog.feet_done WHERE work_order_id=wo.id)` atomically using `db.flush()` before the sum. Returns HTTP 400 if no work order exists for that worker+project+process today.
+
+3. **Backend — scheduler (`backend/app/scheduler/router.py`)**: `GET /work-orders` gained optional `project_id` + `process_type` query params. New `GET /productivity` endpoint (MANAGEMENT roles only) aggregates WorkOrders into per-worker/per-process daily/weekly/monthly summaries with efficiency %.
+
+4. **Backend — PATCH invariant fix**: `complete_work_order` now recomputes `actual_feet` from linked welding logs (if any exist) after setting the manual value — welding logs are always authoritative source of truth.
+
+5. **Frontend — Shop Floor Entry (`next-frontend/src/app/(main)/production/entry/page.tsx`)**: Removed global Operator dropdown. Each welding process card (TIG/MIG/Grinding) now has its own worker dropdown populated from today's work orders for the selected project + process type. Warns and disables submit if no work orders exist for that process. Submit sends required `operator_id`.
+
+6. **Frontend — Scheduler (`next-frontend/src/app/(main)/scheduler/page.tsx`)**: Added "Actual ft" column showing logged vs target feet per work order. Green bold when target met, dash when null.
+
+7. **Frontend — Productivity page (`next-frontend/src/app/(main)/productivity/page.tsx`)**: New page (GM/Admin/Production Manager only). Date range presets (Today/Week/Month), process type filter, 4 summary cards, per-worker table with efficiency badges.
+
+8. **Sidebar**: "Productivity" link added under Workforce, hidden from Supervisor/Operator roles.
+
+### Commits (all on demo):
+- `028f2a7` — feat(db): add work_order_id FK to welding_logs
+- `7c75bcf` — feat(production): require operator on welding log, auto-sync WorkOrder.actual_feet
+- `a170c9a` — feat(scheduler): add project_id/process_type filters to work-orders; add /productivity endpoint
+- `07eabeb` — feat(production): per-process worker dropdown driven by today's work orders
+- `51d7f0f` — fix(production): use work-order id as React key in worker dropdown
+- `c5e53e5` — feat(scheduler): show actual ft vs target ft in work orders table
+- `5295c01` — feat(productivity): add worker productivity dashboard page
+- `6b197f1` — fix(migration): add work_order_id column migration; fix PATCH actual_feet invariant
+
+### Pending:
+- Verify on demo deployment: generate work orders → log welding feet → confirm Scheduler Actual ft updates → confirm /productivity shows data
+- If confirmed working, request user approval to merge demo → main
+
+---
+
+## Date: 2026-07-16 (Session 19 — Work Assignment Feature: algorithm rewrite + workforce trigger)
+
+### What was done:
+
+**Work Assignment Feature (continued from Session 18 / prior context)**
+
+1. **`generate_work_orders` algorithm rewritten** (`backend/app/scheduler/router.py`):
+   - Only assigns work to **present** workers (joined against `AttendanceLog` for `target_date`, status `Present`/`Overtime`)
+   - Each worker gets **exactly one** work order — once assigned, marked done and skipped
+   - Worker priority = `accuracy*0.4 + min(exp/20,1)*0.3 + min(target/100,1)*0.3` where accuracy is computed from historical completed `WorkOrder` records (`func.avg(actual_feet/target_feet)`)
+   - Workers sorted highest priority first; assignment iterates skill tiers, matches to highest-priority project with remaining feet
+   - `Supervisor` role added to allowed roles for this endpoint
+
+2. **Scheduler page fix** (`next-frontend/src/app/(main)/scheduler/page.tsx`):
+   - `isManager` updated to include `"Supervisor"` so the Generate Work Orders button shows for supervisors
+
+3. **Workforce page** (`next-frontend/src/app/(main)/workforce/page.tsx`):
+   - Added "Generate Work Orders" button below the Record Attendance submit button
+   - Calls `POST /api/v1/scheduler/generate-work-orders?target_date={today}`
+   - Visible to all logged-in users; accessible to Supervisors for post-attendance flow
+
+### Commits (on demo):
+- `45b12f5` — feat(scheduler): one task per worker, priority by accuracy+experience+efficiency
+
+4. **Frontend bug fixes (audit-driven)** (`next-frontend/src/app/(main)/scheduler/page.tsx`, `Modal.tsx`, `useConfirm.tsx`):
+   - `worker_map` NameError in `generate_work_orders` return — fixed to `worker_list` (was causing 500 on every generate click)
+   - `Modal.tsx` children container changed from `flex justify-end gap-2` to plain `p-4` — form fields were being squished into one horizontal row
+   - 3 modals (Complete WO, Override, Reject) had bare button siblings — wrapped in `flex justify-end gap-2 pt-2`
+   - `useConfirm` dialog buttons also wrapped for same reason
+
+5. **Manage Workforce modal restructure**:
+   - Added `size` prop to `Modal.tsx` (sm/lg/xl); Manage Workforce uses `xl` (max-w-5xl)
+   - Table now scrollable: `max-h-[60vh] overflow-y-auto`, sticky header
+   - Emp ID column added per row
+   - Delete button per row with `useConfirm` danger dialog
+   - "Save Changes" button directly calls `PATCH /employees/{id}` per edited row
+   - Footer: Override Today's Plan (left) | Cancel + Save Changes (right) with separator
+
+6. **New backend endpoints** (`backend/app/scheduler/router.py`, `schemas.py`):
+   - `PATCH /api/v1/scheduler/employees/{emp_id}` — direct employee update, PM+ only, typed via `EmployeeUpdate` Pydantic schema
+   - `DELETE /api/v1/scheduler/employees/{emp_id}` — permanent delete, Admin/GM/Dev only
+
+7. **Security hardening** (flagged by background security review):
+   - `payload: dict` replaced with `EmployeeUpdate` Pydantic schema (typed, `exclude_unset=True`)
+   - PATCH restricted to `["Developer", "GM", "Admin", "Production Manager"]` — Supervisors excluded (would bypass change-request approval flow)
+   - DELETE restricted to `["Developer", "GM", "Admin"]` — irreversible action
+   - Frontend: Save Changes + Delete buttons hidden from Supervisors via `canEditEmployees` flag
+
+### Commits (all on demo):
+- `45b12f5` — feat(scheduler): one task per worker, priority by accuracy+experience+efficiency
+- `a12dcd8` — fix(scheduler): crash on generate-work-orders + modal layout broken
+- `0a622ca` — fix(scheduler): widen Manage Workforce modal + fix button layout
+- `6595b01` — feat(scheduler): scrollable workforce modal, save + delete employees
+- `14b7cbd` — fix(security): harden employee PATCH/DELETE endpoints
+- `fdac246` — fix(scheduler): hide Save/Delete from Supervisors in workforce modal
+
+### Pending:
+- Test on demo deployment: mark attendance → Generate Work Orders → verify /scheduler shows orders + all modals work
+- If confirmed working, request user approval to merge demo → main
+
+---
+
 ## Date: 2026-07-16 (Session 18 — Procurement fixes + material name alignment)
 
 ### What was done:

@@ -3,6 +3,16 @@ from typing import Optional, List
 from datetime import date, datetime
 
 
+class EmployeeUpdate(BaseModel):
+    skill_1: Optional[str] = None
+    skill_2: Optional[str] = None
+    skill_3: Optional[str] = None
+    skill_4: Optional[str] = None
+    target_per_day: Optional[float] = None
+    experience_years: Optional[int] = None
+    active: Optional[bool] = None
+
+
 class SimpleUser(BaseModel):
     id: int
     full_name: Optional[str] = None

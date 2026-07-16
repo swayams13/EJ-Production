@@ -91,13 +91,7 @@ function crSummary(cr: ChangeRequest): string {
 
 function getRole(): string {
   if (typeof window === "undefined") return "";
-  const token = localStorage.getItem("token");
-  if (!token) return "";
-  try {
-    return JSON.parse(atob(token.split(".")[1])).role ?? "";
-  } catch {
-    return "";
-  }
+  return localStorage.getItem("user_role") ?? "";
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────

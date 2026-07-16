@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import asc
+from sqlalchemy import asc, nullslast
 from sqlalchemy.orm import Session, joinedload
 
 from backend.app.auth.rbac import require_roles
@@ -144,7 +144,7 @@ def generate_work_orders(
         Project.status == "Active",
         Project.hold_until_date == None,
     ).order_by(
-        asc(Project.priority),
+        nullslast(asc(Project.priority)),
         asc(Project.target_date),
         asc(Project.created_at),
     ).all()

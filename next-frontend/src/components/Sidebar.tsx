@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Workforce",
     items: [
       { name: "Workforce Intelligence", href: "/workforce" },
+      { name: "Productivity", href: "/productivity", hideForRoles: ["Supervisor", "Operator"] },
       { name: "User Management", href: "/operators" },
     ],
   },

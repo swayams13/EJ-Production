@@ -93,8 +93,16 @@ export default function OperatorEntry() {
   const [activeTab, setActiveTab] = useState<"Material" | "Fabrication" | "Assembly" | "Welding" | "FinalChecks">("Material");
 
   const { showToast, toasts } = useToast();
-  const [operators, setOperators] = useState<{ id: number; full_name: string }[]>([]);
-  const [operatorId, setOperatorId] = useState("");
+
+  interface WOSlim {
+    id: number;
+    user_id: number;
+    process_type: string;
+    target_feet: number;
+    user?: { id: number; full_name: string | null };
+  }
+  const [todayWorkOrders, setTodayWorkOrders] = useState<WOSlim[]>([]);
+  const [weldingOperatorIds, setWeldingOperatorIds] = useState<Record<string, string>>({});
 
   const isWeldingProcess = (name: string) => /weld|grind|tig|mig/i.test(name);
   const isMaterialProcess = (name: string) => /^(PO|Material Received|Inward Insp)$/i.test(name);
@@ -112,11 +120,13 @@ export default function OperatorEntry() {
   }, []);
 
   useEffect(() => {
-    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/users`)
+    if (!projectId) { setTodayWorkOrders([]); setWeldingOperatorIds({}); return; }
+    const today = new Date().toISOString().split("T")[0];
+    apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/scheduler/work-orders?target_date=${today}&project_id=${projectId}`)
       .then((res) => res.json())
-      .then((d) => setOperators((d.data || []).filter((u: { role: string }) => u.role === "Operator")))
+      .then((data: WOSlim[]) => { if (Array.isArray(data)) setTodayWorkOrders(data); })
       .catch(() => {});
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId) {
@@ -202,7 +212,7 @@ export default function OperatorEntry() {
           quantity_completed: qty,
           feet_completed: feet > 0 ? feet : null,
           po_number: qtyInputs[`po_${processId}`] || null,
-          operator_id: operatorId ? parseInt(operatorId) : null,
+          operator_id: null,
         }),
       });
 
@@ -270,6 +280,10 @@ export default function OperatorEntry() {
       setErrorMsg("Feet done must be greater than 0");
       return;
     }
+    if (!weldingOperatorIds[processType]) {
+      setErrorMsg("Select a worker before logging feet.");
+      return;
+    }
 
     setSubmitting(true);
     setSuccessMsg("");
@@ -279,7 +293,7 @@ export default function OperatorEntry() {
       const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/production/requirements/${requirementId}/welding_logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ process_type: processType, feet_done: feet, operator_id: operatorId ? parseInt(operatorId) : null }),
+        body: JSON.stringify({ process_type: processType, feet_done: feet, operator_id: parseInt(weldingOperatorIds[processType]) }),
       });
 
       if (!res.ok) {
@@ -364,7 +378,7 @@ export default function OperatorEntry() {
           </Alert>
         )}
 
-        <Card className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
           <div>
             <Label>Project</Label>
             <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
@@ -396,18 +410,6 @@ export default function OperatorEntry() {
               {parts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <Label>Operator (Optional)</Label>
-            <Select value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
-              <option value="">-- Supervisor Entry --</option>
-              {operators.map((op) => (
-                <option key={op.id} value={op.id}>
-                  {op.full_name}
                 </option>
               ))}
             </Select>
@@ -746,6 +748,24 @@ export default function OperatorEntry() {
                             </div>
                             {!isComplete && target > 0 ? (
                               <div className="mt-2 flex flex-col gap-2">
+                                {(() => {
+                                  const workers = todayWorkOrders.filter((wo) => wo.process_type === type);
+                                  return workers.length === 0 ? (
+                                    <p className="text-xs text-critical">No workers assigned to {displayType} today. Generate work orders first.</p>
+                                  ) : (
+                                    <Select
+                                      value={weldingOperatorIds[type] || ""}
+                                      onChange={(e) => setWeldingOperatorIds({ ...weldingOperatorIds, [type]: e.target.value })}
+                                    >
+                                      <option value="">-- Select Worker --</option>
+                                      {workers.map((wo) => (
+                                        <option key={wo.user_id} value={wo.user_id}>
+                                          {wo.user?.full_name ?? `Worker #${wo.user_id}`} — {wo.target_feet.toFixed(1)} ft target
+                                        </option>
+                                      ))}
+                                    </Select>
+                                  );
+                                })()}
                                 <Input
                                   type="number"
                                   min="0.1"
@@ -757,7 +777,7 @@ export default function OperatorEntry() {
                                 <Button
                                   variant="primary"
                                   className="w-full justify-center"
-                                  disabled={submitting || !feetInputs[type]}
+                                  disabled={submitting || !feetInputs[type] || !weldingOperatorIds[type]}
                                   onClick={() => handleGlobalWeldingSubmit(type)}
                                 >
                                   Log {displayType} Progress

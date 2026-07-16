@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import asc, func, nullslast
 from sqlalchemy.orm import Session, joinedload
 
-from backend.app.auth.rbac import require_roles
+from backend.app.auth.rbac import require_roles, MANAGEMENT
 from backend.app.scheduler.schemas import (
     TaskAssignmentCreate, TaskAssignmentResponse,
     WorkOrderResponse, WorkOrderComplete,
@@ -541,6 +541,8 @@ def auto_assign_tasks(
 @router.get("/work-orders", response_model=List[WorkOrderResponse])
 def get_work_orders(
     target_date: Optional[date] = None,
+    project_id: Optional[int] = None,
+    process_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
 ):
@@ -552,7 +554,52 @@ def get_work_orders(
     )
     if target_date:
         query = query.filter(WorkOrder.date == target_date)
+    if project_id:
+        query = query.filter(WorkOrder.project_id == project_id)
+    if process_type:
+        query = query.filter(WorkOrder.process_type == process_type)
     return query.order_by(asc(WorkOrder.user_id), asc(WorkOrder.process_type)).all()
+
+
+@router.get("/productivity")
+def get_productivity(
+    from_date: date,
+    to_date: date,
+    user_id: Optional[int] = None,
+    process_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(MANAGEMENT)),
+):
+    query = (
+        db.query(
+            WorkOrder.user_id,
+            User.full_name,
+            WorkOrder.process_type,
+            func.sum(WorkOrder.target_feet).label("target_feet"),
+            func.sum(func.coalesce(WorkOrder.actual_feet, 0)).label("actual_feet"),
+            func.count(WorkOrder.date.distinct()).label("days_worked"),
+        )
+        .join(User, User.id == WorkOrder.user_id)
+        .filter(WorkOrder.date >= from_date, WorkOrder.date <= to_date)
+    )
+    if user_id:
+        query = query.filter(WorkOrder.user_id == user_id)
+    if process_type:
+        query = query.filter(WorkOrder.process_type == process_type)
+    rows = query.group_by(WorkOrder.user_id, User.full_name, WorkOrder.process_type).order_by(User.full_name, WorkOrder.process_type).all()
+
+    return [
+        {
+            "user_id": r.user_id,
+            "worker_name": r.full_name or f"User #{r.user_id}",
+            "process_type": r.process_type,
+            "target_feet": round(r.target_feet or 0, 2),
+            "actual_feet": round(r.actual_feet or 0, 2),
+            "efficiency_pct": round((r.actual_feet / r.target_feet * 100) if r.target_feet else 0, 1),
+            "days_worked": r.days_worked,
+        }
+        for r in rows
+    ]
 
 
 @router.patch("/work-orders/{work_order_id}", response_model=WorkOrderResponse)

@@ -474,6 +474,7 @@ export default function SchedulerPage() {
                   <Th>Part</Th>
                   <Th>Process</Th>
                   <Th numeric>Target ft</Th>
+                  <Th numeric>Actual ft</Th>
                   <Th>OT</Th>
                   <Th>Status</Th>
                   <Th>Action</Th>
@@ -497,6 +498,15 @@ export default function SchedulerPage() {
                       <Badge tone="brand">{wo.process_type}</Badge>
                     </Td>
                     <Td numeric>{wo.target_feet.toFixed(1)}</Td>
+                    <Td numeric>
+                      {wo.actual_feet != null ? (
+                        <span className={wo.actual_feet >= wo.target_feet ? "text-success font-bold" : "text-ink"}>
+                          {wo.actual_feet.toFixed(1)}
+                        </span>
+                      ) : (
+                        <span className="text-ink-soft">—</span>
+                      )}
+                    </Td>
                     <Td>
                       {wo.is_overtime ? (
                         <Badge tone="warning">OT</Badge>

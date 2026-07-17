@@ -645,8 +645,7 @@ export default function OperatorEntry() {
             ) : activeTab === "Assembly" ? (
               <Card className="p-5">
                 <div className="mb-3 flex items-center gap-2">
-                  <h3 className="font-bold text-ink">Proposed Assembly Sequence</h3>
-                  <Badge tone="warning">Pending GM sign-off</Badge>
+                  <h3 className="font-bold text-ink">Assembly Sequence</h3>
                 </div>
                 <div className="divide-y divide-line">
                   {[...assemblySteps]

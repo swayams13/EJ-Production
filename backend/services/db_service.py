@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, date
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, ForeignKey, Text, UniqueConstraint, Index
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 
@@ -188,13 +188,15 @@ class WeldingLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     production_line_id = Column(Integer, ForeignKey("project_production_lines.id"), nullable=False)
     operator_id = Column(Integer, ForeignKey("users.id"))
+    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
     process_type = Column(String, nullable=False) # "TIG", "MIG", "Grinding"
     feet_done = Column(Float, nullable=False)
     date = Column(Date, default=date.today)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     production_line = relationship("ProjectProductionLine")
-    operator = relationship("User")
+    operator = relationship("User", foreign_keys=[operator_id])
+    work_order = relationship("WorkOrder", back_populates="welding_logs")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -386,6 +388,50 @@ class Employee(Base):
     experience_years = Column(Integer, default=0)
     target_per_day = Column(Float, default=0.0)
     active = Column(Boolean, default=True)
+
+class WorkOrder(Base):
+    __tablename__ = "work_orders"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    part_id = Column(Integer, ForeignKey("parts.id"), nullable=True)
+    date = Column(Date, default=date.today, nullable=False)
+    process_type = Column(String, nullable=False)   # TIG | MIG | Grinding
+    target_feet = Column(Float, nullable=False)
+    actual_feet = Column(Float, nullable=True)
+    is_overtime = Column(Boolean, default=False)
+    status = Column(String, default="Pending")      # Pending | Completed | Blocked
+    completed_part_process_id = Column(Integer, ForeignKey("part_processes.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project")
+    user = relationship("User")
+    part = relationship("Part")
+    completed_part_process = relationship("PartProcess")
+    welding_logs = relationship("WeldingLog", back_populates="work_order")
+
+    __table_args__ = (
+        Index("ix_work_orders_date_user", "date", "user_id"),
+        Index("ix_work_orders_date_project", "date", "project_id"),
+    )
+
+class ChangeRequest(Base):
+    __tablename__ = "change_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    subject_type = Column(String, nullable=False)   # daily_plan_override | employee_profile
+    subject_id = Column(Integer, nullable=True)     # Employee.id for employee_profile; null for daily_plan_override
+    target_date = Column(Date, nullable=True)       # which day the daily_plan_override applies to
+    proposed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    status = Column(String, default="pending_approval")  # pending_approval | approved | rejected
+    changes_json = Column(Text, nullable=False)
+    rejection_note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    proposer = relationship("User", foreign_keys=[proposed_by])
+    approver_user = relationship("User", foreign_keys=[approved_by])
 
 class CompanyResourcePool(Base):
     __tablename__ = "company_resource_pool"

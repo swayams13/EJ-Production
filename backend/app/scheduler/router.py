@@ -1,17 +1,272 @@
+import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import asc
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
-from backend.services.db_service import get_db, DailyTaskAssignment, Project, User, AttendanceLog
-from backend.app.auth.rbac import require_roles
-from backend.app.scheduler.schemas import TaskAssignmentCreate, TaskAssignmentResponse
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import asc, func, nullslast
+from sqlalchemy.orm import Session, joinedload
+
+from backend.app.auth.rbac import require_roles, MANAGEMENT
+from backend.app.scheduler.schemas import (
+    TaskAssignmentCreate, TaskAssignmentResponse,
+    WorkOrderResponse, WorkOrderComplete,
+    ChangeRequestCreate, ChangeRequestResponse, ChangeRequestReject,
+    EmployeeUpdate,
+)
+from backend.services.db_service import (
+    get_db,
+    AttendanceLog, ChangeRequest, DailyTaskAssignment, Employee,
+    Part, PartProcess, Project, ProjectResourceAssignment,
+    User, WarehouseStock, WorkOrder,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/scheduler", tags=["Scheduler"])
+
+# ponytail: strawman mapping — confirm with GM before changing.
+PROCESS_TYPE_TO_STEPS = {
+    "TIG":      ["Welding"],
+    "MIG":      ["Welding"],
+    "Grinding": ["Grinding", "DP test"],
+}
+
+
+def _available_stock_local(db: Session, material_name: str, size: int, joint_type: str) -> int:
+    """Return warehouse available qty (on_hand - reserved). 0 if no record found."""
+    stock = db.query(WarehouseStock).filter_by(
+        material_name=material_name,
+        size=size,
+        joint_type=joint_type,
+    ).first()
+    if not stock:
+        return 0
+    return max(0, stock.qty_on_hand - stock.reserved_qty)
+
+
+def find_available_part(db: Session, project: Project, process_type: str):
+    """
+    Return the first Part in the project that has available warehouse stock
+    and at least one PartProcess step matching process_type that is not yet 'ready'.
+    Returns None if no such part exists (work order still created, part_id=None).
+    """
+    relevant_steps = PROCESS_TYPE_TO_STEPS.get(process_type, [])
+    for line in project.production_lines:
+        size = line.size or 0
+        joint_type = line.joint_type or ""
+        for part in line.parts:
+            avail = _available_stock_local(db, part.name, size, joint_type)
+            if avail > 0:
+                for proc in part.processes:
+                    if proc.process_name in relevant_steps and proc.status != "ready":
+                        return part
+    return None
+
+
+@router.post("/generate-work-orders")
+def generate_work_orders(
+    target_date: date,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    from backend.services.mes_service import MESService
+    from backend.services.production_service import aggregate_line_feet
+
+    db.query(WorkOrder).filter(WorkOrder.date == target_date).delete()
+    db.commit()
+
+    # ── Step 1: present workers ───────────────────────────────────────────────
+    any_logs = db.query(AttendanceLog).filter(AttendanceLog.date == target_date).first()
+    if any_logs:
+        present_logs = db.query(AttendanceLog).filter(
+            AttendanceLog.date == target_date,
+            AttendanceLog.status.in_(["Present", "Overtime"]),
+        ).all()
+        present_user_ids = [log.user_id for log in present_logs]
+        if not present_user_ids:
+            return {"success": False, "message": "Attendance marked but no workers present.", "orders_created": 0}
+        workers = db.query(User).filter(
+            User.id.in_(present_user_ids),
+            User.role == "Operator",
+        ).all()
+    else:
+        workers = db.query(User).filter(User.role == "Operator").all()
+        if not workers:
+            return {"success": False, "message": "No operators found.", "orders_created": 0}
+
+    # ── Step 2: approved daily-plan overrides ─────────────────────────────────
+    overrides = db.query(ChangeRequest).filter_by(
+        subject_type="daily_plan_override",
+        target_date=target_date,
+        status="approved",
+    ).all()
+    exclude_ids: set = set()
+    capacity_overrides: dict = {}
+    for cr in overrides:
+        changes = json.loads(cr.changes_json)
+        exclude_ids.update(changes.get("exclude_user_ids", []))
+        for uid_str, cap in changes.get("capacity_overrides", {}).items():
+            capacity_overrides[int(uid_str)] = float(cap)
+
+    workers = [w for w in workers if w.id not in exclude_ids]
+    if not workers:
+        return {"success": False, "message": "All workers excluded by approved overrides.", "orders_created": 0}
+
+    # ── Step 3: accuracy scores from historical work orders ───────────────────
+    accuracy_rows = db.query(
+        WorkOrder.user_id,
+        func.avg(WorkOrder.actual_feet / WorkOrder.target_feet),
+    ).filter(
+        WorkOrder.status == "Completed",
+        WorkOrder.actual_feet.isnot(None),
+        WorkOrder.target_feet > 0,
+    ).group_by(WorkOrder.user_id).all()
+    accuracy_map = {uid: min(float(acc), 1.5) for uid, acc in accuracy_rows if acc}
+
+    # ── Step 4: build worker list with priority scores ────────────────────────
+    employees = db.query(Employee).all()
+    emp_map = {e.name: e for e in employees}
+
+    worker_list = []
+    for w in workers:
+        emp = emp_map.get(w.full_name)
+        target = capacity_overrides.get(w.id, None)
+        skills = []
+        experience_years = 0
+
+        if emp:
+            raw_skills = [emp.skill_1, emp.skill_2, emp.skill_3, emp.skill_4]
+            skills = [(i, s) for i, s in enumerate(raw_skills) if s]
+            experience_years = emp.experience_years or 0
+            if target is None:
+                target = emp.target_per_day or w.base_productivity or 50.0
+        else:
+            if w.skill:
+                skills = [(0, w.skill)]
+            if target is None:
+                target = w.base_productivity or 50.0
+
+        accuracy = accuracy_map.get(w.id, 0.8)          # default 80% if no history
+        exp_score = min(experience_years / 20.0, 1.0)   # cap at 20 yrs
+        eff_score = min(target / 100.0, 1.0)            # cap at 100 ft/day
+
+        # Higher accuracy + more experience + higher efficiency → gets first pick
+        priority_score = accuracy * 0.4 + exp_score * 0.3 + eff_score * 0.3
+
+        worker_list.append({
+            "user_id": w.id,
+            "target_feet": target,
+            "skills": skills,           # [(tier, skill_str), ...]
+            "priority_score": priority_score,
+        })
+
+    # Best workers get first pick of projects
+    worker_list.sort(key=lambda w: w["priority_score"], reverse=True)
+
+    # ── Step 5: project pacing requirements ───────────────────────────────────
+    projects = db.query(Project).filter(
+        Project.status == "Active",
+        Project.hold_until_date == None,
+    ).order_by(
+        nullslast(asc(Project.priority)),
+        asc(Project.target_date),
+        asc(Project.created_at),
+    ).all()
+
+    if not projects:
+        return {"success": True, "message": "No active projects.", "orders_created": 0,
+                "workers_assigned": len(worker_list), "no_stock_projects": []}
+
+    today = date.today()
+    project_requirements = []
+    no_stock_projects: list = []
+
+    for p in projects:
+        total_tig, total_mig, total_grind = aggregate_line_feet(p.production_lines)
+        total_feet = total_tig + total_mig + total_grind
+        if total_feet == 0:
+            continue
+
+        assignment = db.query(ProjectResourceAssignment).filter_by(project_id=p.id).first()
+        target_days = assignment.target_days if assignment and assignment.target_days else 15
+        base_daily_target = total_feet / target_days
+
+        created_date = p.created_at.date() if hasattr(p.created_at, "date") else p.created_at
+        days_elapsed = max(0, (today - created_date).days)
+        expected_completed = min(total_feet, base_daily_target * days_elapsed)
+        progress_pct = MESService.calculate_project_progress(db, p.id)
+        actual_completed = total_feet * (progress_pct / 100)
+        backlog = max(0, expected_completed - actual_completed)
+        today_req = base_daily_target + backlog
+
+        if today_req <= 0:
+            continue
+
+        project_requirements.append({
+            "project": p,
+            "remaining_TIG":      today_req * (total_tig   / total_feet),
+            "remaining_MIG":      today_req * (total_mig   / total_feet),
+            "remaining_GRINDING": today_req * (total_grind / total_feet),
+        })
+
+    if not project_requirements:
+        return {"success": True, "message": "No pacing requirements today.", "orders_created": 0,
+                "workers_assigned": len(worker_list), "no_stock_projects": []}
+
+    # ── Step 6: assign each worker exactly ONE work order ─────────────────────
+    # Process priority within a worker: MIG → TIG → Grinding
+    SKILL_TO_PROCESS = [
+        ("MIG",   "remaining_MIG",      "MIG"),
+        ("TIG",   "remaining_TIG",      "TIG"),
+        ("GRIND", "remaining_GRINDING", "Grinding"),
+    ]
+
+    orders_created = 0
+
+    for worker in worker_list:
+        assigned = False
+        # Try each skill tier (0=primary first) and each matching process type
+        for _tier, skill_str in sorted(worker["skills"], key=lambda x: x[0]):
+            if assigned:
+                break
+            for skill_kw, req_key, process_type in SKILL_TO_PROCESS:
+                if skill_kw not in skill_str.upper():
+                    continue
+                # Assign to the highest-priority project that still needs this process
+                for req in project_requirements:
+                    if req[req_key] <= 0:
+                        continue
+                    assigned_feet = min(worker["target_feet"], req[req_key])
+                    part = find_available_part(db, req["project"], process_type)
+                    if part is None and req["project"].quotation_no not in no_stock_projects:
+                        no_stock_projects.append(req["project"].quotation_no)
+                    db.add(WorkOrder(
+                        project_id=req["project"].id,
+                        user_id=worker["user_id"],
+                        part_id=part.id if part else None,
+                        date=target_date,
+                        process_type=process_type,
+                        target_feet=assigned_feet,
+                        is_overtime=False,
+                        status="Pending",
+                    ))
+                    orders_created += 1
+                    req[req_key] -= assigned_feet
+                    assigned = True
+                    break
+                if assigned:
+                    break
+
+    db.commit()
+    return {
+        "success": True,
+        "message": f"Generated {orders_created} work orders for {len(worker_list)} workers.",
+        "orders_created": orders_created,
+        "workers_assigned": len(worker_list),
+        "no_stock_projects": no_stock_projects,
+    }
+
 
 @router.get("/assignments", response_model=List[TaskAssignmentResponse])
 def get_assignments(
@@ -281,3 +536,253 @@ def auto_assign_tasks(
                         
     db.commit()
     return {"success": True, "message": f"Successfully assigned target tracking plans to {len(worker_map)} workers for today."}
+
+
+@router.get("/work-orders", response_model=List[WorkOrderResponse])
+def get_work_orders(
+    target_date: Optional[date] = None,
+    project_id: Optional[int] = None,
+    process_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    query = db.query(WorkOrder).options(
+        joinedload(WorkOrder.user),
+        joinedload(WorkOrder.project),
+        joinedload(WorkOrder.part).joinedload(Part.processes),
+        joinedload(WorkOrder.part).joinedload(Part.production_line),
+    )
+    if target_date:
+        query = query.filter(WorkOrder.date == target_date)
+    if project_id:
+        query = query.filter(WorkOrder.project_id == project_id)
+    if process_type:
+        query = query.filter(WorkOrder.process_type == process_type)
+    return query.order_by(asc(WorkOrder.user_id), asc(WorkOrder.process_type)).all()
+
+
+@router.get("/productivity")
+def get_productivity(
+    from_date: date,
+    to_date: date,
+    user_id: Optional[int] = None,
+    process_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(MANAGEMENT)),
+):
+    query = (
+        db.query(
+            WorkOrder.user_id,
+            User.full_name,
+            WorkOrder.process_type,
+            func.sum(WorkOrder.target_feet).label("target_feet"),
+            func.sum(func.coalesce(WorkOrder.actual_feet, 0)).label("actual_feet"),
+            func.count(WorkOrder.date.distinct()).label("days_worked"),
+        )
+        .join(User, User.id == WorkOrder.user_id)
+        .filter(WorkOrder.date >= from_date, WorkOrder.date <= to_date)
+    )
+    if user_id:
+        query = query.filter(WorkOrder.user_id == user_id)
+    if process_type:
+        query = query.filter(WorkOrder.process_type == process_type)
+    rows = query.group_by(WorkOrder.user_id, User.full_name, WorkOrder.process_type).order_by(User.full_name, WorkOrder.process_type).all()
+
+    return [
+        {
+            "user_id": r.user_id,
+            "worker_name": r.full_name or f"User #{r.user_id}",
+            "process_type": r.process_type,
+            "target_feet": round(r.target_feet or 0, 2),
+            "actual_feet": round(r.actual_feet or 0, 2),
+            "efficiency_pct": round((r.actual_feet / r.target_feet * 100) if r.target_feet else 0, 1),
+            "days_worked": r.days_worked,
+        }
+        for r in rows
+    ]
+
+
+@router.patch("/work-orders/{work_order_id}", response_model=WorkOrderResponse)
+def complete_work_order(
+    work_order_id: int,
+    payload: WorkOrderComplete,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
+    if not wo:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    wo.actual_feet = payload.actual_feet
+
+    # If welding logs have been linked to this work order, their sum is authoritative
+    from sqlalchemy import func as sa_func
+    from backend.services.db_service import WeldingLog
+    linked_sum = db.query(sa_func.sum(WeldingLog.feet_done)).filter(
+        WeldingLog.work_order_id == wo.id
+    ).scalar()
+    if linked_sum is not None:
+        wo.actual_feet = round(linked_sum, 2)
+
+    wo.status = payload.status
+    if payload.notes is not None:
+        wo.notes = payload.notes
+
+    if payload.mark_step_ready and payload.part_process_id:
+        proc = db.query(PartProcess).filter(PartProcess.id == payload.part_process_id).first()
+        if proc:
+            proc.status = "ready"
+            proc.date_ready = date.today()
+            wo.completed_part_process_id = payload.part_process_id
+
+    db.commit()
+    db.refresh(wo)
+    return wo
+
+
+@router.get("/employees")
+def get_employees(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    employees = db.query(Employee).order_by(Employee.name).all()
+    return [
+        {
+            "id": e.id,
+            "emp_id": e.emp_id,
+            "name": e.name,
+            "company": e.company,
+            "skill_1": e.skill_1,
+            "skill_2": e.skill_2,
+            "skill_3": e.skill_3,
+            "skill_4": e.skill_4,
+            "target_per_day": e.target_per_day,
+            "active": e.active,
+        }
+        for e in employees
+    ]
+
+
+@router.patch("/employees/{emp_id}")
+def update_employee(
+    emp_id: int,
+    payload: EmployeeUpdate,
+    db: Session = Depends(get_db),
+    # Supervisors excluded: direct edit bypasses change-request approval flow
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"])),
+):
+    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    for field, value in payload.dict(exclude_unset=True).items():
+        setattr(emp, field, value)
+    db.commit()
+    return {"success": True, "id": emp.id}
+
+
+@router.delete("/employees/{emp_id}")
+def delete_employee(
+    emp_id: int,
+    db: Session = Depends(get_db),
+    # Deletion is irreversible — restricted to Admin/GM/Developer only
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin"])),
+):
+    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    db.delete(emp)
+    db.commit()
+    return {"success": True}
+
+
+@router.post("/change-requests", response_model=ChangeRequestResponse)
+def create_change_request(
+    payload: ChangeRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    cr = ChangeRequest(
+        subject_type=payload.subject_type,
+        subject_id=payload.subject_id,
+        target_date=payload.target_date,
+        proposed_by=current_user["id"],
+        changes_json=payload.changes_json,
+        status="pending_approval",
+    )
+    db.add(cr)
+    db.commit()
+    db.refresh(cr)
+    return cr
+
+
+@router.get("/change-requests", response_model=List[ChangeRequestResponse])
+def get_change_requests(
+    status: Optional[str] = "pending_approval",
+    target_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"])),
+):
+    query = db.query(ChangeRequest).options(joinedload(ChangeRequest.proposer))
+
+    if current_user.get("role") == "Supervisor":
+        query = query.filter(ChangeRequest.proposed_by == current_user["id"])
+
+    if status:
+        query = query.filter(ChangeRequest.status == status)
+    if target_date:
+        query = query.filter(ChangeRequest.target_date == target_date)
+
+    return query.order_by(ChangeRequest.created_at.desc()).all()
+
+
+@router.patch("/change-requests/{cr_id}/approve", response_model=ChangeRequestResponse)
+def approve_change_request(
+    cr_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"])),
+):
+    cr = db.query(ChangeRequest).filter(ChangeRequest.id == cr_id).first()
+    if not cr:
+        raise HTTPException(status_code=404, detail="Change request not found")
+    if cr.status != "pending_approval":
+        raise HTTPException(status_code=400, detail="Change request is not pending")
+
+    cr.status = "approved"
+    cr.approved_by = current_user["id"]
+    cr.resolved_at = datetime.utcnow()
+
+    if cr.subject_type == "employee_profile" and cr.subject_id:
+        emp = db.query(Employee).filter(Employee.id == cr.subject_id).first()
+        if emp:
+            changes = json.loads(cr.changes_json).get("changes", {})
+            allowed = {"skill_1", "skill_2", "skill_3", "skill_4", "target_per_day", "active"}
+            for field, value in changes.items():
+                if field in allowed:
+                    setattr(emp, field, value)
+
+    db.commit()
+    db.refresh(cr)
+    return cr
+
+
+@router.patch("/change-requests/{cr_id}/reject", response_model=ChangeRequestResponse)
+def reject_change_request(
+    cr_id: int,
+    payload: ChangeRequestReject,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"])),
+):
+    cr = db.query(ChangeRequest).filter(ChangeRequest.id == cr_id).first()
+    if not cr:
+        raise HTTPException(status_code=404, detail="Change request not found")
+    if cr.status != "pending_approval":
+        raise HTTPException(status_code=400, detail="Change request is not pending")
+
+    cr.status = "rejected"
+    cr.approved_by = current_user["id"]
+    cr.rejection_note = payload.rejection_note
+    cr.resolved_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(cr)
+    return cr

@@ -21,7 +21,7 @@ Tells the welding-feet calc which master table to read. Per the requirement,
 the existing EJ ("BELLOWS WELDING FEETS PER SIZE") master is used for BOTH
 Simple and Universal expansion joints (same feet per size), and the DJ master
 is used for Dismantling joints. So:
-    SIMPLE_EJ    -> weld_family "EJ"
+    SINGLE_EJ    -> weld_family "EJ"
     UNIVERSAL_EJ -> weld_family "EJ"
     DJ           -> weld_family "DJ"
 
@@ -34,7 +34,7 @@ UNIVERSAL_EJ = "UNIVERSAL_EJ"
 DJ = "DJ"
 
 CATEGORY_LABELS = {
-    SIMPLE_EJ: "Simple Expansion Joint",
+    SIMPLE_EJ: "Single Expansion Joint",
     UNIVERSAL_EJ: "Universal Joint",
     DJ: "Dismantling Joint",
 }

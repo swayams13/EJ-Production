@@ -35,12 +35,14 @@ export function useConfirm() {
 
   const dialog = options ? (
     <Modal open title={options.title} description={options.description} onClose={() => handle(false)}>
-      <Button variant="secondary" onClick={() => handle(false)}>
-        Cancel
-      </Button>
-      <Button variant={options.tone === "danger" ? "danger" : "primary"} onClick={() => handle(true)}>
-        {options.confirmLabel || "Confirm"}
-      </Button>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="secondary" onClick={() => handle(false)}>
+          Cancel
+        </Button>
+        <Button variant={options.tone === "danger" ? "danger" : "primary"} onClick={() => handle(true)}>
+          {options.confirmLabel || "Confirm"}
+        </Button>
+      </div>
     </Modal>
   ) : null;
 

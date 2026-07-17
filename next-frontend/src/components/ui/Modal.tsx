@@ -3,17 +3,25 @@
 import { ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
 
+const SIZE_CLASS: Record<string, string> = {
+  sm: "max-w-sm",
+  lg: "max-w-2xl",
+  xl: "max-w-5xl",
+};
+
 export default function Modal({
   open,
   onClose,
   title,
   description,
+  size = "sm",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   description?: string;
+  size?: "sm" | "lg" | "xl";
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -36,7 +44,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="w-full max-w-sm rounded-lg border border-line bg-paper-raised shadow-xl"
+        className={`w-full ${SIZE_CLASS[size]} rounded-lg border border-line bg-paper-raised shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 pb-0">
@@ -45,7 +53,7 @@ export default function Modal({
           </h4>
           {description && <p className="text-sm text-ink-soft">{description}</p>}
         </div>
-        <div className="flex justify-end gap-2 p-4">{children}</div>
+        <div className="p-4">{children}</div>
       </div>
     </div>,
     document.body

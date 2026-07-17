@@ -221,6 +221,9 @@ VALID_WELDING_PROCESS_TYPES = ("TIG", "MIG", "Grinding")
 
 @router.post("/requirements/{req_id}/welding_logs")
 def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
+    from sqlalchemy import func as sa_func
+    from backend.services.db_service import WorkOrder
+
     line = db.query(ProjectProductionLine).filter_by(id=req_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -235,34 +238,50 @@ def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get
             detail="Dismantling Joint (DJ) lines have no TIG process; log this welding as MIG instead."
         )
 
-    if tx.operator_id is not None:
-        user = db.query(User).filter_by(id=tx.operator_id).first()
-        if not user:
-            raise HTTPException(status_code=400, detail="Invalid operator")
+    user = db.query(User).filter_by(id=tx.operator_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid operator")
+
+    wo = db.query(WorkOrder).filter(
+        WorkOrder.user_id == tx.operator_id,
+        WorkOrder.project_id == line.project_id,
+        WorkOrder.process_type == tx.process_type,
+        WorkOrder.date == date.today(),
+    ).first()
+    if not wo:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No work order found for this worker on {tx.process_type} for this project today. Generate work orders first."
+        )
 
     log = WeldingLog(
         production_line_id=req_id,
         operator_id=tx.operator_id,
+        work_order_id=wo.id,
         process_type=tx.process_type,
         feet_done=tx.feet_done
     )
     db.add(log)
-    
+    db.flush()  # write to transaction so SUM query includes the new row
+
+    total = db.query(sa_func.sum(WeldingLog.feet_done)).filter(
+        WeldingLog.work_order_id == wo.id
+    ).scalar() or 0.0
+    wo.actual_feet = total
+
     db_user = db.query(User).filter_by(username=current_user["username"]).first() if current_user else None
-    
-    audit = AuditLog(
+    db.add(AuditLog(
         user_id=db_user.id if db_user else None,
         username=current_user["username"] if current_user else None,
         action="Update",
         table_name="welding_logs",
         record_id=req_id,
-        details=f"Added {tx.feet_done} feet of {tx.process_type} for requirement {req_id}"
-    )
-    db.add(audit)
-    
+        details=f"Added {tx.feet_done} feet of {tx.process_type} for requirement {req_id} (work_order_id={wo.id})"
+    ))
+
     db.commit()
 
-    # Recalculate required resources so pending feet + welder counts stay current
+    # Recalculate required resources — never fail the log over a recalc error
     try:
         from backend.services.db_service import Project, ProjectResourceAssignment
         from backend.services.production_service import calculate_required_resources_for_deadline
@@ -278,6 +297,6 @@ def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get
                 assign.assigned_grinders = req_grind
                 db.commit()
     except Exception:
-        pass  # never fail the log submission over a recalc error
+        pass
 
     return {"success": True, "message": f"Added {tx.feet_done} feet to {tx.process_type}"}

@@ -31,7 +31,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "All Projects", href: "/projects" },
       { name: "Add Project", href: "/projects/add" },
       { name: "Edit Project", href: "/projects/edit" },
-      { name: "Daily Scheduler", href: "/scheduler" },
+      { name: "Work Orders", href: "/scheduler" },
       { name: "Hold Center", href: "/dashboard/holds" },
     ],
   },
@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Workforce",
     items: [
       { name: "Workforce Intelligence", href: "/workforce" },
+      { name: "Productivity", href: "/productivity", hideForRoles: ["Supervisor", "Operator"] },
       { name: "User Management", href: "/operators" },
     ],
   },

@@ -528,8 +528,7 @@ export default function MasterData() {
                         {t.assembly_chain && t.assembly_chain.length > 0 && (
                           <div className="mt-3">
                             <div className="mb-2 flex items-center gap-2">
-                              <h4 className="font-display text-xs font-bold uppercase tracking-wide text-ink">Proposed Assembly Sequence</h4>
-                              <Badge tone="warning">Pending GM sign-off</Badge>
+                              <h4 className="font-display text-xs font-bold uppercase tracking-wide text-ink">Assembly Sequence</h4>
                             </div>
                             <ol className="list-decimal pl-5 text-[13px] text-ink-soft">
                               {t.assembly_chain.map((s) => (

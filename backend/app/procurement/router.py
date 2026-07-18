@@ -367,6 +367,8 @@ def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVIS
         log = today_logs.get(item["part_id"])
         item["qty_ordered_today"] = log.qty_ordered if log else 0
         item["qty_received_today"] = log.qty_received if log else 0
+        # Reduce still_needs_ordering by what the PM has already ordered today
+        item["still_needs_ordering"] = max(0, item["still_needs_ordering"] - item["qty_ordered_today"])
 
     return items
 

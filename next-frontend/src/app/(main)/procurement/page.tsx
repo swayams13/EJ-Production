@@ -250,9 +250,8 @@ export default function ProcurementDashboard() {
         body: JSON.stringify({ part_id: item.part_id, qty_ordered: qtyOrdered, qty_received: qtyReceived }),
       });
       if (res.ok) {
-        showToast(`${item.material_name}: saved (ordered ${qtyOrdered}, received ${qtyReceived}).`);
-        item.qty_ordered_today = qtyOrdered;
-        item.qty_received_today = qtyReceived;
+        showToast(`${item.material_name}: saved.`);
+        load();
       } else {
         const b = await res.json().catch(() => ({})) as { detail?: string };
         showToast(b.detail || "Failed to save.", "critical");

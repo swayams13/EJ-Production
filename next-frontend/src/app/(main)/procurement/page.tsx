@@ -120,6 +120,7 @@ function SectionTable({
               <Td numeric>{item.still_needs_ordering}</Td>
               <Td numeric>
                 <input
+                  key={`o-${item.part_id}-${item.qty_ordered_today}`}
                   ref={el => { orderedRef = el; }}
                   type="number"
                   min={0}
@@ -129,6 +130,7 @@ function SectionTable({
               </Td>
               <Td numeric>
                 <input
+                  key={`r-${item.part_id}-${item.qty_received_today}`}
                   ref={el => { receivedRef = el; }}
                   type="number"
                   min={0}

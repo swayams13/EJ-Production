@@ -66,7 +66,7 @@ function SectionTable({
   dimmed?: boolean;
 }) {
   // ponytail: uncontrolled inputs — defaultValue from server, onBlur saves; avoids a state map
-  const colSpan = showActions ? (showOrderBy ? 11 : 10) : (showOrderBy ? 10 : 9);
+  const colSpan = showActions ? (showOrderBy ? 12 : 11) : (showOrderBy ? 11 : 10);
   return (
     <Table>
       <THead>
@@ -80,6 +80,7 @@ function SectionTable({
           <Th numeric>Qty Needed</Th>
           <Th numeric>Ordered Today</Th>
           <Th numeric>Received Today</Th>
+          <Th></Th>
           {showOrderBy && <Th>Order By</Th>}
           {showActions && <Th numeric>Action</Th>}
         </Tr>
@@ -88,7 +89,7 @@ function SectionTable({
         {items.map(item => {
           let orderedRef: HTMLInputElement | null = null;
           let receivedRef: HTMLInputElement | null = null;
-          const handleBlur = () => {
+          const handleSave = () => {
             const o = parseInt(orderedRef?.value ?? "0", 10) || 0;
             const r = parseInt(receivedRef?.value ?? "0", 10) || 0;
             onSaveLog(item, o, r);
@@ -123,7 +124,6 @@ function SectionTable({
                   type="number"
                   min={0}
                   defaultValue={item.qty_ordered_today}
-                  onBlur={handleBlur}
                   className="w-20 rounded border border-surface-border bg-surface px-2 py-1 text-right font-data text-sm text-ink focus:outline-none focus:ring-1 focus:ring-brand"
                 />
               </Td>
@@ -133,9 +133,11 @@ function SectionTable({
                   type="number"
                   min={0}
                   defaultValue={item.qty_received_today}
-                  onBlur={handleBlur}
                   className="w-20 rounded border border-surface-border bg-surface px-2 py-1 text-right font-data text-sm text-ink focus:outline-none focus:ring-1 focus:ring-brand"
                 />
+              </Td>
+              <Td>
+                <Button variant="secondary" onClick={handleSave}>Save</Button>
               </Td>
               {showOrderBy && (
                 <Td className="font-data text-sm text-ink-soft">{item.target_date ?? "—"}</Td>

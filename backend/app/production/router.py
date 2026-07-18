@@ -101,6 +101,29 @@ def add_transaction(process_id: int, tx: TransactionCreate, db: Session = Depend
     if proc.completed_qty + tx.quantity_completed > target:
         raise HTTPException(status_code=400, detail=f"Cannot exceed part target quantity ({target})")
 
+    # Gate fabrication steps by material received / previous step in sequence
+    SKIP_STEPS = {"PO", "Material Received", "Inward Insp", "Ready"}
+    if proc.process_name not in SKIP_STEPS:
+        _route = route_for(proc.part.name)
+        all_sorted = sorted(proc.part.processes, key=lambda p: _route.index(p.process_name) if p.process_name in _route else 999)
+        fab_procs = [p for p in all_sorted if p.process_name not in SKIP_STEPS]
+        fab_idx = next((i for i, p in enumerate(fab_procs) if p.id == proc.id), None)
+        if fab_idx is not None:
+            if fab_idx == 0:
+                mat_proc = next((p for p in proc.part.processes if p.process_name == "Material Received"), None)
+                cap = mat_proc.completed_qty if mat_proc else 0
+                cap_label = "Material Received"
+            else:
+                prev = fab_procs[fab_idx - 1]
+                cap = prev.completed_qty
+                cap_label = prev.process_name
+            available = max(0, cap - proc.completed_qty)
+            if proc.completed_qty + tx.quantity_completed > cap:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot log {tx.quantity_completed}: only {available} available ({cap_label} qty: {cap})"
+                )
+
     proc.completed_qty += tx.quantity_completed
 
     from backend.services.progress_status import compute_process_status

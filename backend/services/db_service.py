@@ -442,6 +442,17 @@ class CompanyResourcePool(Base):
     working_hours_per_day = Column(Float, default=8.0)
     overtime_pct = Column(Float, default=0.0)
 
+
+class DailyProcurementLog(Base):
+    __tablename__ = "daily_procurement_log"
+    id = Column(Integer, primary_key=True, index=True)
+    log_date = Column(Date, nullable=False, default=date.today)
+    part_id = Column(Integer, ForeignKey("parts.id"), nullable=False)
+    qty_ordered = Column(Integer, default=0)
+    qty_received = Column(Integer, default=0)
+    __table_args__ = (UniqueConstraint("log_date", "part_id", name="uq_daily_proc_log"),)
+
+
 # --- Service Functions ---
 
 def init_db():

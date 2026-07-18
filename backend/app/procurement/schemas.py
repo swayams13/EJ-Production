@@ -167,3 +167,10 @@ class ReceiptResponse(BaseModel):
 class DelayReasonCreate(BaseModel):
     part_id: int
     reason: str
+
+
+# --- Daily Procurement Log ---
+class DailyLogCreate(BaseModel):
+    part_id: int
+    qty_ordered: int = 0
+    qty_received: int = 0

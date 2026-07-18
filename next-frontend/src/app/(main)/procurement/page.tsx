@@ -44,6 +44,8 @@ interface MorningListItem {
   priority_score: number;
   bucket: string;
   delay_reason: string | null;
+  qty_ordered_today: number;
+  qty_received_today: number;
 }
 
 function SectionTable({
@@ -52,6 +54,7 @@ function SectionTable({
   showActions,
   onCreatePO,
   onLogReason,
+  onSaveLog,
   dimmed,
 }: {
   items: MorningListItem[];
@@ -59,9 +62,11 @@ function SectionTable({
   showActions: boolean;
   onCreatePO: (item: MorningListItem) => void;
   onLogReason: (item: MorningListItem) => void;
+  onSaveLog: (item: MorningListItem, qtyOrdered: number, qtyReceived: number) => void;
   dimmed?: boolean;
 }) {
-  const colSpan = showActions ? (showOrderBy ? 9 : 8) : (showOrderBy ? 8 : 7);
+  // ponytail: uncontrolled inputs — defaultValue from server, onBlur saves; avoids a state map
+  const colSpan = showActions ? (showOrderBy ? 12 : 11) : (showOrderBy ? 11 : 10);
   return (
     <Table>
       <THead>
@@ -73,54 +78,89 @@ function SectionTable({
           <Th>Material</Th>
           <Th numeric>Size</Th>
           <Th numeric>Qty Needed</Th>
+          <Th numeric>Ordered Today</Th>
+          <Th numeric>Received Today</Th>
+          <Th></Th>
           {showOrderBy && <Th>Order By</Th>}
           {showActions && <Th numeric>Action</Th>}
         </Tr>
       </THead>
       <TBody>
-        {items.map(item => (
-          <Tr key={item.part_id} className={dimmed ? "opacity-75" : ""}>
-            <Td>
-              <div className="font-semibold text-ink">{item.project_name}</div>
-              {item.delay_reason && (
-                <div className="mt-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
-                  {item.delay_reason}
-                </div>
-              )}
-            </Td>
-            <Td>
-              <Badge tone={PRIORITY_TONE[item.priority] ?? "neutral"}>
-                {item.priority}
-              </Badge>
-            </Td>
-            <Td className="font-data text-sm">{item.target_date ?? "—"}</Td>
-            <Td numeric>
-              <span className={daysLeftClass(item.days_to_order_by)}>
-                {item.days_to_order_by}
-              </span>
-            </Td>
-            <Td>{item.material_name}</Td>
-            <Td numeric>{item.size}</Td>
-            <Td numeric>{item.still_needs_ordering}</Td>
-            {showOrderBy && (
-              <Td className="font-data text-sm text-ink-soft">{item.target_date ?? "—"}</Td>
-            )}
-            {showActions && (
-              <Td numeric>
-                <div className="flex items-center justify-center gap-2">
-                  <Button variant="primary" onClick={() => onCreatePO(item)}>
-                    Create PO
-                  </Button>
-                  {!item.delay_reason && (
-                    <Button variant="ghost" onClick={() => onLogReason(item)}>
-                      Log Reason
-                    </Button>
-                  )}
-                </div>
+        {items.map(item => {
+          let orderedRef: HTMLInputElement | null = null;
+          let receivedRef: HTMLInputElement | null = null;
+          const handleSave = () => {
+            const o = parseInt(orderedRef?.value ?? "0", 10) || 0;
+            const r = parseInt(receivedRef?.value ?? "0", 10) || 0;
+            onSaveLog(item, o, r);
+          };
+          return (
+            <Tr key={item.part_id} className={dimmed ? "opacity-75" : ""}>
+              <Td>
+                <div className="font-semibold text-ink">{item.project_name}</div>
+                {item.delay_reason && (
+                  <div className="mt-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+                    {item.delay_reason}
+                  </div>
+                )}
               </Td>
-            )}
-          </Tr>
-        ))}
+              <Td>
+                <Badge tone={PRIORITY_TONE[item.priority] ?? "neutral"}>
+                  {item.priority}
+                </Badge>
+              </Td>
+              <Td className="font-data text-sm">{item.target_date ?? "—"}</Td>
+              <Td numeric>
+                <span className={daysLeftClass(item.days_to_order_by)}>
+                  {item.days_to_order_by}
+                </span>
+              </Td>
+              <Td>{item.material_name}</Td>
+              <Td numeric>{item.size}</Td>
+              <Td numeric>{item.still_needs_ordering}</Td>
+              <Td numeric>
+                <input
+                  key={`o-${item.part_id}-${item.qty_ordered_today}`}
+                  ref={el => { orderedRef = el; }}
+                  type="number"
+                  min={0}
+                  defaultValue={item.qty_ordered_today}
+                  className="w-20 rounded border border-surface-border bg-surface px-2 py-1 text-right font-data text-sm text-ink focus:outline-none focus:ring-1 focus:ring-brand"
+                />
+              </Td>
+              <Td numeric>
+                <input
+                  key={`r-${item.part_id}-${item.qty_received_today}`}
+                  ref={el => { receivedRef = el; }}
+                  type="number"
+                  min={0}
+                  defaultValue={item.qty_received_today}
+                  className="w-20 rounded border border-surface-border bg-surface px-2 py-1 text-right font-data text-sm text-ink focus:outline-none focus:ring-1 focus:ring-brand"
+                />
+              </Td>
+              <Td>
+                <Button variant="secondary" onClick={handleSave}>Save</Button>
+              </Td>
+              {showOrderBy && (
+                <Td className="font-data text-sm text-ink-soft">{item.target_date ?? "—"}</Td>
+              )}
+              {showActions && (
+                <Td numeric>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button variant="primary" onClick={() => onCreatePO(item)}>
+                      Create PO
+                    </Button>
+                    {!item.delay_reason && (
+                      <Button variant="ghost" onClick={() => onLogReason(item)}>
+                        Log Reason
+                      </Button>
+                    )}
+                  </div>
+                </Td>
+              )}
+            </Tr>
+          );
+        })}
         {items.length === 0 && (
           <Tr>
             <Td colSpan={colSpan} className="py-8 text-center text-ink-soft">
@@ -201,6 +241,26 @@ export default function ProcurementDashboard() {
   const handleLogReason = (item: MorningListItem) => {
     setReasonItem(item);
     setReason("");
+  };
+
+  const handleSaveLog = async (item: MorningListItem, qtyOrdered: number, qtyReceived: number) => {
+    if (qtyOrdered === item.qty_ordered_today && qtyReceived === item.qty_received_today) return;
+    try {
+      const res = await apiFetch(`${API}/api/v1/procurement/daily-log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ part_id: item.part_id, qty_ordered: qtyOrdered, qty_received: qtyReceived }),
+      });
+      if (res.ok) {
+        showToast(`${item.material_name}: saved.`);
+        load();
+      } else {
+        const b = await res.json().catch(() => ({})) as { detail?: string };
+        showToast(b.detail || "Failed to save.", "critical");
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Network error.", "critical");
+    }
   };
 
   if (loading) return (
@@ -303,6 +363,7 @@ export default function ProcurementDashboard() {
               showActions={isManagement}
               onCreatePO={handleCreatePO}
               onLogReason={handleLogReason}
+              onSaveLog={handleSaveLog}
             />
           </div>
         </div>
@@ -324,6 +385,7 @@ export default function ProcurementDashboard() {
               showActions={isManagement}
               onCreatePO={handleCreatePO}
               onLogReason={handleLogReason}
+              onSaveLog={handleSaveLog}
               dimmed
             />
           </div>
@@ -347,6 +409,7 @@ export default function ProcurementDashboard() {
               showActions={false}
               onCreatePO={handleCreatePO}
               onLogReason={handleLogReason}
+              onSaveLog={handleSaveLog}
             />
           </div>
         </div>
@@ -369,6 +432,7 @@ export default function ProcurementDashboard() {
               showActions={false}
               onCreatePO={handleCreatePO}
               onLogReason={handleLogReason}
+              onSaveLog={handleSaveLog}
             />
           </div>
         </div>

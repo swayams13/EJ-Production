@@ -7,6 +7,7 @@ from backend.services.db_service import (
     get_db, Vendor, WarehouseStock, MaterialLeadTime,
     PurchaseOrder, PurchaseOrderLine, PurchaseOrderLineAllocation,
     GoodsReceipt, GoodsReceiptLine, PartProcess, Part, User,
+    DailyProcurementLog,
 )
 from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT
 from backend.app.procurement.schemas import (
@@ -15,7 +16,7 @@ from backend.app.procurement.schemas import (
     LeadTimeUpdate, LeadTimeResponse,
     POCreate, POStatusUpdate, POResponse,
     ReceiptCreate, ReceiptResponse,
-    DelayReasonCreate,
+    DelayReasonCreate, DailyLogCreate,
 )
 from backend.services.procurement_service import _vendor_avg_days_late
 
@@ -342,6 +343,7 @@ def log_delay_reason(body: DelayReasonCreate, db: Session = Depends(get_db), _=D
 @router.get("/morning-list")
 def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVISORS))):
     from backend.services.procurement_service import get_morning_list
+    from datetime import date as _date
     items = get_morning_list(db)
 
     part_delay_map = {}
@@ -354,7 +356,57 @@ def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVIS
             for alloc in line.allocations:
                 part_delay_map[alloc.part_id] = po.delay_reason
 
+    today = _date.today()
+    today_logs = {
+        log.part_id: log
+        for log in db.query(DailyProcurementLog).filter_by(log_date=today).all()
+    }
+
     for item in items:
         item["delay_reason"] = part_delay_map.get(item["part_id"])
+        log = today_logs.get(item["part_id"])
+        item["qty_ordered_today"] = log.qty_ordered if log else 0
+        item["qty_received_today"] = log.qty_received if log else 0
 
     return items
+
+
+# ── Daily Procurement Log ──────────────────────────────────────────────────────
+
+@router.post("/daily-log")
+def upsert_daily_log(body: DailyLogCreate, db: Session = Depends(get_db), _=Depends(require_roles(MANAGEMENT))):
+    from datetime import date as _date
+    today = _date.today()
+    log = db.query(DailyProcurementLog).filter_by(log_date=today, part_id=body.part_id).first()
+
+    prev_received = log.qty_received if log else 0
+    delta = body.qty_received - prev_received
+
+    if log:
+        log.qty_ordered = body.qty_ordered
+        log.qty_received = body.qty_received
+    else:
+        log = DailyProcurementLog(
+            log_date=today, part_id=body.part_id,
+            qty_ordered=body.qty_ordered, qty_received=body.qty_received,
+        )
+        db.add(log)
+
+    if delta != 0:
+        part = db.query(Part).filter_by(id=body.part_id).first()
+        if part:
+            mat_proc = next((p for p in part.processes if p.process_name == "Material Received"), None)
+            if mat_proc:
+                mat_proc.completed_qty = max(0, (mat_proc.completed_qty or 0) + delta)
+            if delta > 0:
+                line = part.production_line
+                if line:
+                    stock = db.query(WarehouseStock).filter_by(
+                        material_name=part.name, size=line.size, joint_type=line.joint_type
+                    ).first()
+                    if stock:
+                        stock.qty_on_hand = (stock.qty_on_hand or 0) + delta
+                        stock.updated_at = datetime.utcnow()
+
+    db.commit()
+    return {"ok": True}

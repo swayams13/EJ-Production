@@ -338,6 +338,17 @@ _run_startup_migration("welding_logs: work_order_id FK", [
     "ALTER TABLE welding_logs ADD COLUMN IF NOT EXISTS work_order_id INTEGER REFERENCES work_orders(id);",
 ])
 
+_run_startup_migration("daily_procurement_log table", [
+    """CREATE TABLE IF NOT EXISTS daily_procurement_log (
+        id SERIAL PRIMARY KEY,
+        log_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        part_id INTEGER REFERENCES parts(id),
+        qty_ordered INTEGER DEFAULT 0,
+        qty_received INTEGER DEFAULT 0,
+        UNIQUE(log_date, part_id)
+    );""",
+])
+
 from backend.services.db_service import SessionLocal
 from backend.services.itemwise_backfill import backfill_itemwise
 backfill_itemwise(SessionLocal)

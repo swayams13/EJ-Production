@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import asc, func, nullslast
 from sqlalchemy.orm import Session, joinedload
 
-from backend.app.auth.rbac import require_roles, MANAGEMENT
+from backend.app.auth.rbac import require_roles, MANAGEMENT, SUPERVISORS
 from backend.app.scheduler.schemas import (
     TaskAssignmentCreate, TaskAssignmentResponse,
     WorkOrderResponse, WorkOrderComplete,
@@ -568,7 +568,7 @@ def get_productivity(
     user_id: Optional[int] = None,
     process_type: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_roles(MANAGEMENT)),
+    current_user: dict = Depends(require_roles(SUPERVISORS)),
 ):
     query = (
         db.query(

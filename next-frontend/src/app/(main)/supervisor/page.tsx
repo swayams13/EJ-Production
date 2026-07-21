@@ -7,8 +7,8 @@ import { Card, CardBody } from "@/components/ui";
 const ACTIONS = [
   {
     title: "Attendance",
-    desc: "Record today's worker check-ins and mark present / absent",
-    href: "/workforce",
+    desc: "Mark all workers present / absent / OT in one go — or upload Excel",
+    href: "/attendance",
     accent: "#3e7c77",
     tint: "#e7f1ef",
   },

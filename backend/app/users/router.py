@@ -187,6 +187,36 @@ def get_worker_dashboard(
     for pl in pl_rows:
         daily_steps[str(pl.date)] += 1
 
+    # Process type split (TIG / MIG / Grinding) from welding logs
+    process_feet: dict = defaultdict(float)
+    for wl in wl_rows:
+        process_feet[wl.process_type] += wl.feet_done
+
+    # Project-wise contribution from work orders
+    project_map: dict = {}
+    for wo in wo_rows:
+        if wo.project:
+            key = wo.project.quotation_no
+            if key not in project_map:
+                project_map[key] = {
+                    "quotation_no": key,
+                    "project_name": wo.project.project_name or key,
+                    "feet": 0.0,
+                    "orders": 0,
+                }
+            project_map[key]["feet"] += wo.actual_feet or 0
+            project_map[key]["orders"] += 1
+
+    # Derived summary metrics
+    completed_count = sum(1 for wo in wo_rows if wo.status == "Completed")
+    total_wo = len(wo_rows)
+    efficiency_pct = round(total_actual / total_target * 100, 1) if total_target else 0
+    att_rate = round(present_count / total_att * 100, 1) if total_att else 0
+    on_time_pct = round(completed_count / total_wo * 100, 1) if total_wo else 0
+    avg_ft_per_day = round(total_actual / days_worked, 1) if days_worked else 0
+    # Reliability = blend of attendance and efficiency (both equally weighted)
+    reliability_pct = round((att_rate + efficiency_pct) / 2, 1)
+
     return {
         "profile": {
             "id": user.id,
@@ -204,19 +234,32 @@ def get_worker_dashboard(
             "overtime": att_by_status["Overtime"],
             "absent": att_by_status["Absent"],
             "leave": att_by_status["Leave"],
-            "rate_pct": round(present_count / total_att * 100, 1) if total_att else 0,
+            "rate_pct": att_rate,
             "strip": [{"date": str(a.date), "status": a.status} for a in att_rows],
         },
         "work_orders": {
-            "total": len(wo_rows),
-            "completed": sum(1 for wo in wo_rows if wo.status == "Completed"),
+            "total": total_wo,
+            "completed": completed_count,
             "pending": sum(1 for wo in wo_rows if wo.status == "Pending"),
             "blocked": sum(1 for wo in wo_rows if wo.status == "Blocked"),
             "target_feet": round(total_target, 1),
             "actual_feet": round(total_actual, 1),
-            "efficiency_pct": round(total_actual / total_target * 100, 1) if total_target else 0,
+            "efficiency_pct": efficiency_pct,
             "days_worked": days_worked,
+            "avg_ft_per_day": avg_ft_per_day,
+            "on_time_pct": on_time_pct,
+            "overtime_days": att_by_status["Overtime"],
+            "reliability_pct": reliability_pct,
         },
+        "process_split": [
+            {"process": p, "feet": round(f, 1)}
+            for p, f in sorted(process_feet.items(), key=lambda x: x[1], reverse=True)
+        ],
+        "projects": sorted(
+            [{"quotation_no": v["quotation_no"], "project_name": v["project_name"], "feet": round(v["feet"], 1), "orders": v["orders"]}
+             for v in project_map.values()],
+            key=lambda x: x["feet"], reverse=True,
+        ),
         "today": today_orders,
         "daily_feet": [{"date": d, "feet": round(f, 1)} for d, f in sorted(daily_feet.items())],
         "monthly_feet": [{"month": m, "feet": round(f, 1)} for m, f in sorted(monthly_feet.items())],

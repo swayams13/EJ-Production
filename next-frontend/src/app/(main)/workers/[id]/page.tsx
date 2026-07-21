@@ -93,7 +93,7 @@ export default function WorkerDashboard() {
   useEffect(() => {
     setLoading(true); setError(false);
     apiFetch(`${API}/api/v1/users/${params.id}/dashboard?period=${period}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d) => { setData(d); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, [params.id, period]);
@@ -101,7 +101,9 @@ export default function WorkerDashboard() {
   if (loading) return <div className="flex justify-center p-16"><Spinner label="Loading profile…" /></div>;
   if (error || !data) return <div className="p-16"><EmptyState title="Could not load profile" description="Worker not found or you don't have access." /></div>;
 
-  const { profile, attendance, work_orders: wo, process_split, projects, today, daily_feet, monthly_feet, daily_steps } = data;
+  const { profile, attendance, work_orders: wo, today, daily_feet, monthly_feet, daily_steps } = data;
+  const process_split = data.process_split ?? [];
+  const projects = data.projects ?? [];
   const isWelder = WELDER_SKILLS.includes(profile.skill || "") || daily_feet.length > 0;
   const maxDailyFeet = Math.max(...daily_feet.map((d) => d.feet), 1);
   const maxMonthlyFeet = Math.max(...monthly_feet.map((m) => m.feet), 1);

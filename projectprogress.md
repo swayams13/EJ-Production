@@ -1,5 +1,64 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-21 (Session 23 — Worker dashboard metrics + Supervisor RBAC fixes + Bulk attendance)
+
+### What was done:
+
+**1. Extended worker KPI dashboard (`/workers/[id]`)**
+
+- Added second row of KPI cards: Avg ft/day, On-time completion %, Overtime days, Reliability %
+- New "Process Split" section: TIG / MIG / Grinding as horizontal fill bars with % share
+- New "Project Contribution" section: table of projects worked on with footage + order count + share bar
+- Backend `GET /api/v1/users/{id}/dashboard` updated to return `process_split`, `projects`, `avg_ft_per_day`, `on_time_pct`, `overtime_days`, `reliability_pct`
+
+**Bug fix: worker dashboard crash ("This page couldn't load")**
+
+- Root cause: backend router.py changes (new metrics fields) were edited last session but never committed. Demo ran old endpoint returning no `process_split`/`projects`. Frontend called `projects.map()` on `undefined` → crash.
+- Fix 1: committed the missing backend changes
+- Fix 2: added `?? []` guards on `process_split` / `projects` so page degrades gracefully if backend is behind
+- Fix 3: added `r.ok` check before calling `.json()` so any non-200 response shows error state instead of crashing
+
+**2. Supervisor RBAC fixes**
+
+Three misconnections found and fixed:
+
+| Page | Problem | Fix |
+|---|---|---|
+| `/productivity` frontend | `ALLOWED_ROLES` gate redirected Supervisor → `/dashboard` | Removed gate entirely |
+| `GET /scheduler/productivity` | `require_roles(MANAGEMENT)` — Supervisor excluded | Changed to `SUPERVISORS` |
+| `GET /workforce/metrics` | Inline Management-only list | Changed to `SUPERVISORS` |
+
+**3. Bulk attendance page (`/attendance`)**
+
+New dedicated page replacing the one-at-a-time form on `/workforce`.
+
+- **Quick Mark tab** (mobile-first): all workers listed as cards, tap chips P / OT / L / A, defaults to Present, live summary bar, sticky Submit All button. One submit fires all records in one DB call.
+- **Excel Upload tab**: Download pre-filled .xlsx template → fill column B (P/OT/L/A) → upload → preview table with ✓/Unmatched per row → confirm submit.
+- Backend: new `POST /api/v1/workforce/attendance/bulk` endpoint — batch upsert in single transaction.
+- Installed `xlsx` (SheetJS) for client-side XLSX read + template generation.
+- Sidebar: "Daily Attendance" added under Workforce (hidden from Operators).
+- Supervisor portal: Attendance card now links to `/attendance` instead of `/workforce`.
+
+### Commits (on demo):
+- `a88dfa4` — feat(workers): add extended KPI metrics to worker dashboard
+- `6c324f0` — fix(workers): commit backend metrics endpoint + guard undefined fields
+- `2ead232` — fix(rbac): allow Supervisors to access productivity and workforce metrics
+- `03da5f5` — feat(attendance): bulk quick-mark page + Excel upload for supervisors
+
+### Verified:
+- `npm run build` — 29 routes, 0 TS errors.
+- All 4 commits pushed to `origin/demo`, working tree clean.
+
+### Status: COMPLETE on demo — pending user verification + merge approval
+
+### What to do next session:
+- User to verify: Supervisor login → Attendance card → Quick Mark loads all workers, Submit All saves correctly.
+- User to verify: Excel template download → fill → upload → preview → submit flow.
+- User to verify: Productivity page now loads for Supervisors.
+- If all confirmed, request approval to merge demo → main.
+
+---
+
 ## Date: 2026-07-21 (Session 22 — Supervisor portal)
 
 ### What was done:

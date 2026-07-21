@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Card, Select, Label, Button, Table, THead, TBody, Tr, Th, Td, Badge } from "@/components/ui";
-import { useRouter } from "next/navigation";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
 
@@ -16,8 +15,6 @@ interface ProductivityRow {
   efficiency_pct: number;
   days_worked: number;
 }
-
-const ALLOWED_ROLES = ["Developer", "GM", "Admin", "Production Manager"];
 
 function isoDate(d: Date) {
   return d.toISOString().split("T")[0];
@@ -37,8 +34,6 @@ function presetRange(preset: string): [string, string] {
 }
 
 export default function ProductivityPage() {
-  const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
   const [preset, setPreset] = useState("week");
   const [fromDate, setFromDate] = useState(() => presetRange("week")[0]);
   const [toDate, setToDate] = useState(() => presetRange("week")[1]);
@@ -46,13 +41,6 @@ export default function ProductivityPage() {
   const [rows, setRows] = useState<ProductivityRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    const role = localStorage.getItem("user_role") ?? "";
-    if (!ALLOWED_ROLES.includes(role)) { router.push("/dashboard"); return; }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAllowed(true);
-  }, [router]);
 
   const fetchData = async () => {
     setLoading(true); setError("");
@@ -70,19 +58,16 @@ export default function ProductivityPage() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (allowed) fetchData();
-  // ponytail: intentional — only re-fetch when allowed changes (manual fetch button handles the rest)
+    fetchData();
+  // ponytail: intentional — only re-fetch on initial mount; manual fetch button handles the rest
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed]);
+  }, []);
 
   const handlePreset = (p: string) => {
     setPreset(p);
     const [f, t] = presetRange(p);
     setFromDate(f); setToDate(t);
   };
-
-  if (!allowed) return null;
 
   const totalTarget = rows.reduce((s, r) => s + r.target_feet, 0);
   const totalActual = rows.reduce((s, r) => s + r.actual_feet, 0);

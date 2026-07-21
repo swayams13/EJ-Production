@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from backend.services.db_service import get_db, AttendanceLog, User
-from backend.app.auth.rbac import require_roles
+from backend.app.auth.rbac import require_roles, SUPERVISORS
 
 router = APIRouter(prefix="/api/v1/workforce", tags=["Workforce"])
 
@@ -70,7 +70,7 @@ def get_attendance(
 @router.get("/metrics")
 def get_workforce_metrics(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager"]))
+    current_user: dict = Depends(require_roles(SUPERVISORS))
 ):
     users = db.query(User).filter(User.role == "Operator").all()
     metrics = []

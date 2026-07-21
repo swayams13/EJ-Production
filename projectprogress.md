@@ -1,5 +1,29 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-21 (Session 22 — Supervisor portal)
+
+### What was done:
+
+**Supervisor portal (focused daily hub)**
+
+- `next-frontend/src/app/(main)/supervisor/page.tsx` — new hub page at `/supervisor`. 4 action cards: Attendance, Work Orders, Shop Floor Entry, Worker Productivity. Uses existing pages; no new backend.
+- `next-frontend/src/app/page.tsx` — login now redirects Supervisor role → `/supervisor` (all other roles still go to `/dashboard`).
+- `next-frontend/src/components/Sidebar.tsx` — Productivity now visible to Supervisors (removed from `hideForRoles`). Add Project + Edit Project hidden from Supervisors (management-only actions).
+
+### Commits (on demo):
+- `4ea6e5e` — feat(supervisor): add dedicated supervisor portal + fix productivity visibility
+
+### Verified:
+- `npm run build` — 26 routes (added `/supervisor`), 0 TS errors.
+
+### Status: COMPLETE on demo — pending user verification + merge approval
+
+### What to do next session:
+- User to verify Supervisor login → redirects to hub, 4 cards work, Productivity page loads for Supervisor.
+- If confirmed, request approval to merge demo → main.
+
+---
+
 ## Date: 2026-07-18 (Session 21 — Daily procurement entry + fabrication cap)
 
 ### What was done:

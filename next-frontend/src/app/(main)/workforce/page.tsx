@@ -151,13 +151,14 @@ export default function WorkforceDashboard() {
                   <Th numeric>Efficiency</Th>
                   <Th numeric>Quality</Th>
                   <Th numeric>Reliability</Th>
+                  <Th numeric>Profile</Th>
                 </Tr>
               </THead>
               <TBody>
                 {metrics.map((user) => (
                   <Tr key={user.user_id}>
-                    <Td className="font-bold text-ink">
-                      <Link href={`/workers/${user.user_id}`} className="hover:text-brand hover:underline">
+                    <Td>
+                      <Link href={`/workers/${user.user_id}`} className="font-bold text-brand underline underline-offset-2 hover:text-brand-deep">
                         {user.name}
                       </Link>
                     </Td>
@@ -175,6 +176,11 @@ export default function WorkforceDashboard() {
                     </Td>
                     <Td numeric className="font-semibold text-ink">
                       {user.reliability_score}%
+                    </Td>
+                    <Td numeric>
+                      <Link href={`/workers/${user.user_id}`} className="text-xs font-semibold text-brand hover:text-brand-deep">
+                        View →
+                      </Link>
                     </Td>
                   </Tr>
                 ))}

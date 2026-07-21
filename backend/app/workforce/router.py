@@ -56,6 +56,27 @@ def submit_attendance(
     new_id = result.scalar_one()
     return db.query(AttendanceLog).filter(AttendanceLog.id == new_id).first()
 
+@router.post("/attendance/bulk")
+def submit_attendance_bulk(
+    records: List[AttendanceCreate],
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(SUPERVISORS)),
+):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    for rec in records:
+        stmt = pg_insert(AttendanceLog).values(
+            user_id=rec.user_id,
+            date=rec.date,
+            status=rec.status,
+            hours=rec.hours,
+        ).on_conflict_do_update(
+            index_elements=[AttendanceLog.user_id, AttendanceLog.date],
+            set_={"status": rec.status, "hours": rec.hours},
+        )
+        db.execute(stmt)
+    db.commit()
+    return {"success": True, "count": len(records)}
+
 @router.get("/attendance", response_model=List[AttendanceResponse])
 def get_attendance(
     target_date: Optional[date] = None,

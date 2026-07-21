@@ -1,5 +1,62 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-21 (Session 22 — Supervisor portal)
+
+### What was done:
+
+**Supervisor portal (focused daily hub)**
+
+- `next-frontend/src/app/(main)/supervisor/page.tsx` — new hub page at `/supervisor`. 4 action cards: Attendance, Work Orders, Shop Floor Entry, Worker Productivity. Uses existing pages; no new backend.
+- `next-frontend/src/app/page.tsx` — login now redirects Supervisor role → `/supervisor` (all other roles still go to `/dashboard`).
+- `next-frontend/src/components/Sidebar.tsx` — Productivity now visible to Supervisors (removed from `hideForRoles`). Add Project + Edit Project hidden from Supervisors (management-only actions).
+
+### Commits (on demo):
+- `4ea6e5e` — feat(supervisor): add dedicated supervisor portal + fix productivity visibility
+
+### Verified:
+- `npm run build` — 26 routes (added `/supervisor`), 0 TS errors.
+
+### Status: COMPLETE on demo — pending user verification + merge approval
+
+### What to do next session:
+- User to verify Supervisor login → redirects to hub, 4 cards work, Productivity page loads for Supervisor.
+- If confirmed, request approval to merge demo → main.
+
+---
+
+## Date: 2026-07-18 (Session 21 — Daily procurement entry + fabrication cap)
+
+### What was done:
+
+**1. Daily Ordered/Received Entry on Morning Dashboard**
+
+PM can log qty ordered and qty received per material directly from the morning list — no separate PO/GR flow needed for day-to-day tracking.
+
+- New `DailyProcurementLog` table (unique per log_date + part_id) — idempotent startup migration.
+- `POST /procurement/daily-log` — upserts today's log; applying delta to `PartProcess("Material Received").completed_qty` and `WarehouseStock.qty_on_hand`.
+- `GET /procurement/morning-list` — returns `qty_ordered_today` and `qty_received_today` per item; subtracts `qty_ordered_today` from `still_needs_ordering` so the "Qty Needed" column reflects what's already been ordered.
+- Frontend: two inline number input columns ("Ordered Today", "Received Today") with explicit Save button per row. On save: re-fetches morning list so all numbers update. Inputs keyed on `part_id + value` to force remount after reload (fixes uncontrolled input stale display bug).
+
+**2. Fabrication cap enforced by material received qty**
+
+Backend `add_transaction` now gates fabrication steps sequentially:
+- First fab step (e.g. Cutting) cannot exceed `Material Received.completed_qty`
+- Each subsequent fab step cannot exceed the previous step's `completed_qty`
+- Error returned: "Cannot log 25: only 20 available (Material Received qty: 20)"
+- Frontend already had visual gating; this adds hard backend enforcement.
+
+### Commits (all merged to main):
+- `bb5f5e0` — feat(procurement): add daily ordered/received entry on morning dashboard
+- `5753402` — fix(procurement): replace onBlur auto-save with explicit Save button per row
+- `0e0405e` — feat(production): enforce material-received cap on fabrication steps
+- `86f0480` — fix(procurement): qty_ordered_today reduces still_needs_ordering; reload after save
+- `ff8c9fb` — fix(procurement): force input remount on reload so saved values display correctly
+- `ed8ae6e` — merge(demo→main): all above merged to main, Railway deploying
+
+### Status: COMPLETE — merged to main, Railway auto-deploying
+
+---
+
 ## Date: 2026-07-16 (Session 20 — Worker Productivity Tracking feature)
 
 ### What was done:

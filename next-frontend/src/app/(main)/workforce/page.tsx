@@ -1,5 +1,6 @@
 "use client";
 import { apiFetch } from "@/lib/api";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardBody, Select, Label, Button, Badge, Spinner, useToast, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
 
@@ -150,12 +151,17 @@ export default function WorkforceDashboard() {
                   <Th numeric>Efficiency</Th>
                   <Th numeric>Quality</Th>
                   <Th numeric>Reliability</Th>
+                  <Th numeric>Profile</Th>
                 </Tr>
               </THead>
               <TBody>
                 {metrics.map((user) => (
                   <Tr key={user.user_id}>
-                    <Td className="font-bold text-ink">{user.name}</Td>
+                    <Td>
+                      <Link href={`/workers/${user.user_id}`} className="font-bold text-brand underline underline-offset-2 hover:text-brand-deep">
+                        {user.name}
+                      </Link>
+                    </Td>
                     <Td className="text-ink-soft">
                       {user.department || user.skill || "N/A"} {user.department && user.skill ? `/ ${user.skill}` : ""}
                     </Td>
@@ -170,6 +176,11 @@ export default function WorkforceDashboard() {
                     </Td>
                     <Td numeric className="font-semibold text-ink">
                       {user.reliability_score}%
+                    </Td>
+                    <Td numeric>
+                      <Link href={`/workers/${user.user_id}`} className="text-xs font-semibold text-brand hover:text-brand-deep">
+                        View →
+                      </Link>
                     </Td>
                   </Tr>
                 ))}

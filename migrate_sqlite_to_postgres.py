@@ -20,6 +20,7 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Paths
+
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 SQLITE_DB_PATH = os.path.join(PROJECT_ROOT, "data", "production_tracker.db")
 

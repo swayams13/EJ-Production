@@ -35,7 +35,7 @@ export default function Login() {
       if (data.refresh_token) {
         localStorage.setItem("refresh_token", data.refresh_token);
       }
-      router.push("/dashboard");
+      router.push(data.role === "Supervisor" ? "/supervisor" : "/dashboard");
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {

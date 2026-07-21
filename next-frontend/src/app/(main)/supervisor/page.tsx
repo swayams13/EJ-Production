@@ -75,7 +75,7 @@ export default function SupervisorPortal() {
       </div>
 
       <p className="mt-10 text-xs text-ink-soft text-center">
-        Logged in as Supervisor &mdash; management tools are available from the sidebar.
+        Logged in as Supervisor &mdash; use the sidebar to navigate between your tools.
       </p>
     </div>
   );

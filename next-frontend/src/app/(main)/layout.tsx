@@ -1,4 +1,5 @@
 import Sidebar from "@/components/Sidebar";
+import RouteGuard from "@/components/RouteGuard";
 
 export default function DashboardLayout({
   children,
@@ -10,7 +11,7 @@ export default function DashboardLayout({
       <Sidebar />
       <main className="flex-1 ml-64 p-8 overflow-y-auto">
         <div className="max-w-[1600px] mx-auto">
-          {children}
+          <RouteGuard>{children}</RouteGuard>
         </div>
       </main>
     </div>

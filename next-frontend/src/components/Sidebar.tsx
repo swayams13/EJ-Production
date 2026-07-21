@@ -15,13 +15,15 @@ interface NavGroup {
   items: NavItem[];
 }
 
+const SUP = ["Supervisor", "Operator"]; // shorthand for management-only items
+
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Dashboards",
     items: [
       { name: "Progress", href: "/dashboard" },
-      { name: "Executive", href: "/dashboard/executive" },
-      { name: "Planning", href: "/dashboard/planning" },
+      { name: "Executive", href: "/dashboard/executive", hideForRoles: SUP },
+      { name: "Planning", href: "/dashboard/planning", hideForRoles: SUP },
       { name: "WIP Tracking", href: "/dashboard/wip" },
     ],
   },
@@ -29,8 +31,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Projects & Scheduling",
     items: [
       { name: "All Projects", href: "/projects" },
-      { name: "Add Project", href: "/projects/add", hideForRoles: ["Supervisor", "Operator"] },
-      { name: "Edit Project", href: "/projects/edit", hideForRoles: ["Supervisor", "Operator"] },
+      { name: "Add Project", href: "/projects/add", hideForRoles: SUP },
+      { name: "Edit Project", href: "/projects/edit", hideForRoles: SUP },
       { name: "Work Orders", href: "/scheduler" },
       { name: "Hold Center", href: "/dashboard/holds" },
     ],
@@ -49,14 +51,14 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: "Workforce Intelligence", href: "/workforce" },
       { name: "Productivity", href: "/productivity", hideForRoles: ["Operator"] },
-      { name: "User Management", href: "/operators" },
+      { name: "User Management", href: "/operators", hideForRoles: SUP },
     ],
   },
   {
     label: "Master Data & Admin",
     items: [
-      { name: "Production & Capacity Master", href: "/master" },
-      { name: "System Audit Logs", href: "/audit", hideForRoles: ["Production Manager", "GM"] },
+      { name: "Production & Capacity Master", href: "/master", hideForRoles: SUP },
+      { name: "System Audit Logs", href: "/audit", hideForRoles: ["Production Manager", "GM", "Supervisor", "Operator"] },
     ],
   },
   {
@@ -66,7 +68,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Purchase Orders", href: "/procurement/po" },
       { name: "Vendors", href: "/procurement/vendors" },
       { name: "Warehouse Stock", href: "/procurement/stock" },
-      { name: "Settings", href: "/procurement/settings" },
+      { name: "Settings", href: "/procurement/settings", hideForRoles: SUP },
     ],
   },
 ];

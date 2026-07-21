@@ -1,5 +1,6 @@
 "use client";
 import { apiFetch } from "@/lib/api";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardBody, Select, Label, Button, Badge, Spinner, useToast, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
 
@@ -155,7 +156,11 @@ export default function WorkforceDashboard() {
               <TBody>
                 {metrics.map((user) => (
                   <Tr key={user.user_id}>
-                    <Td className="font-bold text-ink">{user.name}</Td>
+                    <Td className="font-bold text-ink">
+                      <Link href={`/workers/${user.user_id}`} className="hover:text-brand hover:underline">
+                        {user.name}
+                      </Link>
+                    </Td>
                     <Td className="text-ink-soft">
                       {user.department || user.skill || "N/A"} {user.department && user.skill ? `/ ${user.skill}` : ""}
                     </Td>

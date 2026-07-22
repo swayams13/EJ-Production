@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, subqueryload
 from typing import List
 from datetime import datetime
 
@@ -347,10 +347,14 @@ def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVIS
     items = get_morning_list(db)
 
     part_delay_map = {}
-    draft_pos = db.query(PurchaseOrder).filter(
-        PurchaseOrder.status == "draft",
-        PurchaseOrder.delay_reason.isnot(None),
-    ).all()
+    draft_pos = (
+        db.query(PurchaseOrder)
+        .filter(PurchaseOrder.status == "draft", PurchaseOrder.delay_reason.isnot(None))
+        .options(
+            subqueryload(PurchaseOrder.lines).subqueryload(PurchaseOrderLine.allocations)
+        )
+        .all()
+    )
     for po in draft_pos:
         for line in po.lines:
             for alloc in line.allocations:

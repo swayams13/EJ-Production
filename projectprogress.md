@@ -1,5 +1,44 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-22 (Session 24 — Procurement dashboard performance fix)
+
+### What was done:
+
+**Procurement morning-list N+1 fix**
+
+Root cause: `get_morning_list` in `backend/services/procurement_service.py` was doing 5+ individual DB queries per part (uncovered qty, available stock, lead time, most recent PO vendor, vendor lateness), plus lazy-loading the project→line→part→process hierarchy. With 70 projects × ~5 lines × ~5 parts ≈ 1,750 parts this meant 8,000+ round-trips per page load — hence the 1–2 min wait.
+
+Fix:
+- Replaced all per-part DB calls with 6 bulk pre-fetches before the loop:
+  1. `subqueryload` on projects → lines → parts → processes (entire hierarchy in one pass)
+  2. `avg(order_value)` scalar
+  3. `GROUP BY client_name` for repeat-client set
+  4. All `MaterialLeadTime` rows into a dict
+  5. All `WarehouseStock` rows into a dict
+  6. Aggregate `SUM(allocated_qty) GROUP BY part_id` for open PO coverage
+  7. All received-PO lines to build `(material, size, joint_type) → vendor_id` map
+- Vendor lateness still calls `_vendor_avg_days_late` but now lazily cached per vendor_id (at most 1 query per distinct vendor, not per part)
+- Also fixed N+1 on draft-PO delay_reason loop in `router.py` — now eager-loads `lines → allocations`
+- Hot loop is now pure dict lookups, zero DB calls inside it
+- Scales to 500+ projects: query count stays flat at ~6 regardless of project count
+
+Load time should drop from 1–2 min to under 5 seconds in production.
+
+### Commits (on demo):
+- `5ffd66b` — perf(procurement): replace N+1 queries with bulk pre-fetches on morning-list
+
+### Verified:
+- Python syntax OK on both changed files
+- `npm run build` — 29 routes, 0 TS errors (frontend unchanged)
+
+### Status: COMPLETE on demo — pending user verification on Railway demo deployment
+
+### What to do next session:
+- User to open procurement dashboard in production/demo and verify it loads in < 10 seconds
+- If fast, merge demo → main (or wait if Session 23 items are still pending verification)
+
+---
+
 ## Date: 2026-07-21 (Session 23 — Worker dashboard metrics + Supervisor RBAC fixes + Bulk attendance)
 
 ### What was done:

@@ -419,8 +419,7 @@ def get_material_holds(
     db: Session = Depends(get_db),
     _=Depends(require_roles(SUPERVISORS)),
 ):
-    from datetime import date as _date
-    today = _date.today()
+    today = date.today()
 
     holds = (
         db.query(MaterialHold)
@@ -445,7 +444,7 @@ def get_material_holds(
             .first()
         )
 
-        created = h.created_at.date() if hasattr(h.created_at, "date") else h.created_at
+        created = h.created_at.date() if h.created_at else None
         days_blocked = (today - created).days if created else 0
 
         rows.append({
@@ -478,7 +477,7 @@ def resolve_material_hold(
     _=Depends(require_roles(SUPERVISORS)),
 ):
     from datetime import datetime as _dt
-    h = db.query(MaterialHold).filter_by(id=hold_id).first()
+    h = db.query(MaterialHold).filter(MaterialHold.id == hold_id).first()
     if not h:
         raise HTTPException(404, "Hold not found")
     if h.status == "resolved":

@@ -24,16 +24,17 @@ Added via `_run_startup_migration` in `backend/main.py` (existing migration patt
 
 ```sql
 CREATE TABLE material_holds (
-    id            SERIAL PRIMARY KEY,
-    project_id    INTEGER NOT NULL REFERENCES projects(id),
-    part_id       INTEGER REFERENCES parts(id),
-    material_name TEXT NOT NULL,
-    size          INTEGER NOT NULL,
-    joint_type    TEXT NOT NULL,
-    required_qty  INTEGER NOT NULL DEFAULT 1,
-    status        TEXT NOT NULL DEFAULT 'active',  -- active | resolved
-    created_at    TIMESTAMP NOT NULL DEFAULT NOW(),
-    resolved_at   TIMESTAMP
+    id              SERIAL PRIMARY KEY,
+    project_id      INTEGER NOT NULL REFERENCES projects(id),
+    part_id         INTEGER REFERENCES parts(id),
+    material_name   TEXT NOT NULL,
+    size            INTEGER NOT NULL,
+    joint_type      TEXT NOT NULL,
+    required_qty    INTEGER NOT NULL DEFAULT 1,
+    status          TEXT NOT NULL DEFAULT 'active',  -- active | resolved
+    resolution_note TEXT,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    resolved_at     TIMESTAMP
 );
 ```
 
@@ -51,9 +52,10 @@ class MaterialHold(Base):
     required_qty  = Column(Integer, nullable=False, default=1)
     status        = Column(String, nullable=False, default="active")
     created_at    = Column(DateTime, default=datetime.utcnow)
-    resolved_at   = Column(DateTime, nullable=True)
-    project       = relationship("Project")
-    part          = relationship("Part")
+    resolved_at     = Column(DateTime, nullable=True)
+    resolution_note = Column(String, nullable=True)
+    project         = relationship("Project")
+    part            = relationship("Part")
 ```
 
 No columns added to existing tables.
@@ -209,6 +211,18 @@ For each hold, find the earliest `PurchaseOrder.expected_delivery_date` where:
 
 RBAC: same as other project endpoints (`SUPERVISORS`).
 
+### Manual override endpoint
+
+```
+PATCH /api/v1/projects/material-holds/{hold_id}/resolve
+```
+
+Body: `{ "resolution_note": "Material confirmed available in store" }` (optional).  
+Sets `status="resolved"`, `resolved_at=now()`, stores `resolution_note` on the row.  
+RBAC: `SUPERVISORS`.
+
+Requires adding `resolution_note TEXT` column to `material_holds` via startup migration.
+
 ---
 
 ## Section 5: Procurement Morning List — Blocked Parts Badge
@@ -337,7 +351,7 @@ Badge tones:
 - `po_eta` present → `tone="warning"` — "ETA: {date}"
 - `po_eta` null → `tone="critical"` — "No PO Raised"
 
-No action button needed — material holds auto-resolve on goods receipt. The PM's action is to raise a PO (done in procurement module).
+Each row has a **"Mark Resolved"** button. On click, shows a small inline text input for an optional `resolution_note`, then calls `PATCH /api/v1/projects/material-holds/{id}/resolve`. On success, row disappears from the list (re-fetch). Auto-resolve on goods receipt still works — manual override is an additional escape hatch for cases where material was sourced outside the PO system (e.g. pulled from another store).
 
 ---
 
@@ -371,7 +385,7 @@ GET /api/v1/procurement/morning-list      → extended with material_holds_count
 | `backend/app/scheduler/router.py` | Add `_collect_blocked_specs`; hook into `generate_work_orders` |
 | `backend/app/procurement/router.py` | Add `_cascade_material_received`; hook into receipt endpoint; import `MaterialHold` |
 | `backend/services/procurement_service.py` | Add `material_holds_count` to morning list response |
-| `backend/app/projects/router.py` | Add `GET /material-holds` endpoint |
+| `backend/app/projects/router.py` | Add `GET /material-holds` and `PATCH /material-holds/{id}/resolve` endpoints |
 | `backend/app/dashboard/router.py` | Extend planning endpoint with `material_blocks` per project |
 | `next-frontend/.../dashboard/holds/page.tsx` | Add Material Shortages card (second section) |
 | `next-frontend/.../procurement/page.tsx` | Add blocked parts count badge to header |

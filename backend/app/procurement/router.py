@@ -7,7 +7,7 @@ from backend.services.db_service import (
     get_db, Vendor, WarehouseStock, MaterialLeadTime,
     PurchaseOrder, PurchaseOrderLine, PurchaseOrderLineAllocation,
     GoodsReceipt, GoodsReceiptLine, PartProcess, Part, User,
-    DailyProcurementLog,
+    DailyProcurementLog, MaterialHold,
 )
 from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT
 from backend.app.procurement.schemas import (
@@ -238,6 +238,27 @@ def _fifo_sync(db: Session, po_line: PurchaseOrderLine, qty_this_receipt: int):
                 )
 
 
+def _cascade_material_received(db: Session, material_name: str, size: int, joint_type: str) -> int:
+    """Resolve active MaterialHolds for this spec whose required_qty is now covered by current stock."""
+    active = db.query(MaterialHold).filter_by(
+        material_name=material_name,
+        size=size,
+        joint_type=joint_type,
+        status="active",
+    ).all()
+    resolved = 0
+    for h in active:
+        stock = db.query(WarehouseStock).filter_by(
+            material_name=material_name, size=size, joint_type=joint_type
+        ).first()
+        avail = max(0, (stock.qty_on_hand or 0) - (stock.reserved_qty or 0)) if stock else 0
+        if avail >= h.required_qty:
+            h.status = "resolved"
+            h.resolved_at = datetime.utcnow()
+            resolved += 1
+    return resolved
+
+
 @router.post("/po/{po_id}/receipt", response_model=ReceiptResponse)
 def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), user=Depends(require_roles(MANAGEMENT))):
     po = db.query(PurchaseOrder).filter_by(id=po_id).first()
@@ -285,8 +306,18 @@ def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), 
         po.status = "partially_received"
     po.updated_at = datetime.utcnow()
 
+    # Cascade: resolve MaterialHolds for each received material spec
+    total_resolved = 0
+    for rl in body.lines:
+        po_line = db.query(PurchaseOrderLine).filter_by(id=rl.po_line_id).first()
+        if po_line:
+            total_resolved += _cascade_material_received(
+                db, po_line.material_name, po_line.size, po_line.joint_type
+            )
+
     db.commit()
     db.refresh(receipt)
+    receipt.resolved_holds = total_resolved
     return receipt
 
 

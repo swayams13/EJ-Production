@@ -158,6 +158,7 @@ class ReceiptResponse(BaseModel):
     receipt_date: Optional[DateType] = None
     received_by: Optional[int] = None
     notes: Optional[str] = None
+    resolved_holds: int = 0
 
     class Config:
         from_attributes = True

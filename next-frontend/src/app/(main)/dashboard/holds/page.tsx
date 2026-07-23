@@ -54,11 +54,6 @@ export default function HoldsDashboard() {
       });
   };
 
-  useEffect(() => {
-    fetchHolds();
-    fetchMaterialHolds();
-  }, []);
-
   const fetchMaterialHolds = () => {
     setMaterialLoading(true);
     apiFetch(`${API}/api/v1/projects/material-holds`)
@@ -87,6 +82,11 @@ export default function HoldsDashboard() {
       setResolvingId(null);
     }
   };
+
+  useEffect(() => {
+    fetchHolds();
+    fetchMaterialHolds();
+  }, []);
 
   const resumeProject = async (projectId: number) => {
     try {

@@ -319,8 +319,15 @@ def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), 
 
     db.commit()
     db.refresh(receipt)
-    receipt.resolved_holds = total_resolved
-    return receipt
+    from backend.app.procurement.schemas import ReceiptResponse
+    return ReceiptResponse(
+        id=receipt.id,
+        purchase_order_id=receipt.purchase_order_id,
+        receipt_date=receipt.receipt_date,
+        received_by=receipt.received_by,
+        notes=receipt.notes,
+        resolved_holds=total_resolved,
+    )
 
 
 # ── Delay Reason ──────────────────────────────────────────────────────────────
@@ -453,6 +460,8 @@ def upsert_daily_log(body: DailyLogCreate, db: Session = Depends(get_db), _=Depe
                     if stock:
                         stock.qty_on_hand = (stock.qty_on_hand or 0) + delta
                         stock.updated_at = datetime.utcnow()
+                    if delta > 0 and stock:
+                        _cascade_material_received(db, part.name, line.size, line.joint_type)
 
     db.commit()
     return {"ok": True}

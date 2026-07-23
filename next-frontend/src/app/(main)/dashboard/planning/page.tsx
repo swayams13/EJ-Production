@@ -1,7 +1,7 @@
 "use client";
 import { apiFetch } from "@/lib/api";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   Card,
   MetricCard,
@@ -16,6 +16,15 @@ import {
   Th,
   Td,
 } from "@/components/ui";
+
+interface MaterialBlock {
+  material_name: string;
+  size: number;
+  joint_type: string;
+  parts_blocked: number;
+  earliest_po_eta: string | null;
+  po_number: string | null;
+}
 
 interface PacingMetric {
   project_id: number;
@@ -32,6 +41,7 @@ interface PacingMetric {
   mig_req: number;
   grind_req: number;
   monthly_feet: [number, number, number];
+  material_blocks?: MaterialBlock[];
 }
 
 interface WeekForecast {
@@ -183,28 +193,51 @@ export default function PlanningDashboard() {
               ) : metrics.pacing_metrics.map((p) => {
                 const gap = p.gap_today;
                 return (
-                  <Tr key={p.project_id}>
-                    <Td className="font-bold text-ink">{p.project_name}</Td>
-                    <Td numeric>{p.remaining_feet} ft</Td>
-                    <Td numeric>
-                      {p.days_to_deadline === null ? (
-                        <span className="text-xs text-warning">Unscheduled</span>
-                      ) : p.days_to_deadline < 0 ? (
-                        <Badge tone="critical">{Math.abs(p.days_to_deadline)}d late</Badge>
-                      ) : (
-                        <span className={p.days_to_deadline <= 7 ? "font-bold text-critical" : ""}>{p.days_to_deadline}d</span>
-                      )}
-                    </Td>
-                    <Td numeric>{p.today_requirement} ft</Td>
-                    <Td numeric>{p.today_logged_ft} ft</Td>
-                    <Td numeric>
-                      {gap > 0 ? (
-                        <Badge tone="critical">-{gap} ft</Badge>
-                      ) : (
-                        <Badge tone="success">On Track</Badge>
-                      )}
-                    </Td>
-                  </Tr>
+                  <Fragment key={p.project_id}>
+                    <Tr>
+                      <Td className="font-bold text-ink">{p.project_name}</Td>
+                      <Td numeric>{p.remaining_feet} ft</Td>
+                      <Td numeric>
+                        {p.days_to_deadline === null ? (
+                          <span className="text-xs text-warning">Unscheduled</span>
+                        ) : p.days_to_deadline < 0 ? (
+                          <Badge tone="critical">{Math.abs(p.days_to_deadline)}d late</Badge>
+                        ) : (
+                          <span className={p.days_to_deadline <= 7 ? "font-bold text-critical" : ""}>{p.days_to_deadline}d</span>
+                        )}
+                      </Td>
+                      <Td numeric>{p.today_requirement} ft</Td>
+                      <Td numeric>{p.today_logged_ft} ft</Td>
+                      <Td numeric>
+                        {gap > 0 ? (
+                          <Badge tone="critical">-{gap} ft</Badge>
+                        ) : (
+                          <Badge tone="success">On Track</Badge>
+                        )}
+                      </Td>
+                    </Tr>
+                    {p.material_blocks && p.material_blocks.length > 0 && (
+                      <Tr key={`${p.project_id}-blocks`}>
+                        <Td colSpan={6} className="p-0">
+                          <div className="mx-4 mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+                            <span className="font-semibold text-amber-800">
+                              Material Shortage — {p.material_blocks.length} spec{p.material_blocks.length > 1 ? "s" : ""} blocked:
+                            </span>
+                            <ul className="mt-1 space-y-0.5 text-amber-700">
+                              {p.material_blocks.map((b) => (
+                                <li key={`${b.material_name}-${b.size}-${b.joint_type}`}>
+                                  {b.material_name} {b.size}NB {b.joint_type} · {b.parts_blocked} part{b.parts_blocked > 1 ? "s" : ""}
+                                  {b.earliest_po_eta
+                                    ? ` · PO ${b.po_number} ETA ${b.earliest_po_eta}`
+                                    : " · No PO raised"}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </Td>
+                      </Tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </TBody>

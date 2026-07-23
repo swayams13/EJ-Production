@@ -7,7 +7,7 @@ from backend.services.db_service import (
     get_db, Vendor, WarehouseStock, MaterialLeadTime,
     PurchaseOrder, PurchaseOrderLine, PurchaseOrderLineAllocation,
     GoodsReceipt, GoodsReceiptLine, PartProcess, Part, User,
-    DailyProcurementLog,
+    DailyProcurementLog, MaterialHold,
 )
 from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT
 from backend.app.procurement.schemas import (
@@ -238,6 +238,29 @@ def _fifo_sync(db: Session, po_line: PurchaseOrderLine, qty_this_receipt: int):
                 )
 
 
+def _cascade_material_received(db: Session, material_name: str, size: int, joint_type: str) -> int:
+    """Resolve active MaterialHolds for this spec whose required_qty is now covered by current stock."""
+    active = db.query(MaterialHold).filter_by(
+        material_name=material_name,
+        size=size,
+        joint_type=joint_type,
+        status="active",
+    ).all()
+    if not active:
+        return 0
+    stock = db.query(WarehouseStock).filter_by(
+        material_name=material_name, size=size, joint_type=joint_type
+    ).first()
+    avail = max(0, (stock.qty_on_hand or 0) - (stock.reserved_qty or 0)) if stock else 0
+    resolved = 0
+    for h in active:
+        if avail >= h.required_qty:
+            h.status = "resolved"
+            h.resolved_at = datetime.utcnow()
+            resolved += 1
+    return resolved
+
+
 @router.post("/po/{po_id}/receipt", response_model=ReceiptResponse)
 def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), user=Depends(require_roles(MANAGEMENT))):
     po = db.query(PurchaseOrder).filter_by(id=po_id).first()
@@ -285,9 +308,26 @@ def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), 
         po.status = "partially_received"
     po.updated_at = datetime.utcnow()
 
+    # Cascade: resolve MaterialHolds for each received material spec
+    total_resolved = 0
+    for rl in body.lines:
+        po_line = db.query(PurchaseOrderLine).filter_by(id=rl.po_line_id).first()
+        if po_line:
+            total_resolved += _cascade_material_received(
+                db, po_line.material_name, po_line.size, po_line.joint_type
+            )
+
     db.commit()
     db.refresh(receipt)
-    return receipt
+    from backend.app.procurement.schemas import ReceiptResponse
+    return ReceiptResponse(
+        id=receipt.id,
+        purchase_order_id=receipt.purchase_order_id,
+        receipt_date=receipt.receipt_date,
+        received_by=receipt.received_by,
+        notes=receipt.notes,
+        resolved_holds=total_resolved,
+    )
 
 
 # ── Delay Reason ──────────────────────────────────────────────────────────────
@@ -374,7 +414,14 @@ def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVIS
         # Reduce still_needs_ordering by what the PM has already ordered today
         item["still_needs_ordering"] = max(0, item["still_needs_ordering"] - item["qty_ordered_today"])
 
-    return items
+    from sqlalchemy import func as _func
+    material_holds_count = (
+        db.query(_func.count(MaterialHold.id))
+        .filter(MaterialHold.status == "active")
+        .scalar()
+    ) or 0
+
+    return {"items": items, "material_holds_count": material_holds_count}
 
 
 # ── Daily Procurement Log ──────────────────────────────────────────────────────
@@ -413,6 +460,8 @@ def upsert_daily_log(body: DailyLogCreate, db: Session = Depends(get_db), _=Depe
                     if stock:
                         stock.qty_on_hand = (stock.qty_on_hand or 0) + delta
                         stock.updated_at = datetime.utcnow()
+                    if delta > 0 and stock:
+                        _cascade_material_received(db, part.name, line.size, line.joint_type)
 
     db.commit()
     return {"ok": True}

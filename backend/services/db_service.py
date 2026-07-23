@@ -326,6 +326,23 @@ class WarehouseStock(Base):
     __table_args__ = (UniqueConstraint("material_name", "size", "joint_type", name="uq_warehouse_stock"),)
 
 
+class MaterialHold(Base):
+    __tablename__ = "material_holds"
+    id              = Column(Integer, primary_key=True)
+    project_id      = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    part_id         = Column(Integer, ForeignKey("parts.id"), nullable=True)
+    material_name   = Column(String, nullable=False)
+    size            = Column(Integer, nullable=False)
+    joint_type      = Column(String, nullable=False)
+    required_qty    = Column(Integer, nullable=False, default=1)
+    status          = Column(String, nullable=False, default="active")  # active | resolved
+    resolution_note = Column(String, nullable=True)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    resolved_at     = Column(DateTime, nullable=True)
+    project         = relationship("Project")
+    part            = relationship("Part")
+
+
 class MaterialLeadTime(Base):
     __tablename__ = "material_lead_times"
     id = Column(Integer, primary_key=True, index=True)

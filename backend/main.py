@@ -349,6 +349,22 @@ _run_startup_migration("daily_procurement_log table", [
     );""",
 ])
 
+_run_startup_migration("material_holds table", [
+    """CREATE TABLE IF NOT EXISTS material_holds (
+        id              SERIAL PRIMARY KEY,
+        project_id      INTEGER NOT NULL REFERENCES projects(id),
+        part_id         INTEGER REFERENCES parts(id),
+        material_name   TEXT NOT NULL,
+        size            INTEGER NOT NULL,
+        joint_type      TEXT NOT NULL,
+        required_qty    INTEGER NOT NULL DEFAULT 1,
+        status          TEXT NOT NULL DEFAULT 'active',
+        resolution_note TEXT,
+        created_at      TIMESTAMP DEFAULT NOW(),
+        resolved_at     TIMESTAMP
+    )"""
+])
+
 from backend.services.db_service import SessionLocal
 from backend.services.itemwise_backfill import backfill_itemwise
 backfill_itemwise(SessionLocal)

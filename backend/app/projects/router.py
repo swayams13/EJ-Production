@@ -6,7 +6,7 @@ import json
 from typing import List, Optional
 from pydantic import BaseModel
 
-from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory
+from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory, MaterialHold, PurchaseOrder, PurchaseOrderLine
 from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet, get_productivity_rates
 from backend.app.projects.schemas import ProjectCreate, ProjectUpdate, SimulationRequest, DurationRequest, SimulateDurationRequest, BellowItem
 from backend.services import joint_catalog
@@ -412,3 +412,78 @@ def get_requirements(project_id: int, db: Session = Depends(get_db), current_use
         "joint_category": getattr(l, 'joint_category', None),
         "description": (joint_catalog.get_type(l.joint_type_code) or {}).get("description") if getattr(l, 'joint_type_code', None) else None,
     } for l in lines]}
+
+
+@router.get("/material-holds")
+def get_material_holds(
+    db: Session = Depends(get_db),
+    _=Depends(require_roles(SUPERVISORS)),
+):
+    today = date.today()
+
+    holds = (
+        db.query(MaterialHold)
+        .filter_by(status="active")
+        .order_by(MaterialHold.created_at.asc())
+        .all()
+    )
+
+    rows = []
+    for h in holds:
+        # ponytail: one PO lookup per hold — acceptable for small hold counts
+        po = (
+            db.query(PurchaseOrder)
+            .join(PurchaseOrderLine, PurchaseOrderLine.purchase_order_id == PurchaseOrder.id)
+            .filter(
+                PurchaseOrderLine.material_name == h.material_name,
+                PurchaseOrderLine.size == h.size,
+                PurchaseOrderLine.joint_type == h.joint_type,
+                PurchaseOrder.status.in_(["raised", "sent", "partially_received"]),
+            )
+            .order_by(PurchaseOrder.expected_delivery_date.asc())
+            .first()
+        )
+
+        created = h.created_at.date() if h.created_at else None
+        days_blocked = (today - created).days if created else 0
+
+        rows.append({
+            "id": h.id,
+            "project_id": h.project_id,
+            "quotation_no": h.project.quotation_no if h.project else "",
+            "project_name": h.project.project_name if h.project else "",
+            "part_name": h.part.name if h.part else h.material_name,
+            "material_name": h.material_name,
+            "size": h.size,
+            "joint_type": h.joint_type,
+            "required_qty": h.required_qty,
+            "days_blocked": days_blocked,
+            "po_eta": po.expected_delivery_date.isoformat() if po and po.expected_delivery_date else None,
+            "po_number": po.po_number if po else None,
+        })
+
+    return rows
+
+
+class MaterialHoldResolve(BaseModel):
+    resolution_note: Optional[str] = None
+
+
+@router.patch("/material-holds/{hold_id}/resolve")
+def resolve_material_hold(
+    hold_id: int,
+    body: MaterialHoldResolve,
+    db: Session = Depends(get_db),
+    _=Depends(require_roles(SUPERVISORS)),
+):
+    from datetime import datetime as _dt
+    h = db.query(MaterialHold).filter(MaterialHold.id == hold_id).first()
+    if not h:
+        raise HTTPException(404, "Hold not found")
+    if h.status == "resolved":
+        raise HTTPException(400, "Hold is already resolved")
+    h.status = "resolved"
+    h.resolved_at = _dt.utcnow()
+    h.resolution_note = body.resolution_note
+    db.commit()
+    return {"ok": True, "id": hold_id}

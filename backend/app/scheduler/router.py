@@ -18,7 +18,7 @@ from backend.services.db_service import (
     get_db,
     AttendanceLog, ChangeRequest, DailyTaskAssignment, Employee,
     Part, PartProcess, Project, ProjectResourceAssignment,
-    User, WarehouseStock, WorkOrder,
+    User, WarehouseStock, WorkOrder, MaterialHold,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,33 @@ def find_available_part(db: Session, project: Project, process_type: str):
                     if proc.process_name in relevant_steps and proc.status != "ready":
                         return part
     return None
+
+
+def _collect_blocked_specs(db: Session, project, process_type: str) -> list:
+    """
+    Returns all (part, material_name, size, joint_type) specs in the project
+    that have zero warehouse stock AND have at least one pending process matching
+    process_type. Called only when find_available_part returns None.
+    """
+    relevant_steps = PROCESS_TYPE_TO_STEPS.get(process_type, [])
+    specs = []
+    for line in project.production_lines:
+        size = line.size or 0
+        jt = line.joint_type or ""
+        for part in line.parts:
+            avail = _available_stock_local(db, part.name, size, jt)
+            has_pending = any(
+                proc.process_name in relevant_steps and proc.status != "ready"
+                for proc in part.processes
+            )
+            if avail == 0 and has_pending:
+                specs.append({
+                    "part": part,
+                    "material_name": part.name,
+                    "size": size,
+                    "joint_type": jt,
+                })
+    return specs
 
 
 @router.post("/generate-work-orders")
@@ -239,8 +266,27 @@ def generate_work_orders(
                         continue
                     assigned_feet = min(worker["target_feet"], req[req_key])
                     part = find_available_part(db, req["project"], process_type)
-                    if part is None and req["project"].quotation_no not in no_stock_projects:
-                        no_stock_projects.append(req["project"].quotation_no)
+                    if part is None:
+                        if req["project"].quotation_no not in no_stock_projects:
+                            no_stock_projects.append(req["project"].quotation_no)
+                        for spec in _collect_blocked_specs(db, req["project"], process_type):
+                            exists = db.query(MaterialHold).filter_by(
+                                project_id=req["project"].id,
+                                part_id=spec["part"].id,
+                                material_name=spec["material_name"],
+                                size=spec["size"],
+                                joint_type=spec["joint_type"],
+                                status="active",
+                            ).first()
+                            if not exists:
+                                db.add(MaterialHold(
+                                    project_id=req["project"].id,
+                                    part_id=spec["part"].id,
+                                    material_name=spec["material_name"],
+                                    size=spec["size"],
+                                    joint_type=spec["joint_type"],
+                                    required_qty=1,
+                                ))
                     db.add(WorkOrder(
                         project_id=req["project"].id,
                         user_id=worker["user_id"],

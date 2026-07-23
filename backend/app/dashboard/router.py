@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import io
 
-from backend.services.db_service import get_db, Project, ProjectProductionLine
+from backend.services.db_service import get_db, Project, ProjectProductionLine, MaterialHold, PurchaseOrder, PurchaseOrderLine
 from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel, aggregate_line_feet
 from backend.app.auth.rbac import require_roles, SUPERVISORS
 
@@ -202,9 +202,15 @@ def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = D
     total_target = 0
     today = date.today()
     late_projects = 0
-    
+
+    # Bulk-fetch all active holds — avoids N+1 per project
+    all_active_holds = db.query(MaterialHold).filter_by(status="active").all()
+    holds_by_project: dict = {}
+    for h in all_active_holds:
+        holds_by_project.setdefault(h.project_id, []).append(h)
+
     pacing_metrics = []
-    
+
     for p in active_projects:
         # Top level metrics
         for line in p.production_lines:
@@ -292,6 +298,38 @@ def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = D
             .scalar()
         ) or 0.0
 
+        # Material blocks for this project
+        project_holds = holds_by_project.get(p.id, [])
+        blocks_map: dict = {}
+        for h in project_holds:
+            key = (h.material_name, h.size, h.joint_type)
+            blocks_map.setdefault(key, 0)
+            blocks_map[key] += 1
+
+        material_blocks = []
+        for (mat, sz, jt), count in blocks_map.items():
+            # ponytail: one query per unique material spec — acceptable given holds are rare
+            po = (
+                db.query(PurchaseOrder)
+                .join(PurchaseOrderLine, PurchaseOrderLine.purchase_order_id == PurchaseOrder.id)
+                .filter(
+                    PurchaseOrderLine.material_name == mat,
+                    PurchaseOrderLine.size == sz,
+                    PurchaseOrderLine.joint_type == jt,
+                    PurchaseOrder.status.in_(["raised", "sent", "partially_received"]),
+                )
+                .order_by(PurchaseOrder.expected_delivery_date.asc())
+                .first()
+            )
+            material_blocks.append({
+                "material_name": mat,
+                "size": sz,
+                "joint_type": jt,
+                "parts_blocked": count,
+                "earliest_po_eta": po.expected_delivery_date.isoformat() if po and po.expected_delivery_date else None,
+                "po_number": po.po_number if po else None,
+            })
+
         pacing_metrics.append({
             "project_id": p.id,
             "project_number": p.quotation_no,
@@ -311,6 +349,7 @@ def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = D
             "mig_req": round(mig_req, 1),
             "grind_req": round(grind_req, 1),
             "monthly_feet": [round(x, 1) for x in project_monthly],
+            "material_blocks": material_blocks,
         })
             
     # Clean up floats

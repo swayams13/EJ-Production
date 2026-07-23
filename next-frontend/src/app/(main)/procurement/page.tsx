@@ -178,6 +178,7 @@ export default function ProcurementDashboard() {
   const { showToast, toasts } = useToast();
 
   const [items, setItems] = useState<MorningListItem[]>([]);
+  const [materialHoldsCount, setMaterialHoldsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
 
@@ -195,7 +196,9 @@ export default function ProcurementDashboard() {
     try {
       const res = await apiFetch(`${API}/api/v1/procurement/morning-list`);
       if (res.ok) {
-        setItems(await res.json());
+        const data = await res.json();
+        setItems(data.items ?? []);
+        setMaterialHoldsCount(data.material_holds_count ?? 0);
       } else {
         const b = await res.json().catch(() => ({})) as { detail?: string };
         setFetchError(b.detail || "Failed to load morning list.");
@@ -289,6 +292,11 @@ export default function ProcurementDashboard() {
           Procurement priorities for{" "}
           {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </p>
+        {materialHoldsCount > 0 && (
+          <a href="/dashboard/holds" className="inline-flex items-center gap-1.5 rounded-full bg-critical/10 px-3 py-1 text-sm font-semibold text-critical hover:bg-critical/20 transition-colors">
+            {materialHoldsCount} part{materialHoldsCount !== 1 ? "s" : ""} blocked on shop floor ↗
+          </a>
+        )}
       </div>
 
       {fetchError && (

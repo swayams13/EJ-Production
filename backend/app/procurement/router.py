@@ -246,12 +246,14 @@ def _cascade_material_received(db: Session, material_name: str, size: int, joint
         joint_type=joint_type,
         status="active",
     ).all()
+    if not active:
+        return 0
+    stock = db.query(WarehouseStock).filter_by(
+        material_name=material_name, size=size, joint_type=joint_type
+    ).first()
+    avail = max(0, (stock.qty_on_hand or 0) - (stock.reserved_qty or 0)) if stock else 0
     resolved = 0
     for h in active:
-        stock = db.query(WarehouseStock).filter_by(
-            material_name=material_name, size=size, joint_type=joint_type
-        ).first()
-        avail = max(0, (stock.qty_on_hand or 0) - (stock.reserved_qty or 0)) if stock else 0
         if avail >= h.required_qty:
             h.status = "resolved"
             h.resolved_at = datetime.utcnow()

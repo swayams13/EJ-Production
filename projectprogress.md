@@ -24,18 +24,21 @@ Fix:
 
 Load time should drop from 1–2 min to under 5 seconds in production.
 
-### Commits (on demo):
+### Commits:
 - `5ffd66b` — perf(procurement): replace N+1 queries with bulk pre-fetches on morning-list
+- `8e54c2a` — docs: update projectprogress for Session 24
+- `f90de69` — docs: add problemsresolved.md
+- `0904dd6` — merge demo → main (Railway production deploy triggered)
 
 ### Verified:
 - Python syntax OK on both changed files
 - `npm run build` — 29 routes, 0 TS errors (frontend unchanged)
 
-### Status: COMPLETE on demo — pending user verification on Railway demo deployment
+### Status: COMPLETE — merged to main, live on Railway
 
 ### What to do next session:
-- User to open procurement dashboard in production/demo and verify it loads in < 10 seconds
-- If fast, merge demo → main (or wait if Session 23 items are still pending verification)
+- Confirm procurement dashboard loads fast in production (target < 10 seconds)
+- Continue any pending Session 23 verification (Supervisor → Attendance → Quick Mark + Excel upload flow)
 
 ---
 

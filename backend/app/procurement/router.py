@@ -407,7 +407,14 @@ def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVIS
         # Reduce still_needs_ordering by what the PM has already ordered today
         item["still_needs_ordering"] = max(0, item["still_needs_ordering"] - item["qty_ordered_today"])
 
-    return items
+    from sqlalchemy import func as _func
+    material_holds_count = (
+        db.query(_func.count(MaterialHold.id))
+        .filter(MaterialHold.status == "active")
+        .scalar()
+    ) or 0
+
+    return {"items": items, "material_holds_count": material_holds_count}
 
 
 # ── Daily Procurement Log ──────────────────────────────────────────────────────

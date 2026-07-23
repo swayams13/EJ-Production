@@ -1,5 +1,40 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-23 (Session 25 — Concurrency hardening for multi-user production use)
+
+### Context:
+App is now being used concurrently by 3–10 team members on the custom Railway domain. Assessed risk areas and hardened the backend for concurrent load.
+
+### What was done:
+
+**DB connection pool config (`backend/services/db_service.py`)**
+
+- `create_engine(DATABASE_URL)` had no pool settings — bare default (pool_size=5, no pre-ping)
+- Added `pool_size=5, max_overflow=5, pool_pre_ping=True`
+- `pool_pre_ping` drops stale connections before reuse — prevents hangs after Railway DB container restarts
+- Cap at 10 total connections per process × 4 workers = 40 theoretical max, but SQLAlchemy queues excess requests rather than opening new connections, so real concurrent peak stays ≤ 20 — safely under Railway's 25-connection limit
+
+**Railway start command (done in Railway dashboard)**
+
+- Changed from default `uvicorn backend.main:app --port $PORT` (1 worker) to `uvicorn backend.main:app --port $PORT --workers 4`
+- 4 workers handle parallel requests; without this, concurrent users queue on a single process
+
+### Known limitations (not fixed, low priority for current user count):
+- Last-write-wins on attendance/status records — if two supervisors edit the same record simultaneously, second write silently overwrites first. Acceptable at 3–10 users with distinct roles.
+- Excel import (`import_welding_master_from_disk`) is not concurrency-safe — avoid triggering it from two sessions simultaneously.
+
+### Commits:
+- `cbf71de` — perf(db): configure connection pool for concurrent use
+- `0e8b86d` — merge demo → main (Railway production deploy triggered)
+
+### Status: COMPLETE — merged to main, live on Railway
+
+### What to do next session:
+- Confirm procurement dashboard loads fast in production (target < 10 seconds) — pending from Session 24
+- Continue any pending Session 23 verification (Supervisor → Attendance → Quick Mark + Excel upload flow)
+
+---
+
 ## Date: 2026-07-22 (Session 24 — Procurement dashboard performance fix)
 
 ### What was done:

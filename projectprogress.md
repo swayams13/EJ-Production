@@ -1418,4 +1418,84 @@ contract, then reviewed/compiled on Opus. All backend files `py_compile` clean.
 - Confirm PROCESS_TYPE_TO_STEPS mapping with GM.
 - Execute Phase 6 (Hold Management System finalization).
 - Execute Phase 7 (Material Intelligence Engine).
+
+---
+
+## Date: 2026-07-23 (Session 26 — Material Cascade, Holds & Planning ETA)
+
+### Context:
+User requested proper enterprise-level interconnection between all modules. Two hard constraints: no work order generated until material is available for that job; work order can only be generated if the worker is present (existing worker-present gate was already in place).
+
+### What was decided:
+- Implement items 1, 2, 3 from brainstorm together: material unblock cascade, auto-create holds, planning ETA visibility.
+- New `material_holds` table as the signal layer — not columns on existing tables — to avoid computed/stored state drift.
+- Cascade-on-write pattern (synchronous, same DB transaction) over message queue — appropriate for current 3-10 concurrent user scale.
+- `required_qty=1` simplification per hold (documented with `ponytail:` comment) — avoids needing per-part BoM quantity tracking that doesn't exist yet.
+- Manual override endpoint added so supervisors can clear holds for material sourced outside the PO system (e.g. pulled from another store).
+- Both hold visibility surfaces added: Holds Dashboard new section + Procurement morning list badge.
+
+### What was done:
+
+**`backend/services/db_service.py`**
+- Added `MaterialHold` SQLAlchemy model (table: `material_holds`) with 11 columns: project_id (NOT NULL FK), part_id (nullable FK), material_name, size, joint_type, required_qty (default=1), status (default='active'), resolution_note, created_at, resolved_at.
+
+**`backend/main.py`**
+- Added `_run_startup_migration` call for `CREATE TABLE IF NOT EXISTS material_holds` — runs idempotently on Railway deploy.
+
+**`backend/app/scheduler/router.py`**
+- Added `_collect_blocked_specs(db, project, process_type)` helper — finds zero-stock parts with pending processes.
+- Hooked into `generate_work_orders` assignment loop: when `find_available_part` returns None, auto-creates `MaterialHold` rows (idempotent check on existing active hold before insert).
+
+**`backend/app/procurement/router.py`**
+- Added `_cascade_material_received(db, material_name, size, joint_type) -> int` — resolves active holds when goods arrive and stock covers required_qty. Stock query pulled above the loop (not repeated per hold) for N+1 fix.
+- Hooked into `POST /po/{id}/receipt` — receipt response now includes `resolved_holds: int`. Used explicit `ReceiptResponse(...)` constructor (not transient attr) for correct Pydantic serialization.
+- Hooked into `upsert_daily_log` stock update path (gated on `delta > 0`) — holds also resolve when PM records stock outside the formal PO flow.
+- `GET /procurement/morning-list` response changed to `{"items": [...], "material_holds_count": N}`.
+
+**`backend/app/projects/router.py`**
+- Added `GET /api/v1/projects/material-holds` — all active holds enriched with project name, part name, days_blocked, po_eta (min expected_delivery_date from open POs), po_number.
+- Added `PATCH /api/v1/projects/material-holds/{id}/resolve` — manual override with optional resolution_note; 404/400 guards.
+
+**`backend/app/dashboard/router.py`**
+- Planning endpoint extended with `material_blocks` per project — bulk-fetched active holds before project loop, grouped by project_id, one PO ETA sub-query per unique `(material_name, size, joint_type)` spec.
+
+**`next-frontend/src/app/(main)/procurement/page.tsx`**
+- Parses new `{items, material_holds_count}` response shape.
+- Badge in page header: "N parts blocked on shop floor →" linking to `/dashboard/holds` (hidden when count is 0).
+
+**`next-frontend/src/app/(main)/dashboard/holds/page.tsx`**
+- New **Material Shortages** card: fetches `GET /api/v1/projects/material-holds`, shows project, material, days blocked, PO ETA or "No PO Raised" (critical badge), inline Mark Resolved form.
+
+**`next-frontend/src/app/(main)/dashboard/planning/page.tsx`**
+- Amber banner row beneath each project with active material shortages — material name, NB size, joint type, parts count, PO ETA.
+
+### Problems faced and fixed:
+1. **Missing startup migration** — `MaterialHold` model was added to `db_service.py` but no `CREATE TABLE` migration in `main.py`. Railway would throw `ProgrammingError: relation "material_holds" does not exist`. Fixed by adding `_run_startup_migration` call.
+2. **Pydantic serialization bug** — `receipt.resolved_holds = total_resolved` sets a transient Python attribute; `from_attributes=True` reads only mapped ORM columns so `resolved_holds` always returned 0. Fixed by using explicit `ReceiptResponse(...)` constructor.
+3. **Daily-log cascade gap** — `upsert_daily_log` also increments `qty_on_hand` but didn't call `_cascade_material_received`. Added cascade call gated on `delta > 0 and stock`.
+4. **N+1 in cascade loop** — original `_cascade_material_received` queried `WarehouseStock` once per hold inside the loop; all holds share the same spec so the result can't change. Fixed by pulling the stock query above the loop with early-exit guard.
+
+### Commits (on demo branch, 11 commits, `e5af8a7..eb51972`):
+- `124f3eb` — feat: add MaterialHold SQLAlchemy model
+- `813d571` — feat(scheduler): auto-create MaterialHold on material-blocked work orders
+- `d6bb4b2` — feat(procurement): cascade-resolve MaterialHolds on goods receipt
+- `13eb569` — fix(procurement): pull stock query above cascade loop
+- `6caca94` — feat(projects): add GET /material-holds and PATCH /material-holds/{id}/resolve
+- `5f54298` — fix(projects): style cleanup in material-holds endpoints
+- `d91f471` — feat(procurement): add material holds count badge to morning list
+- `bef51a3` — feat(dashboard): add material_blocks per project to planning endpoint
+- `4f0d436` — feat(holds-dashboard): add Material Shortages card with manual resolve
+- `2f95131` — feat(planning-dashboard): show material shortage ETA per project
+- `eb51972` — fix: startup migration for material_holds, resolved_holds serialization, daily-log cascade, function order
+
+### What is pending:
+- Test material holds and cascade live on Railway with real goods receipts.
+- Confirm PROCESS_TYPE_TO_STEPS mapping with GM (from Session 25 open question).
+- Execute Phase 7 (Material Intelligence Engine).
+- Finalize Quality & Efficiency score calculation logic with exact formulas.
+
+### What needs to be done next session:
+- Verify `material_holds` table created on Railway deploy after merge to main.
+- Run `generate_work_orders` with a zero-stock project and confirm `MaterialHold` rows appear in Holds Dashboard.
+- Receive a PO and confirm the `resolved_holds` count in the response and that the hold disappears from the dashboard.
 - Finalize the Quality & Efficiency score calculation logic with exact formulas.

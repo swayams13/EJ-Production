@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import List, Optional
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 from datetime import datetime
 import io
 
-from backend.services.db_service import get_db, Project, ProjectProductionLine, MaterialHold, PurchaseOrder, PurchaseOrderLine
+from backend.services.db_service import get_db, Project, ProjectProductionLine, MaterialHold, PurchaseOrder, PurchaseOrderLine, Part, PartProcess, WarehouseStock
 from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel, aggregate_line_feet
 from backend.app.auth.rbac import require_roles, SUPERVISORS
 
@@ -382,3 +384,168 @@ def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = D
         "pacing_metrics": pacing_metrics
     }
     return {"success": True, "message": "Planning dashboard retrieved", "data": result}
+
+
+# ---------------------------------------------------------------------------
+# Material Intelligence Dashboard
+# ---------------------------------------------------------------------------
+
+class MaterialProjectItem(BaseModel):
+    id: int
+    name: str
+    qty_needed: int
+    delivery_date: Optional[str]
+
+
+class MaterialRow(BaseModel):
+    material_name: str
+    size: Optional[int]
+    joint_type: Optional[str]
+    qty_on_hand: int
+    reserved_qty: int
+    minimum_stock: int
+    incoming_qty: int
+    expected_delivery_date: Optional[str]
+    total_demand: int
+    net_gap: int
+    status: str
+    projects: List[MaterialProjectItem]
+
+
+@router.get("/materials", response_model=List[MaterialRow])
+def get_materials_dashboard(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(SUPERVISORS)),
+):
+    # Pre-fetch A: all warehouse stock rows
+    stock_rows = db.query(WarehouseStock).all()
+    stock_map: dict = {(r.material_name, r.size, r.joint_type): r for r in stock_rows}
+
+    # Pre-fetch B: open PO lines (status not received/cancelled)
+    open_lines = (
+        db.query(PurchaseOrderLine, PurchaseOrder.expected_delivery_date)
+        .join(PurchaseOrder, PurchaseOrderLine.purchase_order_id == PurchaseOrder.id)
+        .filter(PurchaseOrder.status.notin_(["received", "cancelled"]))
+        .all()
+    )
+    # {spec -> {incoming_qty, expected_delivery_date}}
+    po_map: dict = {}
+    for line, po_edd in open_lines:
+        remaining = (line.ordered_qty or 0) - (line.received_qty or 0)
+        if remaining <= 0:
+            continue
+        key = (line.material_name, line.size, line.joint_type)
+        if key not in po_map:
+            po_map[key] = {"incoming_qty": 0, "expected_delivery_date": None}
+        po_map[key]["incoming_qty"] += remaining
+        if po_edd is not None:
+            cur = po_map[key]["expected_delivery_date"]
+            if cur is None or po_edd < cur:
+                po_map[key]["expected_delivery_date"] = po_edd
+
+    # Pre-fetch C: parts from active projects, with their processes and parent line/project
+    # Single query: Part JOIN ProjectProductionLine JOIN Project + all PartProcesses bulk-loaded
+    from sqlalchemy.orm import selectinload
+
+    active_project_ids = [
+        row[0]
+        for row in db.query(Project.id).filter(Project.status != "Completed").all()
+    ]
+
+    if active_project_ids:
+        parts_with_line = (
+            db.query(Part, ProjectProductionLine, Project)
+            .join(ProjectProductionLine, Part.production_line_id == ProjectProductionLine.id)
+            .join(Project, ProjectProductionLine.project_id == Project.id)
+            .filter(Project.id.in_(active_project_ids))
+            .all()
+        )
+
+        # Bulk-fetch all PartProcess rows for these parts in one query
+        part_ids = [p.id for p, _, _ in parts_with_line]
+        all_processes = db.query(PartProcess).filter(PartProcess.part_id.in_(part_ids)).all()
+        procs_by_part: dict = {}
+        for proc in all_processes:
+            procs_by_part.setdefault(proc.part_id, []).append(proc)
+    else:
+        parts_with_line = []
+        procs_by_part = {}
+
+    # {spec -> {total_demand, projects: [{id, name, qty_needed, delivery_date}]}}
+    demand_map: dict = {}
+    for part, line, project in parts_with_line:
+        processes = procs_by_part.get(part.id, [])
+        mr_proc = next((p for p in processes if p.process_name == "Material Received"), None)
+        unmet_qty = (part.total_qty or 0) - (mr_proc.completed_qty if mr_proc else 0)
+        if unmet_qty <= 0:
+            continue
+        key = (part.name, line.size, line.joint_type)
+        if key not in demand_map:
+            demand_map[key] = {"total_demand": 0, "projects": []}
+        demand_map[key]["total_demand"] += unmet_qty
+        demand_map[key]["projects"].append({
+            "id": project.id,
+            "name": project.project_name or project.quotation_no,
+            "qty_needed": unmet_qty,
+            "delivery_date": project.target_date.isoformat() if project.target_date else None,
+        })
+
+    # Union all specs and compute coverage
+    all_specs = set(stock_map) | set(po_map) | set(demand_map)
+
+    rows: List[MaterialRow] = []
+    for spec in all_specs:
+        material_name, size, joint_type = spec
+        stock = stock_map.get(spec)
+        qty_on_hand = stock.qty_on_hand if stock else 0
+        reserved_qty = stock.reserved_qty if stock else 0
+        minimum_stock = stock.minimum_stock if stock else 0
+
+        po_entry = po_map.get(spec, {})
+        incoming_qty = po_entry.get("incoming_qty", 0)
+        edd = po_entry.get("expected_delivery_date")
+
+        dem_entry = demand_map.get(spec, {})
+        total_demand = dem_entry.get("total_demand", 0)
+        projects_raw = dem_entry.get("projects", [])
+
+        # Only include specs that have some demand (specs with only stock/PO but no demand are noise)
+        if total_demand == 0:
+            continue
+
+        available_stock = qty_on_hand - reserved_qty
+        net_gap = total_demand - available_stock - incoming_qty
+
+        if net_gap > 0:
+            status = "red"
+        elif available_stock < minimum_stock:
+            status = "amber"
+        else:
+            status = "green"
+
+        # Sort projects by delivery_date ascending (None last)
+        projects_sorted = sorted(
+            projects_raw,
+            key=lambda p: (p["delivery_date"] is None, p["delivery_date"] or ""),
+        )
+
+        rows.append(MaterialRow(
+            material_name=material_name,
+            size=size,
+            joint_type=joint_type,
+            qty_on_hand=qty_on_hand,
+            reserved_qty=reserved_qty,
+            minimum_stock=minimum_stock,
+            incoming_qty=incoming_qty,
+            expected_delivery_date=edd.isoformat() if edd else None,
+            total_demand=total_demand,
+            net_gap=net_gap,
+            status=status,
+            projects=[MaterialProjectItem(**p) for p in projects_sorted],
+        ))
+
+    # Sort: red (highest net_gap first) → amber → green
+    _order = {"red": 0, "amber": 1, "green": 2}
+    rows.sort(key=lambda r: (_order[r.status], -r.net_gap))
+
+    return rows

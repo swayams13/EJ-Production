@@ -1,3 +1,4 @@
+
 # Procurement Module Design Spec
 **Date:** 2026-07-15  
 **Status:** Approved — ready for implementation planning  

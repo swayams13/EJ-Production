@@ -25,6 +25,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Executive", href: "/dashboard/executive", hideForRoles: SUP },
       { name: "Planning", href: "/dashboard/planning", hideForRoles: SUP },
       { name: "WIP Tracking", href: "/dashboard/wip" },
+      { name: "Materials", href: "/dashboard/materials" },
     ],
   },
   {

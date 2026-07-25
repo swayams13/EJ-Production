@@ -1,5 +1,58 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-24 (Session 27 — Phase 7: Material Intelligence Dashboard)
+
+### What was done:
+
+**Material Intelligence Dashboard — proactive forward-visibility for PM**
+
+New page at `/dashboard/materials` answers: what materials are short, which projects get hit, and when does the next PO arrive?
+
+**`backend/app/dashboard/router.py`**
+- Added `MaterialProjectItem` and `MaterialRow` Pydantic schemas
+- Added `GET /api/v1/dashboard/materials` endpoint (auth: SUPERVISORS+)
+- 3 bulk pre-fetches, zero N+1:
+  - A) all `WarehouseStock` rows → dict by `(material_name, size, joint_type)`
+  - B) open `PurchaseOrderLine` rows joined to parent `PurchaseOrder` → grouped by spec: `incoming_qty = SUM(ordered_qty - received_qty)`, `expected_delivery_date = MIN(expected_delivery_date)`
+  - C) all `Part` rows from active projects (Project.status != 'Completed') joined to ProjectProductionLine + Project; bulk-fetched PartProcess rows for all part IDs; unmet demand = `total_qty - completed_qty` for the "Material Received" step; grouped by spec with project impact list
+- Traffic light: red (`net_gap > 0`), amber (`net_gap ≤ 0` but `available_stock < minimum_stock`), green (otherwise)
+- Sort: red (highest gap first) → amber → green; specs with zero demand excluded
+
+**`next-frontend/src/app/(main)/dashboard/materials/page.tsx`** (new file)
+- Summary bar: count chips for at-risk / low-stock / healthy
+- Filter chips: All / At Risk / Low Stock (client-side)
+- Table: Material · Size · Type · Stock · Incoming · Demand · Gap · Status
+- Red and amber rows auto-expand inline project list (project name · needs N · due DATE)
+- Gap column: positive = "+N" in red text; zero = "—"
+- Status badges: Short (critical) / Low (warning) / OK (success)
+- "Order →" link on red rows → `/procurement`
+- EmptyState when no unmet demand
+
+**`next-frontend/src/components/Sidebar.tsx`**
+- "Materials" added to Dashboards section after "WIP Tracking" (visible to all roles including Supervisor)
+
+### Build verification:
+- `py_compile`: PASS
+- `npm run build`: PASS — 30 routes, 0 TS errors
+
+### Commits (on demo):
+- `9c05b6f` — feat(dashboard): add Material Intelligence Dashboard (Phase 7)
+
+### Status: COMPLETE on demo — pending user verification + merge approval
+
+### What to do next session:
+- User to open `/dashboard/materials` on Railway demo and verify:
+  - Red rows show correctly for zero-stock materials
+  - Project impact list expands inline
+  - Filter chips work
+  - "Order →" link goes to /procurement
+- Merge Session 26 + Session 27 work (demo → main) if all looks good
+- Run `generate_work_orders` with zero-stock project, confirm MaterialHold appears in Holds Dashboard (pending from Session 26)
+- Receive a PO, confirm `resolved_holds` count and hold clears (pending from Session 26)
+- Finalize Quality & Efficiency score calculation formulas (open from Session 26)
+
+---
+
 ## Date: 2026-07-23 (Session 25 — Concurrency hardening for multi-user production use)
 
 ### Context:

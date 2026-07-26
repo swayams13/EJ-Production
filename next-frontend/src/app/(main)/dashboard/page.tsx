@@ -2,7 +2,8 @@
 import { apiFetch } from "@/lib/api";
 
 import { useEffect, useState } from "react";
-import { Button, Card, MetricCard, Spinner, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
+import { Button, Card, MetricCard, Modal, Spinner, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
+import { useToast } from "@/components/ui/useToast";
 
 interface OvertimeData {
   total_ot_tig: number;
@@ -47,13 +48,66 @@ interface DashboardData {
 
 const round1 = (n: number) => Math.round((n || 0) * 10) / 10;
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { showToast, toasts } = useToast();
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<Array<{
+    id: number;
+    project_id: number;
+    project_name: string | null;
+    quotation_no: string | null;
+    requested_by: string;
+    requested_at: string | null;
+  }>>([]);
+  const [rejectModal, setRejectModal] = useState<{ reqId: number; projectName: string | null } | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [actionInProgress, setActionInProgress] = useState(false);
+
+  useEffect(() => {
+    const role = localStorage.getItem("user_role");
+    setUserRole(role);
+    if (role === "GM" || role === "Developer") { fetchPendingRequests(); }
+  }, []);
+
+  async function fetchPendingRequests() {
+    try {
+      const res = await apiFetch(`${API}/api/v1/projects/completion-requests/pending`);
+      if (res.ok) setPendingRequests(await res.json());
+    } catch {}
+  }
+
+  async function handleApprove(reqId: number) {
+    setActionInProgress(true);
+    try {
+      const res = await apiFetch(`${API}/api/v1/projects/completion-requests/${reqId}/approve`, { method: "POST" });
+      if (res.ok) { showToast("Project marked as complete.", "success"); await fetchPendingRequests(); }
+      else showToast("Failed to approve.", "critical");
+    } finally { setActionInProgress(false); }
+  }
+
+  async function handleReject() {
+    if (!rejectModal || !rejectReason.trim()) return;
+    setActionInProgress(true);
+    try {
+      const res = await apiFetch(`${API}/api/v1/projects/completion-requests/${rejectModal.reqId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rejection_reason: rejectReason }),
+      });
+      if (res.ok) {
+        showToast("Completion request rejected.", "success");
+        setRejectModal(null); setRejectReason(""); await fetchPendingRequests();
+      } else showToast("Failed to reject.", "critical");
+    } finally { setActionInProgress(false); }
+  }
 
   useEffect(() => {
     const fetchDashboard = () => {
-      apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/status`)
+      apiFetch(`${API}/api/v1/dashboard/status`)
         .then((res) => res.json())
         .then((resData) => {
           setData(resData.data);
@@ -68,7 +122,7 @@ export default function Dashboard() {
   }, []);
 
   const handleDownloadExcel = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/dashboard/export`;
+    window.location.href = `${API}/api/v1/dashboard/export`;
   };
 
   if (loading || !data) return <Spinner label="Loading dashboard…" />;
@@ -77,6 +131,39 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-8">
+      {toasts}
+      {(userRole === "GM" || userRole === "Developer") && pendingRequests.length > 0 && (
+        <div className="mb-8">
+          <h2 className="font-display text-lg font-bold text-ink mb-3 uppercase tracking-wide">Pending Completions</h2>
+          <div className="flex flex-col gap-3">
+            {pendingRequests.map((req) => (
+              <div key={req.id} className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-ink">{req.quotation_no} — {req.project_name}</p>
+                  <p className="text-xs text-ink-soft mt-0.5">Requested by {req.requested_by}{req.requested_at ? ` on ${new Date(req.requested_at).toLocaleDateString()}` : ""}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => setRejectModal({ reqId: req.id, projectName: req.project_name })} disabled={actionInProgress}>Reject</Button>
+                  <Button variant="primary" onClick={() => handleApprove(req.id)} disabled={actionInProgress}>Approve</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {rejectModal && (
+        <Modal open onClose={() => { setRejectModal(null); setRejectReason(""); }} title="Reject Completion Request" description={rejectModal.projectName ?? undefined} size="sm">
+          <div className="space-y-3">
+            <label className="block text-sm text-ink font-medium">Reason for rejection</label>
+            <textarea className="w-full rounded border border-line bg-paper-raised px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand resize-none" rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Explain why the completion request is being rejected…" />
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => { setRejectModal(null); setRejectReason(""); }}>Cancel</Button>
+              <Button variant="primary" disabled={!rejectReason.trim() || actionInProgress} onClick={handleReject}>{actionInProgress ? "Rejecting…" : "Reject"}</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-ink">

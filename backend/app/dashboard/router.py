@@ -8,6 +8,7 @@ from datetime import datetime
 import io
 
 from backend.services.db_service import get_db, Project, ProjectProductionLine, MaterialHold, PurchaseOrder, PurchaseOrderLine, Part, PartProcess, WarehouseStock
+from backend.services.notification_service import create_notification
 from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel, aggregate_line_feet
 from backend.app.auth.rbac import require_roles, SUPERVISORS
 
@@ -547,5 +548,30 @@ def get_materials_dashboard(
     # Sort: red (highest net_gap first) → amber → green
     _order = {"red": 0, "amber": 1, "green": 2}
     rows.sort(key=lambda r: (_order[r.status], -r.net_gap))
+
+    from datetime import timedelta
+    from backend.services.db_service import Notification as NotifModel
+    red_specs = [r for r in rows if r.status == "red"]
+    if red_specs:
+        cutoff = datetime.utcnow() - timedelta(hours=24)
+        for spec in red_specs[:5]:
+            spec_key = f"{spec.material_name}/{spec.size}/{spec.joint_type}"
+            already = (
+                db.query(NotifModel)
+                .filter(
+                    NotifModel.event_type == "material_red",
+                    NotifModel.body.like(f"%{spec_key}%"),
+                    NotifModel.created_at > cutoff,
+                )
+                .first()
+            )
+            if not already:
+                for role in ["GM", "Production Manager"]:
+                    create_notification(
+                        db, role, "material_red",
+                        f"Material shortage: {spec.material_name} {spec.size}",
+                        f"Stock gap for {spec_key}. Net gap: {spec.net_gap} units.",
+                        "/dashboard/materials",
+                    )
 
     return rows

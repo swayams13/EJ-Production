@@ -1,5 +1,60 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-27 (Session 30 — Email Delivery Debugging)
+
+### What was done:
+
+**Root cause diagnosed: Railway blocks outbound SMTP (port 587)**
+- In-app notifications (bell, dashboard panel) confirmed working on Railway demo
+- Email delivery was failing silently — added `POST /api/v1/notifications/test-email` diagnostic endpoint (GM/Developer only) that runs synchronous send and returns config + error inline
+- Test revealed: `[Errno 101] Network is unreachable` — Railway firewall blocks outbound port 587, credentials were never the issue
+
+**Provider switches attempted:**
+1. **SMTP (Gmail, smtp.gmail.com:587)** → blocked by Railway network firewall
+2. **Resend (api.resend.com)** → `403 error code: 1010` — Cloudflare WAF blocks Railway IP range
+3. **Brevo (api.brevo.com)** → `401 Key not found` — user pasted wrong/invalid API key; **session ended here**
+
+**Current state of email_service.py:** Brevo HTTP API via `urllib.request` (no new dependencies). Env vars expected: `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`.
+
+**Commits pushed to demo this session:**
+- `1009f65` — feat: add SMTP diagnostic test-email endpoint
+- `30a0d23` — fix: switch email delivery from SMTP to Resend HTTP API
+- `9688fe4` — fix: switch from Resend to Brevo for email delivery
+
+### What to do next session:
+
+1. **Fix Brevo API key** — user needs to go to brevo.com → Settings → SMTP & API → API Keys → copy key fresh (no spaces), update `BREVO_API_KEY` in Railway backend env vars. Key starts with `xkeysib-`
+2. **Verify sender** — in Brevo → Senders & IP → Senders → add `preciseengineersai@gmail.com` → click verification link (if not done yet)
+3. **Run test-email endpoint** to confirm `"ok": true`:
+   ```js
+   fetch('https://ej-production-demo.up.railway.app/api/v1/notifications/test-email', {
+     method: 'POST',
+     headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+   }).then(r => r.json()).then(d => console.log(JSON.stringify(d, null, 2)))
+   ```
+4. **Full end-to-end Railway verification** once email confirmed:
+   - PM submits completion request → GM gets in-app bell + email
+   - GM approves → PM gets in-app bell + email, project status flips to Completed
+   - GM rejects with reason → PM gets notification with reason
+   - CEO/MD login works, executive dashboard loads at `/dashboard/executive`
+   - MailButton visible and generates correct `mailto:` links
+5. **After Railway demo verified** → request user approval to merge demo → main
+
+### Pending Railway env vars (backend):
+```
+BREVO_API_KEY     = xkeysib-...   ← re-copy from Brevo dashboard
+SMTP_FROM_EMAIL   = preciseengineersai@gmail.com
+SMTP_FROM_NAME    = EJ Tracker
+GM_EMAIL          = (GM's email)
+PM_EMAIL          = (PM's email)
+CEO_EMAIL         = (CEO's email)
+MD_EMAIL          = (MD's email)
+CEO_USER / CEO_PASS
+MD_USER  / MD_PASS
+```
+
+---
+
 ## Date: 2026-07-26 (Session 29 — Project Completion Workflow + Notifications + CEO/MD Design)
 
 ### What was done:

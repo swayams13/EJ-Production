@@ -23,7 +23,22 @@
 - `docs/superpowers/plans/2026-07-26-completion-workflow-notifications.md` (Plan A — 11 tasks)
 - `docs/superpowers/plans/2026-07-26-executive-dashboard-ceo-md.md` (Plan B — 6 tasks, requires Plan A first)
 
-### Status: PLAN A IMPLEMENTED — pushed to demo, pending Railway verification
+### Status: PLANS A + B IMPLEMENTED — pushed to demo, pending Railway verification
+
+### Plan B — what was built (5 commits on demo):
+- `backend/app/auth/rbac.py` — `EXECUTIVES = ["CEO", "MD"]` added; both included in MANAGEMENT (read access) but not write endpoints
+- `backend/app/auth/router.py` — CEO/MD credential checks wired into login (env vars: CEO_USER/CEO_PASS, MD_USER/MD_PASS)
+- `backend/app/dashboard/router.py` — `GET /api/v1/dashboard/executive` endpoint: 6 KPIs + per-project financial data (order_value, advance_received, committed_dispatch_date, progress %)
+- `next-frontend/src/components/MailButton.tsx` — mailto: link generator, fetches recipients from /mail-recipients, single-recipient = direct link, multi = checkbox picker
+- `next-frontend/src/app/(main)/dashboard/executive/page.tsx` — stub replaced with real data: 6 KPI cards, filter chips, full project table with financials + ProgressBar + MailButton per row
+- `next-frontend/src/components/Sidebar.tsx` — `SUP` extended to include "CEO" and "MD" → write nav items (Add/Edit Project, Settings etc.) auto-hidden
+- `next-frontend/src/app/(main)/projects/page.tsx` — MailButton added for GM and PM in expanded project row
+
+### Plan B verification (all clean):
+- 3/3 Python files: syntax PASS
+- RBAC assertions: CEO + MD correctly in EXECUTIVES and MANAGEMENT
+- npm build: PASS — 30 routes, 0 TS errors
+- Push to demo: PASS (6977cde..59a2a8f)
 
 ### Plan A — what was built (9 commits on demo):
 - `backend/services/email_service.py` — SMTP sender, dev-safe no-op when unconfigured
@@ -42,11 +57,7 @@
 - npm build: PASS — 30 routes, 0 TS errors, 0 warnings
 
 ### What to do next session:
-- Add Railway env vars before testing on demo:
-  - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (org Outlook account)
-  - GM_EMAIL, PM_EMAIL
-- Resolve Railway demo login issue (from Session 28) if still present
-- Verify on Railway demo:
+- Verify on Railway demo (env vars already added):
   - Task 1: ORM models + migrations
   - Task 2: email_service.py
   - Task 3: notification_service.py

@@ -365,6 +365,37 @@ _run_startup_migration("material_holds table", [
     )"""
 ])
 
+_run_startup_migration("project_completion_requests table", [
+    """
+    CREATE TABLE IF NOT EXISTS project_completion_requests (
+        id SERIAL PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        requested_by VARCHAR NOT NULL,
+        requested_at TIMESTAMP DEFAULT NOW(),
+        status VARCHAR DEFAULT 'pending',
+        reviewed_by VARCHAR,
+        reviewed_at TIMESTAMP,
+        rejection_reason TEXT
+    )
+    """,
+])
+
+_run_startup_migration("notifications table", [
+    """
+    CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        for_role VARCHAR NOT NULL,
+        event_type VARCHAR NOT NULL,
+        title VARCHAR NOT NULL,
+        body TEXT,
+        link VARCHAR,
+        project_id INTEGER,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+])
+
 from backend.services.db_service import SessionLocal
 from backend.services.itemwise_backfill import backfill_itemwise
 backfill_itemwise(SessionLocal)

@@ -23,11 +23,30 @@
 - `docs/superpowers/plans/2026-07-26-completion-workflow-notifications.md` (Plan A — 11 tasks)
 - `docs/superpowers/plans/2026-07-26-executive-dashboard-ceo-md.md` (Plan B — 6 tasks, requires Plan A first)
 
-### Status: DESIGN COMPLETE — ready for implementation
+### Status: PLAN A IMPLEMENTED — pushed to demo, pending Railway verification
+
+### Plan A — what was built (9 commits on demo):
+- `backend/services/email_service.py` — SMTP sender, dev-safe no-op when unconfigured
+- `backend/services/notification_service.py` — `create_notification()` DB helper
+- `backend/app/projects/completion.py` — 5 endpoints: preview, submit, list-pending, approve (bulk-complete), reject
+- `backend/app/notifications/router.py` — unread-count, list, mark-read, mark-all-read, mail-recipients
+- Notification triggers wired into: projects router (new project, hold), procurement router (GR created), scheduler router (work orders generated), dashboard/materials router (material-red with 24h dedup)
+- `NotificationBell.tsx` — bell icon in sidebar header, badge count, dropdown panel, 30s polling
+- `projects/page.tsx` — PM "Mark as Complete" button + checklist modal + pending banner
+- `dashboard/page.tsx` — GM "Pending Completions" panel with Approve/Reject + rejection reason modal
+
+### Verification results (all clean):
+- 9/9 Python files: syntax PASS
+- test_email_service.py: OK
+- test_notification_service.py: OK
+- npm build: PASS — 30 routes, 0 TS errors, 0 warnings
 
 ### What to do next session:
-- Resolve Railway demo login issue (from Session 28) before starting implementation
-- Implement Plan A (`2026-07-26-completion-workflow-notifications.md`) task by task:
+- Add Railway env vars before testing on demo:
+  - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (org Outlook account)
+  - GM_EMAIL, PM_EMAIL
+- Resolve Railway demo login issue (from Session 28) if still present
+- Verify on Railway demo:
   - Task 1: ORM models + migrations
   - Task 2: email_service.py
   - Task 3: notification_service.py

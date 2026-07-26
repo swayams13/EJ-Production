@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import NotificationBell from "@/components/NotificationBell";
 
 interface NavItem {
   name: string;
@@ -97,9 +98,12 @@ export default function Sidebar() {
   return (
     <div className="fixed left-0 top-0 flex h-screen w-64 flex-col bg-ink text-[#d7e3e0] shadow-xl">
       <div className="border-b border-white/10 p-6">
-        <h2 className="font-display uppercase tracking-wide text-xl font-extrabold text-white">
-          EJ Tracker
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-display uppercase tracking-wide text-xl font-extrabold text-white">
+            EJ Tracker
+          </h2>
+          <NotificationBell />
+        </div>
         {role && (
           <div className="mt-2 inline-block rounded border border-brand/40 bg-brand/20 px-2 py-1 text-xs font-medium text-[#9fd6d0]">
             {role}

@@ -88,7 +88,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         role = "GM"
     elif req.username == os.getenv("PM_USER") and req.password == os.getenv("PM_PASS"):
         role = "Production Manager"
-        
+    elif req.username == os.getenv("CEO_USER") and req.password == os.getenv("CEO_PASS"):
+        role = "CEO"
+    elif req.username == os.getenv("MD_USER") and req.password == os.getenv("MD_PASS"):
+        role = "MD"
+
     if not role:
         # 2. Check dynamic env users
         for key, value in os.environ.items():

@@ -31,6 +31,8 @@ from backend.app.master.router import router as master_router
 from backend.app.projects.router import router as projects_router
 from backend.app.scheduler.router import router as scheduler_router
 from backend.app.procurement.router import router as procurement_router
+from backend.app.projects.completion import router as completion_router
+from backend.app.notifications.router import router as notifications_router
 
 app = FastAPI(title="EJ Production Tracker API", version="1.0.0")
 
@@ -41,6 +43,8 @@ app.include_router(master_router)
 app.include_router(projects_router)
 app.include_router(scheduler_router)
 app.include_router(procurement_router)
+app.include_router(completion_router)
+app.include_router(notifications_router)
 
 # Configure CORS — origins come from FRONTEND_ORIGINS (comma-separated),
 # e.g. "https://ej-demo.up.railway.app,https://ej.example.com".
@@ -363,6 +367,37 @@ _run_startup_migration("material_holds table", [
         created_at      TIMESTAMP DEFAULT NOW(),
         resolved_at     TIMESTAMP
     )"""
+])
+
+_run_startup_migration("project_completion_requests table", [
+    """
+    CREATE TABLE IF NOT EXISTS project_completion_requests (
+        id SERIAL PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        requested_by VARCHAR NOT NULL,
+        requested_at TIMESTAMP DEFAULT NOW(),
+        status VARCHAR DEFAULT 'pending',
+        reviewed_by VARCHAR,
+        reviewed_at TIMESTAMP,
+        rejection_reason TEXT
+    )
+    """,
+])
+
+_run_startup_migration("notifications table", [
+    """
+    CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        for_role VARCHAR NOT NULL,
+        event_type VARCHAR NOT NULL,
+        title VARCHAR NOT NULL,
+        body TEXT,
+        link VARCHAR,
+        project_id INTEGER,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
 ])
 
 from backend.services.db_service import SessionLocal

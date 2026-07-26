@@ -3,7 +3,8 @@ import { apiFetch } from "@/lib/api";
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, MetricCard, Badge, Button, ProgressBar, Spinner, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
+import { Card, MetricCard, Badge, Button, ProgressBar, Spinner, Table, THead, TBody, Tr, Th, Td, Modal } from "@/components/ui";
+import { useToast } from "@/components/ui/useToast";
 
 interface Bellow {
   type: string;
@@ -17,6 +18,7 @@ interface Bellow {
 interface ProjectRow {
   id: number;
   quotation_no: string;
+  project_name?: string;
   progress_percentage?: number;
   target_date?: string;
   assigned_tig: number;
@@ -26,6 +28,16 @@ interface ProjectRow {
   estimated_duration_days: number;
   status?: string;
   bellows: Bellow[];
+  completion_request_status?: string | null;
+}
+
+interface CompletionPreview {
+  project_name: string;
+  quotation_no: string;
+  production_lines: number;
+  part_processes: number;
+  assembly_steps: number;
+  final_checks: number;
 }
 
 const TABLE_COLS = 7;
@@ -34,6 +46,11 @@ export default function ProjectsList() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { showToast, toasts } = useToast();
+  const [completionModal, setCompletionModal] = useState<{ projectId: number; preview: CompletionPreview | null } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  useEffect(() => { setUserRole(localStorage.getItem("user_role")); }, []);
 
   useEffect(() => {
     apiFetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003"}/api/v1/projects`)
@@ -194,6 +211,23 @@ export default function ProjectsList() {
                       ) : (
                         <p className="text-sm italic text-ink-soft">No expansion joints assigned to this project.</p>
                       )}
+                      {userRole === "Production Manager" && (
+                        <div className="mt-4 pt-4 border-t border-line">
+                          {p.status === "Completed" ? (
+                            <span className="text-sm text-ink-soft">Project completed.</span>
+                          ) : p.completion_request_status === "pending" ? (
+                            <span className="inline-flex items-center gap-1.5 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700">
+                              Completion approval pending GM review — entries can still be logged.
+                            </span>
+                          ) : (
+                            <Button variant="secondary" onClick={async () => {
+                              const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+                              const res = await apiFetch(`${API}/api/v1/projects/${p.id}/completion-preview`);
+                              if (res.ok) { const preview = await res.json(); setCompletionModal({ projectId: p.id, preview }); }
+                            }}>Mark as Complete</Button>
+                          )}
+                        </div>
+                      )}
                     </Td>
                   </Tr>
                 )}
@@ -209,6 +243,40 @@ export default function ProjectsList() {
           </TBody>
         </Table>
       </Card>
+      {toasts}
+      {completionModal && (
+        <Modal open onClose={() => setCompletionModal(null)} title="Review Completion Checklist" description={completionModal.preview?.quotation_no + " — " + completionModal.preview?.project_name} size="sm">
+          <div className="space-y-3">
+            <p className="text-sm text-ink-soft">These records will be marked complete upon GM approval:</p>
+            <ul className="text-sm text-ink space-y-1">
+              <li>Production lines: <span className="font-semibold">{completionModal.preview?.production_lines}</span></li>
+              <li>Part processes: <span className="font-semibold">{completionModal.preview?.part_processes}</span></li>
+              <li>Assembly steps: <span className="font-semibold">{completionModal.preview?.assembly_steps}</span></li>
+              <li>Final checks: <span className="font-semibold">{completionModal.preview?.final_checks}</span></li>
+            </ul>
+            <p className="text-xs text-ink-soft border-t border-line pt-3">Cannot be undone after GM approval.</p>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="secondary" onClick={() => setCompletionModal(null)}>Cancel</Button>
+              <Button variant="primary" disabled={submitting} onClick={async () => {
+                setSubmitting(true);
+                const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+                try {
+                  const res = await apiFetch(`${API}/api/v1/projects/${completionModal.projectId}/completion-request`, { method: "POST" });
+                  if (res.ok) {
+                    showToast("Completion request sent to GM for approval.", "success");
+                    setCompletionModal(null);
+                    const r = await apiFetch(`${API}/api/v1/projects`);
+                    if (r.ok) setProjects((await r.json()).data || []);
+                  } else {
+                    const err = await res.json().catch(() => ({}));
+                    showToast((err as { detail?: string }).detail || "Failed to submit.", "critical");
+                  }
+                } finally { setSubmitting(false); }
+              }}>{submitting ? "Submitting…" : "Submit for Approval"}</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

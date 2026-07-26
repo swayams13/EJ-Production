@@ -1,5 +1,100 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-26 (Session 29 — Project Completion Workflow + Notifications + CEO/MD Design)
+
+### What was done:
+
+**Brainstorm + spec + implementation plans for 4 new sub-features:**
+
+1. **Project Completion Workflow** — PM initiates bulk-complete with checklist preview, GM approves/rejects, all records (PartProcess, AssemblyStep, JobFinalCheck, production lines, Project.status) bulk-updated in one DB transaction on approval. Soft banner while pending (operators can still log). PM and GM both get in-app + email notifications.
+
+2. **Role-Aware Notification System** — `notifications` table, `NotificationBell` component with badge count in sidebar header, 30s polling, mark-read/mark-all-read. Events: completion workflow, new project, project held, material-red (24h dedup), PO received, work order generated.
+
+3. **CEO/MD Roles** — New read-only roles added to RBAC + env-var login (CEO_USER/CEO_PASS, MD_USER/MD_PASS). CEO/MD excluded from all write nav items via `SUP` constant. New `/api/v1/dashboard/executive` endpoint.
+
+4. **Executive Dashboard** — Real `/dashboard/executive` page (replaces stub) with 6 KPI cards (active, pipeline value, on-time, delayed, on-hold, completed) + full project table with financial columns (order_value, advance_received, committed_dispatch_date, progress %).
+
+5. **In-App Mail** — `MailButton` component generates `mailto:` links pre-filled with project context. Each role sees only permitted recipients (fetched from `/api/v1/notifications/mail-recipients`). Emails send from personal Outlook — no SMTP credentials per user.
+
+**Email approach decided:** Single org SMTP account (Outlook/Office 365) for automated system notifications. User-initiated mail via `mailto:` browser links — opens personal Outlook, zero credential management.
+
+**Documents committed (on demo):**
+- `docs/superpowers/specs/2026-07-26-project-completion-notifications-executive-design.md`
+- `docs/superpowers/plans/2026-07-26-completion-workflow-notifications.md` (Plan A — 11 tasks)
+- `docs/superpowers/plans/2026-07-26-executive-dashboard-ceo-md.md` (Plan B — 6 tasks, requires Plan A first)
+
+### Status: PLAN A IMPLEMENTED — pushed to demo, pending Railway verification
+
+### Plan A — what was built (9 commits on demo):
+- `backend/services/email_service.py` — SMTP sender, dev-safe no-op when unconfigured
+- `backend/services/notification_service.py` — `create_notification()` DB helper
+- `backend/app/projects/completion.py` — 5 endpoints: preview, submit, list-pending, approve (bulk-complete), reject
+- `backend/app/notifications/router.py` — unread-count, list, mark-read, mark-all-read, mail-recipients
+- Notification triggers wired into: projects router (new project, hold), procurement router (GR created), scheduler router (work orders generated), dashboard/materials router (material-red with 24h dedup)
+- `NotificationBell.tsx` — bell icon in sidebar header, badge count, dropdown panel, 30s polling
+- `projects/page.tsx` — PM "Mark as Complete" button + checklist modal + pending banner
+- `dashboard/page.tsx` — GM "Pending Completions" panel with Approve/Reject + rejection reason modal
+
+### Verification results (all clean):
+- 9/9 Python files: syntax PASS
+- test_email_service.py: OK
+- test_notification_service.py: OK
+- npm build: PASS — 30 routes, 0 TS errors, 0 warnings
+
+### What to do next session:
+- Add Railway env vars before testing on demo:
+  - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (org Outlook account)
+  - GM_EMAIL, PM_EMAIL
+- Resolve Railway demo login issue (from Session 28) if still present
+- Verify on Railway demo:
+  - Task 1: ORM models + migrations
+  - Task 2: email_service.py
+  - Task 3: notification_service.py
+  - Tasks 4–5: completion router
+  - Task 6: notifications router + mount in main.py
+  - Task 7: notification triggers in existing routers
+  - Tasks 8–10: frontend (NotificationBell, PM completion modal, GM approval panel)
+  - Task 11: end-to-end test + add SMTP env vars to Railway
+- After Plan A verified on demo → implement Plan B (CEO/MD + executive dashboard)
+- New Railway env vars needed: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, GM_EMAIL, PM_EMAIL, CEO_EMAIL, MD_EMAIL, CEO_USER, CEO_PASS, MD_USER, MD_PASS
+
+---
+
+## Date: 2026-07-26 (Session 28 — Phase 7 deploy + login debug)
+
+### What was done:
+
+**Merged demo → main**
+- Session 27 work (Material Intelligence Dashboard) verified on demo by user and merged to main
+- Railway production deploy triggered automatically
+
+**Investigated Railway demo login failure**
+- User reported "Sign-in failed / Invalid credentials" on demo after deploy
+- Traced auth flow: env var users (DEV_USER/GM_USER/PM_USER) → dynamic env vars → DB users
+- Confirmed: code is unchanged — Phase 7 commits touch only dashboard route and sidebar, not auth
+- Root cause narrowed to Railway environment configuration:
+  - Either `NEXT_PUBLIC_API_URL` not set in Railway demo frontend → frontend falls back to `localhost:8003` → fetch fails → mislabelled as "Invalid credentials"
+  - OR backend env vars (`DEV_USER`/`DEV_PASS` etc.) not set in Railway demo service
+- Resolution: user to check Railway demo service env vars and browser DevTools → Network tab to see actual request URL and HTTP status
+
+### Status: UNRESOLVED — login issue on Railway demo needs Railway env var check
+
+### What to do next session:
+- User to open browser DevTools → Network tab → attempt login on demo URL → confirm:
+  - What URL the login POST hits (should be Railway backend URL, not localhost:8003)
+  - What HTTP status comes back (401 = credentials wrong, 4xx/network = URL wrong)
+- Verify env vars in Railway demo service: JWT_SECRET_KEY, DEV_USER, DEV_PASS, GM_USER, GM_PASS, PM_USER, PM_PASS
+- Once login works on demo, verify Material Intelligence Dashboard data loads correctly:
+  - Red rows for zero-stock materials
+  - Inline project impact list for red/amber rows
+  - Filter chips (All / At Risk / Low Stock)
+  - "Order →" link goes to /procurement
+- Run `generate_work_orders` with zero-stock project, confirm MaterialHold appears in Holds Dashboard (pending from Session 26)
+- Receive a PO, confirm `resolved_holds` count and hold clears (pending from Session 26)
+- Finalize Quality & Efficiency score calculation formulas (open from Session 26)
+
+---
+
 ## Date: 2026-07-24 (Session 27 — Phase 7: Material Intelligence Dashboard)
 
 ### What was done:

@@ -6,7 +6,8 @@ import json
 from typing import List, Optional
 from pydantic import BaseModel
 
-from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory, MaterialHold, PurchaseOrder, PurchaseOrderLine
+from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory, MaterialHold, PurchaseOrder, PurchaseOrderLine, ProjectCompletionRequest
+from backend.services.notification_service import create_notification
 from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet, get_productivity_rates
 from backend.app.projects.schemas import ProjectCreate, ProjectUpdate, SimulationRequest, DurationRequest, SimulateDurationRequest, BellowItem
 from backend.services import joint_catalog
@@ -54,6 +55,9 @@ def get_projects(db: Session = Depends(get_db), current_user: dict = Depends(req
             elif days_away <= 60:
                 priority = "P2"
                 
+        pending_req = db.query(ProjectCompletionRequest).filter_by(
+            project_id=p.id, status="pending"
+        ).first()
         results.append({
             "id": p.id,
             "quotation_no": p.quotation_no,
@@ -74,6 +78,7 @@ def get_projects(db: Session = Depends(get_db), current_user: dict = Depends(req
             "order_value": getattr(p, "order_value", None),
             "advance_received": getattr(p, "advance_received", 0.0),
             "committed_dispatch_date": str(p.committed_dispatch_date) if getattr(p, "committed_dispatch_date", None) else None,
+            "completion_request_status": "pending" if pending_req else None,
         })
     return {"success": True, "message": "Projects retrieved", "data": results}
 
@@ -120,7 +125,15 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db), current_us
     )
     db.add(new_proj)
     db.commit()
-    
+    for role in ["GM", "CEO", "MD"]:
+        create_notification(
+            db, role, "project_created",
+            f"New project: {new_proj.quotation_no}",
+            f"Project '{new_proj.project_name}' for {new_proj.client_name} was added.",
+            "/projects",
+            project_id=new_proj.id,
+        )
+
     dt_deadline = datetime.combine(req.target_date, datetime.min.time()) if req.target_date else datetime.utcnow()
     assign = ProjectResourceAssignment(
         project_id=new_proj.id, 
@@ -175,6 +188,14 @@ def update_project(project_id: int, req: ProjectUpdate, db: Session = Depends(ge
             )
             db.add(hold)
             proj.hold_type = req.hold_type or "General Hold"
+            for role in ["GM", "CEO", "MD"]:
+                create_notification(
+                    db, role, "project_on_hold",
+                    f"Project on hold: {proj.quotation_no}",
+                    f"Project '{proj.project_name}' has been placed on hold.",
+                    "/projects",
+                    project_id=project_id,
+                )
         elif req.status != "Hold" and proj.status == "Hold":
             active_hold = db.query(ProjectHoldHistory).filter(ProjectHoldHistory.project_id == project_id, ProjectHoldHistory.resume_date == None).first()
             if active_hold:

@@ -8,6 +8,7 @@ from sqlalchemy import asc, func, nullslast
 from sqlalchemy.orm import Session, joinedload
 
 from backend.app.auth.rbac import require_roles, MANAGEMENT, SUPERVISORS
+from backend.services.notification_service import create_notification
 from backend.app.scheduler.schemas import (
     TaskAssignmentCreate, TaskAssignmentResponse,
     WorkOrderResponse, WorkOrderComplete,
@@ -305,6 +306,12 @@ def generate_work_orders(
                     break
 
     db.commit()
+    create_notification(
+        db, "Production Manager", "work_order_generated",
+        "Work orders generated",
+        "New work orders have been generated.",
+        "/scheduler",
+    )
     return {
         "success": True,
         "message": f"Generated {orders_created} work orders for {len(worker_list)} workers.",

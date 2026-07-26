@@ -19,6 +19,7 @@ from backend.app.procurement.schemas import (
     DelayReasonCreate, DailyLogCreate,
 )
 from backend.services.procurement_service import _vendor_avg_days_late
+from backend.services.notification_service import create_notification
 
 router = APIRouter(prefix="/api/v1/procurement", tags=["Procurement"])
 
@@ -318,6 +319,12 @@ def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), 
             )
 
     db.commit()
+    create_notification(
+        db, "Production Manager", "po_received",
+        f"PO received: {po.po_number}",
+        f"Goods receipt logged for PO {po.po_number}.",
+        "/procurement/po",
+    )
     db.refresh(receipt)
     from backend.app.procurement.schemas import ReceiptResponse
     return ReceiptResponse(

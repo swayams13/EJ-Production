@@ -566,6 +566,32 @@ if __name__ == "__main__":
     init_db()
     print("Database initialized successfully.")
 
+class ProjectCompletionRequest(Base):
+    __tablename__ = "project_completion_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    requested_by = Column(String, nullable=False)
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="pending")
+    reviewed_by = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    project = relationship("Project")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    for_role = Column(String, nullable=False)
+    event_type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=True)
+    link = Column(String, nullable=True)
+    project_id = Column(Integer, nullable=True)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:

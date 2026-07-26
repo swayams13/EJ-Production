@@ -1,5 +1,4 @@
 import os
-import smtplib
 import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -80,38 +79,41 @@ def mark_all_read(db: Session = Depends(get_db), user=Depends(require_roles(MANA
 
 @router.post("/test-email")
 def test_email(user=Depends(require_roles(["GM", "Developer"]))):
-    """Diagnostic: attempt a synchronous SMTP test and return the result immediately."""
-    host = email_service.SMTP_HOST
-    port = email_service.SMTP_PORT
-    smtp_user = email_service.SMTP_USER
-    smtp_pass = email_service.SMTP_PASS
+    """Diagnostic: send a test email via Resend and return the result immediately."""
+    import urllib.request, urllib.error, json as _json
+    api_key = email_service.RESEND_API_KEY
     gm_email = os.getenv("GM_EMAIL", "")
 
     config = {
-        "SMTP_HOST": host or "(not set)",
-        "SMTP_PORT": port,
-        "SMTP_USER": smtp_user or "(not set)",
-        "SMTP_PASS_set": bool(smtp_pass),
+        "RESEND_API_KEY_set": bool(api_key),
+        "SMTP_FROM": email_service.SMTP_FROM,
         "GM_EMAIL": gm_email or "(not set)",
     }
 
-    if not host or not smtp_user or not smtp_pass:
-        return {"ok": False, "config": config, "error": "SMTP env vars missing — check SMTP_HOST, SMTP_USER, SMTP_PASS"}
-
+    if not api_key:
+        return {"ok": False, "config": config, "error": "RESEND_API_KEY not set in Railway env vars"}
     if not gm_email:
         return {"ok": False, "config": config, "error": "GM_EMAIL not set"}
 
+    payload = _json.dumps({
+        "from": email_service.SMTP_FROM,
+        "to": [gm_email],
+        "subject": "[EJ Tracker] SMTP Test",
+        "text": "This is a test email from EJ Production Tracker to confirm Resend is working.",
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
     try:
-        with smtplib.SMTP(host, port, timeout=10) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            from email.mime.text import MIMEText
-            msg = MIMEText("This is a test email from EJ Production Tracker to confirm SMTP is working.")
-            msg["Subject"] = "[EJ Tracker] SMTP Test"
-            msg["From"] = smtp_user
-            msg["To"] = gm_email
-            server.sendmail(smtp_user, [gm_email], msg.as_string())
-        return {"ok": True, "config": config, "sent_to": gm_email}
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return {"ok": True, "config": config, "sent_to": gm_email, "resend_status": resp.status}
+    except urllib.error.HTTPError as e:
+        err = e.read().decode()
+        logger.error("Resend test failed: %s %s", e.code, err)
+        return {"ok": False, "config": config, "error": f"Resend {e.code}: {err}"}
     except Exception as e:
-        logger.error("SMTP test failed: %s", e)
+        logger.error("Resend test failed: %s", e)
         return {"ok": False, "config": config, "error": str(e)}

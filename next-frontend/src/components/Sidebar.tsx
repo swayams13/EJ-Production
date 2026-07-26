@@ -16,7 +16,7 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const SUP = ["Supervisor", "Operator"]; // shorthand for management-only items
+const SUP = ["Supervisor", "Operator", "CEO", "MD"]; // read-only roles excluded from write actions
 
 const NAV_GROUPS: NavGroup[] = [
   {

@@ -11,7 +11,7 @@ from backend.services.db_service import (
 )
 from backend.app.auth.rbac import require_roles
 from backend.services.notification_service import create_notification
-from backend.services.email_service import send_system_email
+from backend.services.email_service import send_system_email_async as send_system_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/projects", tags=["Completion"])

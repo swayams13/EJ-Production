@@ -79,41 +79,41 @@ def mark_all_read(db: Session = Depends(get_db), user=Depends(require_roles(MANA
 
 @router.post("/test-email")
 def test_email(user=Depends(require_roles(["GM", "Developer"]))):
-    """Diagnostic: send a test email via Resend and return the result immediately."""
+    """Diagnostic: send a test email via Brevo and return the result immediately."""
     import urllib.request, urllib.error, json as _json
-    api_key = email_service.RESEND_API_KEY
+    api_key = email_service.BREVO_API_KEY
     gm_email = os.getenv("GM_EMAIL", "")
 
     config = {
-        "RESEND_API_KEY_set": bool(api_key),
-        "SMTP_FROM": email_service.SMTP_FROM,
+        "BREVO_API_KEY_set": bool(api_key),
+        "from_email": email_service.SMTP_FROM_EMAIL,
         "GM_EMAIL": gm_email or "(not set)",
     }
 
     if not api_key:
-        return {"ok": False, "config": config, "error": "RESEND_API_KEY not set in Railway env vars"}
+        return {"ok": False, "config": config, "error": "BREVO_API_KEY not set in Railway env vars"}
     if not gm_email:
         return {"ok": False, "config": config, "error": "GM_EMAIL not set"}
 
     payload = _json.dumps({
-        "from": email_service.SMTP_FROM,
-        "to": [gm_email],
-        "subject": "[EJ Tracker] SMTP Test",
-        "text": "This is a test email from EJ Production Tracker to confirm Resend is working.",
+        "sender": {"name": email_service.SMTP_FROM_NAME, "email": email_service.SMTP_FROM_EMAIL},
+        "to": [{"email": gm_email}],
+        "subject": "[EJ Tracker] Email Test",
+        "textContent": "This is a test email from EJ Production Tracker to confirm Brevo email delivery is working.",
     }).encode()
     req = urllib.request.Request(
-        "https://api.resend.com/emails",
+        "https://api.brevo.com/v3/smtp/email",
         data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={"api-key": api_key, "Content-Type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return {"ok": True, "config": config, "sent_to": gm_email, "resend_status": resp.status}
+            return {"ok": True, "config": config, "sent_to": gm_email, "status": resp.status}
     except urllib.error.HTTPError as e:
         err = e.read().decode()
-        logger.error("Resend test failed: %s %s", e.code, err)
-        return {"ok": False, "config": config, "error": f"Resend {e.code}: {err}"}
+        logger.error("Brevo test failed: %s %s", e.code, err)
+        return {"ok": False, "config": config, "error": f"Brevo {e.code}: {err}"}
     except Exception as e:
-        logger.error("Resend test failed: %s", e)
+        logger.error("Brevo test failed: %s", e)
         return {"ok": False, "config": config, "error": str(e)}

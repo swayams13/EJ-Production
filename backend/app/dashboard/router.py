@@ -10,7 +10,7 @@ import io
 from backend.services.db_service import get_db, Project, ProjectProductionLine, MaterialHold, PurchaseOrder, PurchaseOrderLine, Part, PartProcess, WarehouseStock
 from backend.services.notification_service import create_notification
 from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel, aggregate_line_feet
-from backend.app.auth.rbac import require_roles, SUPERVISORS
+from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT, EXECUTIVES
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
@@ -141,38 +141,74 @@ def get_wip_lines(db: Session = Depends(get_db), current_user: dict = Depends(re
 
 
 @router.get("/executive")
-def get_executive_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
-    total_active = db.query(Project).filter(Project.status == "Active").count()
-    total_hold = db.query(Project).filter(Project.status == "Hold").count()
-    total_completed = db.query(Project).filter(Project.status == "Completed").count()
-    
-    active_projects = db.query(Project).filter(Project.status != "Completed").all()
-    avg_progress = 0
-    if active_projects:
-        from backend.services.mes_service import MESService
-        total_p = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects])
-        avg_progress = round(total_p / len(active_projects), 1)
-        
-    wip = get_wip_dashboard(db)
-    dept_loads = []
-    colors = ["orange", "emerald", "blue", "purple"]
-    for i, shop in enumerate(["Fabrication Shop", "Assembly Shop", "Bellows Shop", "Machining Shop"]):
-        data = wip.get(shop, {"required": 0, "completed": 0})
-        load = 0
-        if data["required"] > 0:
-            load = round(((data["required"] - data["completed"]) / data["required"]) * 100)
-        dept_loads.append({"name": shop, "load": load, "color": colors[i]})
-    
-    result = {
-        "kpis": [
-            {"label": "Active Projects", "value": str(total_active), "trend": "Ongoing jobs", "color": "blue"},
-            {"label": "Projects at Hold", "value": str(total_hold), "trend": "Pending clarification", "color": "rose"},
-            {"label": "Avg Progress", "value": f"{avg_progress}%", "trend": "Overall completion", "color": "emerald"},
-            {"label": "Completed", "value": str(total_completed), "trend": "All time", "color": "amber"}
-        ],
-        "departments": dept_loads
+def executive_dashboard(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(EXECUTIVES + ["Developer"])),
+):
+    from backend.services.db_service import ProjectCompletionRequest
+    from datetime import date as _date_today
+
+    today = _date_today.today()
+    projects = db.query(Project).all()
+
+    total_active = sum(1 for p in projects if p.status == "Active")
+    total_on_hold = sum(1 for p in projects if p.status == "Hold")
+    total_completed = sum(1 for p in projects if p.status == "Completed")
+    pipeline_value = sum((p.order_value or 0) for p in projects if p.status != "Completed")
+    on_time = sum(
+        1 for p in projects
+        if p.status == "Active" and p.committed_dispatch_date and p.committed_dispatch_date >= today
+    )
+    delayed = sum(
+        1 for p in projects
+        if p.status == "Active" and p.committed_dispatch_date and p.committed_dispatch_date < today
+    )
+
+    project_rows = []
+    for p in projects:
+        line_ids = [l.id for l in db.query(ProjectProductionLine.id).filter_by(project_id=p.id).all()]
+        part_ids = [pt.id for pt in db.query(Part.id).filter(Part.production_line_id.in_(line_ids)).all()] if line_ids else []
+        processes = db.query(PartProcess).filter(PartProcess.part_id.in_(part_ids)).all() if part_ids else []
+
+        if processes:
+            total_qty_sum = 0
+            completed_qty_sum = 0
+            for pp in processes:
+                part = db.query(Part).filter(Part.id == pp.part_id).first()
+                if part and part.total_qty:
+                    total_qty_sum += part.total_qty
+                    completed_qty_sum += min(pp.completed_qty, part.total_qty)
+            progress = round((completed_qty_sum / total_qty_sum * 100)) if total_qty_sum else 0
+        else:
+            progress = 100 if p.status == "Completed" else 0
+
+        pending_req = db.query(ProjectCompletionRequest).filter_by(project_id=p.id, status="pending").first()
+
+        project_rows.append({
+            "id": p.id,
+            "quotation_no": p.quotation_no,
+            "project_name": p.project_name,
+            "client_name": p.client_name,
+            "status": p.status,
+            "order_value": p.order_value,
+            "advance_received": p.advance_received,
+            "committed_dispatch_date": p.committed_dispatch_date.isoformat() if p.committed_dispatch_date else None,
+            "target_date": p.target_date.isoformat() if p.target_date else None,
+            "progress_pct": progress,
+            "completion_request_status": "pending" if pending_req else None,
+        })
+
+    return {
+        "kpis": {
+            "total_active": total_active,
+            "total_on_hold": total_on_hold,
+            "total_completed": total_completed,
+            "pipeline_value": pipeline_value,
+            "on_time": on_time,
+            "delayed": delayed,
+        },
+        "projects": project_rows,
     }
-    return {"success": True, "message": "Executive dashboard retrieved", "data": result}
 
 @router.get("/planning")
 def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):

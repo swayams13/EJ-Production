@@ -36,7 +36,7 @@ export default function NotificationBell() {
 
   const fetchNotifications = async () => {
     try {
-      const res = await apiFetch(`${API}/api/v1/notifications?limit=20`);
+      const res = await apiFetch(`${API}/api/v1/notifications/`);
       if (res.ok) {
         const data = await res.json();
         setNotifications(data);

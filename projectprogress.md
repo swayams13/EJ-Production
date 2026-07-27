@@ -52,7 +52,7 @@ Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. N
 
 ### What was done:
 
-Picked up backlog items #1 and #2 from Session 33/34's Briefing v2 list above. Both features were built via an 8-task implementation plan (`docs/superpowers/plans/2026-07-27-briefing-v2-material-risk-and-email-digest.md`) executed with subagent-driven development — an independent implementer + independent task reviewer per task. All 8 task reviews came back clean/approved (a few cosmetic/deferred notes only, logged in the plan's ledger — no code fixes needed).
+Picked up backlog items #1 and #2 from Session 33/34's Briefing v2 list above. Both features were built via an 8-task implementation plan (`docs/superpowers/plans/2026-07-27-briefing-v2-material-risk-and-email-digest.md`) executed with subagent-driven development — an independent implementer + independent task reviewer per task. All 7 code-producing task reviews (Tasks 1-7) came back clean/approved (a few cosmetic/deferred notes only, logged in the plan's ledger — no code fixes needed); Task 8 (documentation + push, no code) is reviewed separately after the fact.
 
 **Part 1 — Material risk digest:**
 - `_compute_material_rows` extracted as a reusable pure function out of `get_materials_dashboard` (`backend/app/dashboard/router.py`). The materials notification side effect (GM/PM notification-dedup queries) was deliberately kept in `get_materials_dashboard` itself and **not** pulled into the extracted function — so calling the pure computation from the briefing endpoint doesn't also fire notification checks on every briefing page load.

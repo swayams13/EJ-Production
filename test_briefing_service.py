@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from datetime import date, datetime, timedelta
-from backend.services.briefing_service import summarize_production, on_time_pct
+from backend.services.briefing_service import summarize_production, on_time_pct, build_leaderboard
 
 
 def _row(d, process_type, feet, entries):
@@ -55,10 +55,26 @@ def test_on_time_pct_no_active_projects_returns_100():
     assert on_time_pct([], date(2026, 7, 27)) == 100
 
 
+def test_build_leaderboard_sorts_by_week_desc():
+    users = {1: SimpleNamespace(full_name="Alice", role="Supervisor"), 2: SimpleNamespace(full_name="Bob", role="Supervisor")}
+    result = build_leaderboard({1: 2}, {1: 10, 2: 15}, users)
+    assert result[0]["full_name"] == "Bob"
+    assert result[0]["entries_7d"] == 15
+    assert result[1]["entries_yesterday"] == 2
+
+
+def test_build_leaderboard_unknown_user_falls_back_to_id():
+    result = build_leaderboard({}, {99: 5}, {})
+    assert result[0]["full_name"] == "User #99"
+    assert result[0]["role"] == "—"
+
+
 if __name__ == "__main__":
     test_summarize_production_buckets_yesterday_and_week()
     test_summarize_production_ignores_unknown_process_type()
     test_on_time_pct_all_on_time()
     test_on_time_pct_mixed()
     test_on_time_pct_no_active_projects_returns_100()
+    test_build_leaderboard_sorts_by_week_desc()
+    test_build_leaderboard_unknown_user_falls_back_to_id()
     print("OK")

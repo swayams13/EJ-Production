@@ -61,3 +61,25 @@ def on_time_pct(projects, today):
         return 100
     on_time = sum(1 for p in active_with_date if p.committed_dispatch_date >= today)
     return round(on_time / len(active_with_date) * 100)
+
+
+def build_leaderboard(yesterday_counts, week_counts, users_by_id):
+    """
+    yesterday_counts, week_counts: dict[int user_id, int count].
+    users_by_id: dict[int user_id, object with .full_name and .role].
+    Returns list sorted by entries_7d descending:
+      {user_id, full_name, role, entries_yesterday, entries_7d}
+    """
+    all_ids = set(yesterday_counts) | set(week_counts)
+    rows = []
+    for uid in all_ids:
+        u = users_by_id.get(uid)
+        rows.append({
+            "user_id": uid,
+            "full_name": (u.full_name if u and u.full_name else f"User #{uid}"),
+            "role": u.role if u else "—",
+            "entries_yesterday": yesterday_counts.get(uid, 0),
+            "entries_7d": week_counts.get(uid, 0),
+        })
+    rows.sort(key=lambda r: r["entries_7d"], reverse=True)
+    return rows

@@ -16,14 +16,15 @@ interface NavGroup {
 }
 
 const SUP = ["Supervisor", "Operator", "CEO", "MD"]; // read-only roles excluded from write actions
+const SHOP_FLOOR = ["Supervisor", "Operator"]; // excluded from dashboards meant for executives/management
 
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Dashboards",
     items: [
       { name: "Progress", href: "/dashboard" },
-      { name: "Executive", href: "/dashboard/executive", hideForRoles: SUP },
-      { name: "Planning", href: "/dashboard/planning", hideForRoles: SUP },
+      { name: "Executive", href: "/dashboard/executive", hideForRoles: SHOP_FLOOR },
+      { name: "Planning", href: "/dashboard/planning", hideForRoles: SHOP_FLOOR },
       { name: "WIP Tracking", href: "/dashboard/wip" },
       { name: "Materials", href: "/dashboard/materials" },
     ],

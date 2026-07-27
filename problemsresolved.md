@@ -5,6 +5,20 @@ Update this alongside `projectprogress.md` whenever a non-trivial problem is sol
 
 ---
 
+## 2026-07-27 — Executive briefing chart stagger + Sidebar hiding dashboard from CEO/MD (Session 34)
+
+**Symptom 1 — chart "staggering":** `HorizontalBarChart` (`next-frontend/src/components/charts/BarChart.tsx`) and `ProgressBar` (`next-frontend/src/components/ui/ProgressBar.tsx`) both had `transition-all duration-700` on the bar-fill `div`. Bars render at their final width on mount (no draw-in was ever requested), so the transition only fired on re-renders — most visibly React Strict Mode's dev-mode double-invoke of the data-fetching `useEffect`, which re-commits state and re-triggers the transition on ~10 bars at once. Since each bar's paint cost differs slightly, they don't finish repainting in the same frame, reading as a cascading/staggered draw-in. **Fix:** removed `transition-all duration-700` from both components — no animation was ever requested. `npm run build` passes.
+
+**Symptom 2 — CEO/MD saw "sign in failed" locally:** unrelated to credentials — `next-frontend/.env.local` had `NEXT_PUBLIC_API_URL=http://localhost:4500`, but the backend runs on port 8003 (nothing was listening on 4500), so every local login attempt failed to reach the backend at all, for every role, not just CEO/MD. Fixed the URL; `.env.local` is gitignored so no code change needed.
+
+**Symptom 3 — CEO/MD logged in fine (confirmed via backend + corrected `.env.local`) but saw no Executive dashboard link at all:** `next-frontend/src/components/Sidebar.tsx` had a `SUP = ["Supervisor", "Operator", "CEO", "MD"]` list meant to hide *write-action* nav items (Add/Edit Project, User Management, Master Data, Procurement Settings) from read-only roles — correct for those. But the same `SUP` array was reused as `hideForRoles` on the **Executive** and **Planning** dashboard links too, so CEO/MD lost visibility into the one dashboard built for them, even though the backend already returned 200 for their role. **Fix:** split out a separate `SHOP_FLOOR = ["Supervisor", "Operator"]` list for the two dashboard nav items, leaving `SUP` (with CEO/MD) on the genuinely write-only items where it belongs.
+
+**Verified:** started backend (port 8003) + frontend (port 3000) locally, added temporary `CEO_USER=VD`/`MD_USER=RD` to local `.env` (gitignored), logged in via API as both — JWT `role` claim correctly resolved to `CEO`/`MD` — and confirmed `GET /api/v1/dashboard/executive-briefing` returns HTTP 200 for both. User confirmed in-browser after the `.env.local` and `Sidebar.tsx` fixes that login, the Executive link, and the dashboard all work correctly with no more chart stagger.
+
+**Also confirms (not a code bug):** the earlier Railway "CEO/MD can't log in" report is purely a missing-env-var problem on Railway (`CEO_USER`/`CEO_PASS`/`MD_USER`/`MD_PASS` still not set there — pending since Session 30) — the backend role-resolution logic is username-agnostic and works correctly with `VD`/`RD` as literal values once those vars exist.
+
+---
+
 ## 2026-07-27 — Executive briefing PM/GM attribution fixed (follow-up to the entry below)
 
 **Fix applied same day**, in a scoped follow-up (chose option 2 from below — narrower fix, no auth-model change):

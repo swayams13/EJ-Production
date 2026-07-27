@@ -17,7 +17,7 @@ export function HorizontalBarChart({
           <span className="w-36 shrink-0 truncate text-sm text-ink-soft">{b.label}</span>
           <div className="h-3 flex-1 rounded-full bg-line">
             <div
-              className="h-3 rounded-full transition-all duration-700"
+              className="h-3 rounded-full"
               style={{
                 width: `${Math.max(0, Math.min(100, (b.value / max) * 100))}%`,
                 backgroundColor: b.color ?? "#3e7c77",

@@ -1,5 +1,28 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-27 (Session 34 — Briefing Chart Stagger + CEO/MD Sidebar Visibility)
+
+### What was done:
+
+Picked up the open items from Session 33's pending list (browser walkthrough, CEO/MD login) plus two bugs the user reported live during the session. Full detail in `problemsresolved.md`.
+
+1. **Chart stagger fix** — `transition-all duration-700` removed from `BarChart.tsx`'s `HorizontalBarChart` and `ui/ProgressBar.tsx`. It had no purpose on mount (bars render at final width immediately) and only caused a visible cascading redraw on re-render.
+2. **Local CEO/MD login "sign in failed"** — root cause was `next-frontend/.env.local` pointing `NEXT_PUBLIC_API_URL` at port 4500 while the backend runs on 8003 (unrelated to credentials, affected every role locally). Fixed the URL.
+3. **CEO/MD login worked but no Executive dashboard link visible** — `Sidebar.tsx` was reusing the `SUP` (Supervisor/Operator/CEO/MD) write-action-hiding list to also hide the Executive and Planning dashboard nav items, which CEO/MD should see. Split out a `SHOP_FLOOR` (Supervisor/Operator only) list for those two items.
+
+**Verified:** ran backend (8003) + frontend (3000) locally, added temporary `CEO_USER=VD`/`MD_USER=RD` to local `.env` (gitignored, not committed), confirmed via curl that both resolve the correct JWT role and get HTTP 200 from `/api/v1/dashboard/executive-briefing`. User then confirmed live in-browser that login, the Executive link, and the dashboard (no more chart stagger) all work correctly. `npm run build` passes.
+
+**Also confirmed (not a code issue):** the original Railway "CEO/MD can't log in" report is a missing-env-var gap on Railway (`CEO_USER`/`CEO_PASS`/`MD_USER`/`MD_PASS` — pending since Session 30, never set). Backend role resolution is username-agnostic; `VD`/`RD` will work on Railway the moment those 4 env vars are set there.
+
+### What's still pending:
+- **Set `CEO_USER=VD`, `CEO_PASS=<pw>`, `MD_USER=RD`, `MD_PASS=<pw>` on Railway backend env vars** — this is the only remaining blocker for CEO/MD access in production. No code change needed once set.
+- Session 33's backlog (Briefing v2 ideas, below) is still untouched — material risk digest / daily email digest recommended as the next starting point.
+
+### Commit this session:
+- `fix: unstagger briefing charts and restore CEO/MD executive dashboard nav visibility`
+
+---
+
 ## Backlog: Executive Morning Briefing v2 ideas (not started — pick up here next session)
 
 Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. Nothing below is built yet — this is a scoped list to start the next brainstorming session from, not a commitment.

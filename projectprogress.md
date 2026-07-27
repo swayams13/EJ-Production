@@ -1,5 +1,30 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Backlog: Executive Morning Briefing v2 ideas (not started — pick up here next session)
+
+Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. Nothing below is built yet — this is a scoped list to start the next brainstorming session from, not a commitment.
+
+**High value, low effort (data already exists in the schema, just not surfaced):**
+1. **Material risk digest** — `/dashboard/materials` already computes stock-vs-demand RAG status. Add a "N projects blocked on material" tile to the Briefing tab so delays are explained without digging into the Materials page separately.
+2. **Daily email digest** — email infra (Brevo) and the briefing data both already exist; add a scheduled job that emails CEO/MD this same briefing every morning (e.g. 8am) instead of requiring them to open the page.
+3. **Attendance snapshot** — `AttendanceLog` exists; a "42/50 workers present today" tile is one query away and explains capacity dips.
+4. **Overtime signal** — `WorkOrder.is_overtime` / `DailyTaskAssignment.is_overtime` exist; "12 overtime hours logged yesterday" is a cost/fatigue flag.
+
+**Medium value, needs a bit more design:**
+5. **Vendor delay ranking** — `_vendor_avg_days_late` is already computed in `backend/services/procurement_service.py`; surface "these vendors are your recurring bottleneck" as a small table.
+6. **"Days late" instead of on-time/delayed boolean** — `target_date`/`committed_dispatch_date`/`forecast_date` already exist; a signed day-count is more actionable than a badge.
+7. **Month-over-month trend** — extend the existing 14-day `WeldingLog` chart with a wider comparison window.
+8. **Auto-flagged outliers** — e.g. "3 workers under 40% efficiency this week" surfaced at the top instead of buried in the sorted bar chart.
+
+**Lower priority / bigger lift:**
+9. Drill-down from an activity-feed line or project row into its full history (explicitly deferred in the original 2026-07-27 spec too).
+10. Payment collection tracking (`advance_received` vs `order_value`, overdue amounts).
+11. Weekly PDF/Excel export of the whole briefing.
+
+**Recommendation for next session:** start with #1 (material risk digest) and #2 (daily email digest) — both reuse infrastructure that's already working end-to-end, and together they turn the briefing from "a page you have to remember to check" into something that actually reaches the CEO/MD unprompted.
+
+---
+
 ## Date: 2026-07-27 (Session 33 — Executive Briefing PM/GM Attribution Fix)
 
 ### What was done:

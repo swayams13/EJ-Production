@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { Button, Card, MetricCard, Modal, Spinner, Table, THead, TBody, Tr, Th, Td } from "@/components/ui";
 import { useToast } from "@/components/ui/useToast";
+import NotificationBell from "@/components/NotificationBell";
 
 interface OvertimeData {
   total_ot_tig: number;
@@ -132,6 +133,10 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-8">
       {toasts}
+      <div className="flex items-center justify-between">
+        <h1 className="font-display text-2xl font-bold text-ink uppercase tracking-wide">Dashboard</h1>
+        <NotificationBell />
+      </div>
       {(userRole === "GM" || userRole === "Developer") && pendingRequests.length > 0 && (
         <div className="mb-8">
           <h2 className="font-display text-lg font-bold text-ink mb-3 uppercase tracking-wide">Pending Completions</h2>

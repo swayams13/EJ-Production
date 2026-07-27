@@ -1,10 +1,24 @@
 from types import SimpleNamespace
 from datetime import date, datetime, timedelta
-from backend.services.briefing_service import summarize_production, on_time_pct, build_leaderboard, resolve_and_rank_activity, resolve_role
+from backend.services.briefing_service import (
+    summarize_production, on_time_pct, build_leaderboard, resolve_and_rank_activity,
+    resolve_role, summarize_material_risk,
+)
 
 
 def _row(d, process_type, feet, entries):
     return SimpleNamespace(date=d, process_type=process_type, feet=feet, entries=entries)
+
+
+def _material_row(status, net_gap, material_name="Pipe", size=6, joint_type="Butt", projects=None):
+    return SimpleNamespace(
+        status=status, net_gap=net_gap, material_name=material_name, size=size,
+        joint_type=joint_type, projects=projects or [],
+    )
+
+
+def _project(id, name):
+    return SimpleNamespace(id=id, name=name)
 
 
 def test_summarize_production_buckets_yesterday_and_week():
@@ -105,6 +119,28 @@ def test_resolve_role_no_match_returns_none():
     assert resolve_role(None, None, env_values) is None
 
 
+def test_summarize_material_risk_counts_distinct_blocked_projects():
+    rows = [
+        _material_row("red", 10, projects=[_project(1, "P1"), _project(2, "P2")]),
+        _material_row("red", 5, projects=[_project(2, "P2")]),  # P2 in both rows — counted once
+        _material_row("green", 0, projects=[_project(3, "P3")]),
+    ]
+    result = summarize_material_risk(rows)
+    assert result["projects_blocked"] == 2
+
+
+def test_summarize_material_risk_sorts_top_n_by_net_gap_desc():
+    rows = [_material_row("red", g, material_name=f"M{g}") for g in [3, 9, 1, 7, 5, 2]]
+    result = summarize_material_risk(rows, top_n=3)
+    assert [r["material_name"] for r in result["top_risks"]] == ["M9", "M7", "M5"]
+
+
+def test_summarize_material_risk_ignores_amber_and_green():
+    rows = [_material_row("green", 0), _material_row("amber", 0)]
+    result = summarize_material_risk(rows)
+    assert result == {"projects_blocked": 0, "top_risks": []}
+
+
 if __name__ == "__main__":
     test_summarize_production_buckets_yesterday_and_week()
     test_summarize_production_ignores_unknown_process_type()
@@ -118,4 +154,7 @@ if __name__ == "__main__":
     test_resolve_role_prefers_known_role()
     test_resolve_role_falls_back_to_env_var_match()
     test_resolve_role_no_match_returns_none()
+    test_summarize_material_risk_counts_distinct_blocked_projects()
+    test_summarize_material_risk_sorts_top_n_by_net_gap_desc()
+    test_summarize_material_risk_ignores_amber_and_green()
     print("OK")

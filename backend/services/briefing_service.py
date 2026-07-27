@@ -152,3 +152,32 @@ def resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=
     for r in top:
         r["timestamp"] = r["timestamp"].isoformat()
     return top
+
+
+def summarize_material_risk(rows, top_n=5):
+    """
+    rows: iterable of objects with .status ("red"|"amber"|"green"), .net_gap (int),
+      .material_name, .size, .joint_type, and .projects (iterable of objects with
+      .id and .name) — the MaterialRow list from
+      backend.app.dashboard.router._compute_material_rows.
+    "Blocked" = touching at least one red-status spec (net_gap > 0, a hard
+    shortfall). Amber (stock below minimum but no hard gap yet) doesn't count.
+    Returns {"projects_blocked": int, "top_risks": [...]} — the top_n red
+    specs sorted by net_gap descending.
+    """
+    red_rows = [r for r in rows if r.status == "red"]
+    blocked_project_ids = {p.id for r in red_rows for p in r.projects}
+    top = sorted(red_rows, key=lambda r: r.net_gap, reverse=True)[:top_n]
+    return {
+        "projects_blocked": len(blocked_project_ids),
+        "top_risks": [
+            {
+                "material_name": r.material_name,
+                "size": r.size,
+                "joint_type": r.joint_type,
+                "net_gap": r.net_gap,
+                "projects": [p.name for p in r.projects],
+            }
+            for r in top
+        ],
+    }

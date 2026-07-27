@@ -120,6 +120,7 @@ def list_pos(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVISORS)
 
 @router.post("/po", response_model=POResponse)
 def create_po(body: POCreate, db: Session = Depends(get_db), user=Depends(require_roles(MANAGEMENT))):
+    u = db.query(User).filter_by(username=user["username"]).first()
     po = PurchaseOrder(
         po_number=body.po_number,
         vendor_id=body.vendor_id,
@@ -128,6 +129,8 @@ def create_po(body: POCreate, db: Session = Depends(get_db), user=Depends(requir
         total_value=body.total_value,
         notes=body.notes,
         status="draft",
+        raised_by=u.id if u else None,
+        raised_by_username=user["username"],
     )
     db.add(po)
     db.flush()  # get po.id before adding lines
@@ -277,6 +280,7 @@ def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), 
         purchase_order_id=po_id,
         receipt_date=body.receipt_date or _date.today(),
         received_by=u.id if u else None,
+        received_by_username=user["username"],
         notes=body.notes,
     )
     db.add(receipt)

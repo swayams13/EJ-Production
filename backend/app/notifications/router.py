@@ -1,9 +1,13 @@
 import os
+import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.services.db_service import get_db, Notification
 from backend.app.auth.rbac import require_roles, MANAGEMENT
+from backend.services import email_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 
@@ -71,3 +75,45 @@ def mark_read(notif_id: int, db: Session = Depends(get_db), user=Depends(require
 def mark_all_read(db: Session = Depends(get_db), user=Depends(require_roles(MANAGEMENT))):
     db.query(Notification).filter_by(for_role=user["role"], is_read=False).update({"is_read": True})
     db.commit()
+
+
+@router.post("/test-email")
+def test_email(user=Depends(require_roles(["GM", "Developer"]))):
+    """Diagnostic: send a test email via Brevo and return the result immediately."""
+    import urllib.request, urllib.error, json as _json
+    api_key = email_service.BREVO_API_KEY
+    gm_email = os.getenv("GM_EMAIL", "")
+
+    config = {
+        "BREVO_API_KEY_set": bool(api_key),
+        "from_email": email_service.SMTP_FROM_EMAIL,
+        "GM_EMAIL": gm_email or "(not set)",
+    }
+
+    if not api_key:
+        return {"ok": False, "config": config, "error": "BREVO_API_KEY not set in Railway env vars"}
+    if not gm_email:
+        return {"ok": False, "config": config, "error": "GM_EMAIL not set"}
+
+    payload = _json.dumps({
+        "sender": {"name": email_service.SMTP_FROM_NAME, "email": email_service.SMTP_FROM_EMAIL},
+        "to": [{"email": gm_email}],
+        "subject": "[EJ Tracker] Email Test",
+        "textContent": "This is a test email from EJ Production Tracker to confirm Brevo email delivery is working.",
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={"api-key": api_key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return {"ok": True, "config": config, "sent_to": gm_email, "status": resp.status}
+    except urllib.error.HTTPError as e:
+        err = e.read().decode()
+        logger.error("Brevo test failed: %s %s", e.code, err)
+        return {"ok": False, "config": config, "error": f"Brevo {e.code}: {err}"}
+    except Exception as e:
+        logger.error("Brevo test failed: %s", e)
+        return {"ok": False, "config": config, "error": str(e)}

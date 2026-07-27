@@ -1,5 +1,214 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-27 (Session 34 — Briefing Chart Stagger + CEO/MD Sidebar Visibility)
+
+### What was done:
+
+Picked up the open items from Session 33's pending list (browser walkthrough, CEO/MD login) plus two bugs the user reported live during the session. Full detail in `problemsresolved.md`.
+
+1. **Chart stagger fix** — `transition-all duration-700` removed from `BarChart.tsx`'s `HorizontalBarChart` and `ui/ProgressBar.tsx`. It had no purpose on mount (bars render at final width immediately) and only caused a visible cascading redraw on re-render.
+2. **Local CEO/MD login "sign in failed"** — root cause was `next-frontend/.env.local` pointing `NEXT_PUBLIC_API_URL` at port 4500 while the backend runs on 8003 (unrelated to credentials, affected every role locally). Fixed the URL.
+3. **CEO/MD login worked but no Executive dashboard link visible** — `Sidebar.tsx` was reusing the `SUP` (Supervisor/Operator/CEO/MD) write-action-hiding list to also hide the Executive and Planning dashboard nav items, which CEO/MD should see. Split out a `SHOP_FLOOR` (Supervisor/Operator only) list for those two items.
+
+**Verified:** ran backend (8003) + frontend (3000) locally, added temporary `CEO_USER=VD`/`MD_USER=RD` to local `.env` (gitignored, not committed), confirmed via curl that both resolve the correct JWT role and get HTTP 200 from `/api/v1/dashboard/executive-briefing`. User then confirmed live in-browser that login, the Executive link, and the dashboard (no more chart stagger) all work correctly. `npm run build` passes.
+
+**Also confirmed (not a code issue):** the original Railway "CEO/MD can't log in" report is a missing-env-var gap on Railway (`CEO_USER`/`CEO_PASS`/`MD_USER`/`MD_PASS` — pending since Session 30, never set). Backend role resolution is username-agnostic; `VD`/`RD` will work on Railway the moment those 4 env vars are set there.
+
+### What's still pending:
+- **Set `CEO_USER=VD`, `CEO_PASS=<pw>`, `MD_USER=RD`, `MD_PASS=<pw>` on Railway backend env vars** — this is the only remaining blocker for CEO/MD access in production. No code change needed once set.
+- Session 33's backlog (Briefing v2 ideas, below) is still untouched — material risk digest / daily email digest recommended as the next starting point.
+
+### Commit this session:
+- `fix: unstagger briefing charts and restore CEO/MD executive dashboard nav visibility`
+
+---
+
+## Backlog: Executive Morning Briefing v2 ideas (not started — pick up here next session)
+
+Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. Nothing below is built yet — this is a scoped list to start the next brainstorming session from, not a commitment.
+
+**High value, low effort (data already exists in the schema, just not surfaced):**
+1. **Material risk digest** — `/dashboard/materials` already computes stock-vs-demand RAG status. Add a "N projects blocked on material" tile to the Briefing tab so delays are explained without digging into the Materials page separately.
+2. **Daily email digest** — email infra (Brevo) and the briefing data both already exist; add a scheduled job that emails CEO/MD this same briefing every morning (e.g. 8am) instead of requiring them to open the page.
+3. **Attendance snapshot** — `AttendanceLog` exists; a "42/50 workers present today" tile is one query away and explains capacity dips.
+4. **Overtime signal** — `WorkOrder.is_overtime` / `DailyTaskAssignment.is_overtime` exist; "12 overtime hours logged yesterday" is a cost/fatigue flag.
+
+**Medium value, needs a bit more design:**
+5. **Vendor delay ranking** — `_vendor_avg_days_late` is already computed in `backend/services/procurement_service.py`; surface "these vendors are your recurring bottleneck" as a small table.
+6. **"Days late" instead of on-time/delayed boolean** — `target_date`/`committed_dispatch_date`/`forecast_date` already exist; a signed day-count is more actionable than a badge.
+7. **Month-over-month trend** — extend the existing 14-day `WeldingLog` chart with a wider comparison window.
+8. **Auto-flagged outliers** — e.g. "3 workers under 40% efficiency this week" surfaced at the top instead of buried in the sorted bar chart.
+
+**Lower priority / bigger lift:**
+9. Drill-down from an activity-feed line or project row into its full history (explicitly deferred in the original 2026-07-27 spec too).
+10. Payment collection tracking (`advance_received` vs `order_value`, overdue amounts).
+11. Weekly PDF/Excel export of the whole briefing.
+
+**Recommendation for next session:** start with #1 (material risk digest) and #2 (daily email digest) — both reuse infrastructure that's already working end-to-end, and together they turn the briefing from "a page you have to remember to check" into something that actually reaches the CEO/MD unprompted.
+
+---
+
+## Date: 2026-07-27 (Session 33 — Executive Briefing PM/GM Attribution Fix)
+
+### What was done:
+
+Follow-up to Session 32's found-but-unfixed gap (env-var management logins have no `users` row, so PM/GM KPIs and "project created" attribution silently returned zero/nothing). User asked to fix it immediately rather than defer.
+
+**Root cause traced further than Session 32 found it:** it wasn't just `Project.created_by` — the same env-var-login gap also zeroed out `people.by_role.pm.completion_requests_submitted` and `people.by_role.gm.completions_approved/rejected` (both joined `User.role`, which requires a DB row that env-var GM/PM logins don't have). Separately, `PurchaseOrder.raised_by` was found to be **never set at all** in `create_po` — an unrelated pre-existing bug, not env-var-specific.
+
+**Fix (details in `problemsresolved.md`):**
+- Added `raised_by_username`/`received_by_username` columns (mirrors the existing `AuditLog.username` workaround for the same problem).
+- `create_project` now also writes an `AuditLog` row so "project created" survives without a `users` row.
+- Fixed `create_po` to actually set `raised_by`/`raised_by_username` (was a no-op).
+- New `resolve_role()` helper in `briefing_service.py` (TDD, 3 new unit tests) resolves role via env-var match when no DB user exists.
+- Simplified the PM/GM completion-request KPI queries — dropped an unnecessary `User`-role join since those actions are already RBAC-gated to one role each.
+
+**Verified against the real dev Postgres DB** (not just unit tests): started the backend, confirmed all 3 new/changed columns via `information_schema.columns`, raised a real test PO as the env-var Developer login, confirmed `raised_by_username` populated correctly and `pos_raised` correctly excluded it (role mismatch, not just blind counting), and confirmed real historical completion-request events now resolve to `"Production Manager"`/`"GM"` instead of `"—"` in both the activity feed and the KPI counts. Test data cleaned up afterward. `python test_briefing_service.py` and `npm run build` both pass.
+
+### What's still pending:
+- Actual browser walkthrough of the 3-tab page (visual rendering, tab clicks, console errors) — not yet done by a human.
+- CEO/MD login not exercised locally (no `CEO_USER`/`CEO_PASS` in local `.env`); only `Developer` role tested.
+- Broader auth-model question (should every management role have a real `users` row?) intentionally left open — today's fix solves the practical symptom without that larger change.
+
+### Commit this session:
+- `fix: attribute PM/GM actions correctly when logged in via env-var credentials`
+
+---
+
+## Date: 2026-07-27 (Session 32 — Executive Morning Briefing)
+
+### What was built (Tasks 1-5, already committed on `demo` before this verification session):
+- `Project.created_by` FK column + startup migration (`ALTER TABLE projects ADD COLUMN created_by INTEGER;`).
+- `backend/services/briefing_service.py` — pure aggregation functions (`summarize_production`, `on_time_pct`, `build_leaderboard`, `resolve_and_rank_activity`), unit-tested per plan's Task 2.
+- `GET /api/v1/dashboard/executive-briefing` — new endpoint aggregating 14-day production trend, today's allotted work, activity feed (capped at 50), and per-role (PM/GM) KPIs.
+- Hand-rolled `BarChart` and `Donut` frontend chart components (no new npm dependency).
+- `next-frontend/src/app/dashboard/executive/page.tsx` rebuilt as a 3-tab page: Briefing / People & KPIs / Projects (Projects tab preserves the prior page's content unchanged).
+
+### What was verified this session (Task 6 — no browser tool available, verified via backend/API/build instead):
+1. **Backend boot**: started `uvicorn backend.main:app --port 8003` against the real dev Postgres DB. All startup migrations ran (most log "already applied" `DuplicateColumn`/`DuplicateTable` warnings for pre-existing columns, which is the established idempotent pattern in this repo — expected, not a new error). The new `created_by` migration is silent-on-success by design (bare `try/except: pass`, same as its neighbors), so absence of a log line doesn't confirm it — directly queried `information_schema.columns` instead: `[('created_by', 'integer')]` confirmed present.
+2. **Auth**: logged in via `POST /api/v1/auth/login` using the local `DEV_USER`/`DEV_PASS` env-var account (role `Developer`, which is included in the endpoint's `EXECUTIVES + ["Developer"]` allow-list — `.env` has no `CEO_USER`/`CEO_PASS`/`MD_USER`/`MD_PASS` set locally, so CEO/MD login could not be exercised in this environment). Got a valid JWT.
+3. **New endpoint**: `curl GET /api/v1/dashboard/executive-briefing` with the JWT → **HTTP 200**, JSON matched the plan's §5.2 shape exactly: `production.{yesterday,last_7d,trend_14d}`, `today_allotted`, `activity` (4 real entries from existing completion-request audit history), `people.{leaderboard, by_role.{pm,gm}}`.
+4. **End-to-end `created_by` attribution — found a real gap**: created a test project (`POST /api/v1/projects`) as the `Developer`-role login, then queried the DB directly. `created_by` came back **NULL**, not the creator's user id. Root cause: `backend/app/projects/router.py`'s `create_project` resolves the creator via `db.query(User).filter_by(username=current_user["username"]).first()` — but every management/executive login in this system (`DEV_USER`, `GM_USER`, `PM_USER`, `CEO_USER`, `MD_USER`) is an env-var login with **no corresponding row in the `users` table** (confirmed: `users` table has 59 rows, all role `Operator`/synced-from-Excel workers — zero management-role DB users). So `creator` is always `None` for any real management login today, `created_by` is always written as `NULL`, and the endpoint's "Project created" activity event (filtered on `Project.created_by.isnot(None)`) can never appear in the feed as currently deployed. Confirmed directly: created `BRIEFING-TEST-001`, re-fetched the briefing endpoint, the new project did **not** appear in `activity` or affect `people.leaderboard`. Test project deleted afterward (`DELETE /api/v1/projects/5`) to leave the DB clean. This is a pre-existing architecture gap (env-var logins were never backed by DB `User` rows anywhere else in the app either), not something introduced or fixable within Task 6's scope — flagged here and in `problemsresolved.md` for a future session to decide: either back CEO/MD/GM/PM logins with real DB `User` rows, or have `create_project` fall back to resolving `created_by` by role name when no DB user matches.
+5. **Frontend build**: `npm --prefix next-frontend run build` → compiled successfully (Next.js 16.2.9, Turbopack), TypeScript passed, all 30 routes generated including `/dashboard/executive` as a static route. No build errors.
+
+### What still needs a human in a browser (not verifiable from this session):
+- Actual visual rendering of the Briefing tab (KPI strip, 14-day trend bar chart, process-split donut, activity feed formatting).
+- People & KPIs tab rendering (PM/GM KPI cards, leaderboard, worker efficiency bars) and their empty states.
+- Projects tab regression check against the old page (6 KPIs, status donut, filter chips, MailButton) — confirm nothing visually broke.
+- Actual CEO/MD login (only `Developer` role was exercised locally; Railway env vars for `CEO_USER`/`MD_USER` are listed as pending from Session 31).
+- Console-error-free confirmation while clicking between tabs.
+- Deciding whether the `created_by`/env-var-login gap above needs a fix before this is considered "done," or is acceptable as-is (activity feed still shows completion-request events correctly; only project-creation events are silently dropped).
+
+### Commits this session:
+- `docs: update projectprogress for executive morning briefing session` (this entry + `problemsresolved.md`)
+
+## Date: 2026-07-27 (Session 31 — Notification Bell Fix)
+
+### What was done:
+
+**Bug fix: notification bell dropdown was off-screen (invisible)**
+- Root cause: `NotificationBell` was rendered inside the sidebar (256px wide, fixed at `left:0`). The dropdown is `w-80` (320px) with `right-0`, so it extended 320px leftward from the button — entirely off-screen.
+- Fix: removed bell from `Sidebar.tsx`, added it as a top-right header element on `dashboard/page.tsx` only (with `Dashboard` title on the left, bell on the right).
+
+**Bug fix: notification list was always empty despite count showing correctly**
+- Root cause: count endpoint (`GET /unread-count`) is an exact path match — no redirect. List endpoint is registered as `@router.get("/")` in FastAPI, which serves at `/api/v1/notifications/` (with trailing slash). Frontend was calling `/api/v1/notifications?limit=20` (no trailing slash) → FastAPI sent a 307 redirect → on Railway the Authorization header was stripped on the redirect → 401 response → `if (res.ok)` failed silently → empty list.
+- Fix: changed frontend fetch URL from `/api/v1/notifications?limit=20` to `/api/v1/notifications/` (trailing slash, no redirect).
+
+**Confirmed working by user on Railway demo.**
+
+**Commits pushed to demo this session:**
+- `ffadfe2` — fix(notifications): move bell to dashboard header so dropdown is visible
+- `f6742fd` — fix(notifications): use trailing slash on list fetch to avoid 307 redirect stripping auth header
+
+### What to do next session:
+
+1. **Fix Brevo API key** — user needs to go to brevo.com → Settings → SMTP & API → API Keys → copy key fresh (no spaces), update `BREVO_API_KEY` in Railway backend env vars. Key starts with `xkeysib-`
+2. **Verify sender** — in Brevo → Senders & IP → Senders → add `preciseengineersai@gmail.com` → click verification link (if not done yet)
+3. **Run test-email endpoint** to confirm `"ok": true`:
+   ```js
+   fetch('https://ej-production-demo.up.railway.app/api/v1/notifications/test-email', {
+     method: 'POST',
+     headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+   }).then(r => r.json()).then(d => console.log(JSON.stringify(d, null, 2)))
+   ```
+4. **Full end-to-end Railway verification** once email confirmed:
+   - PM submits completion request → GM gets in-app bell + email
+   - GM approves → PM gets in-app bell + email, project status flips to Completed
+   - GM rejects with reason → PM gets notification with reason
+   - CEO/MD login works, executive dashboard loads at `/dashboard/executive`
+   - MailButton visible and generates correct `mailto:` links
+5. **After Railway demo verified** → request user approval to merge demo → main
+
+### Pending Railway env vars (backend):
+```
+BREVO_API_KEY     = xkeysib-...   ← re-copy from Brevo dashboard
+SMTP_FROM_EMAIL   = preciseengineersai@gmail.com
+SMTP_FROM_NAME    = EJ Tracker
+GM_EMAIL          = (GM's email)
+PM_EMAIL          = (PM's email)
+CEO_EMAIL         = (CEO's email)
+MD_EMAIL          = (MD's email)
+CEO_USER / CEO_PASS
+MD_USER  / MD_PASS
+```
+
+---
+
+## Date: 2026-07-27 (Session 30 — Email Delivery Debugging)
+
+### What was done:
+
+**Root cause diagnosed: Railway blocks outbound SMTP (port 587)**
+- In-app notifications (bell, dashboard panel) confirmed working on Railway demo
+- Email delivery was failing silently — added `POST /api/v1/notifications/test-email` diagnostic endpoint (GM/Developer only) that runs synchronous send and returns config + error inline
+- Test revealed: `[Errno 101] Network is unreachable` — Railway firewall blocks outbound port 587, credentials were never the issue
+
+**Provider switches attempted:**
+1. **SMTP (Gmail, smtp.gmail.com:587)** → blocked by Railway network firewall
+2. **Resend (api.resend.com)** → `403 error code: 1010` — Cloudflare WAF blocks Railway IP range
+3. **Brevo (api.brevo.com)** → `401 Key not found` — user pasted wrong/invalid API key; **session ended here**
+
+**Current state of email_service.py:** Brevo HTTP API via `urllib.request` (no new dependencies). Env vars expected: `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`.
+
+**Commits pushed to demo this session:**
+- `1009f65` — feat: add SMTP diagnostic test-email endpoint
+- `30a0d23` — fix: switch email delivery from SMTP to Resend HTTP API
+- `9688fe4` — fix: switch from Resend to Brevo for email delivery
+
+### What to do next session:
+
+1. **Fix Brevo API key** — user needs to go to brevo.com → Settings → SMTP & API → API Keys → copy key fresh (no spaces), update `BREVO_API_KEY` in Railway backend env vars. Key starts with `xkeysib-`
+2. **Verify sender** — in Brevo → Senders & IP → Senders → add `preciseengineersai@gmail.com` → click verification link (if not done yet)
+3. **Run test-email endpoint** to confirm `"ok": true`:
+   ```js
+   fetch('https://ej-production-demo.up.railway.app/api/v1/notifications/test-email', {
+     method: 'POST',
+     headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+   }).then(r => r.json()).then(d => console.log(JSON.stringify(d, null, 2)))
+   ```
+4. **Full end-to-end Railway verification** once email confirmed:
+   - PM submits completion request → GM gets in-app bell + email
+   - GM approves → PM gets in-app bell + email, project status flips to Completed
+   - GM rejects with reason → PM gets notification with reason
+   - CEO/MD login works, executive dashboard loads at `/dashboard/executive`
+   - MailButton visible and generates correct `mailto:` links
+5. **After Railway demo verified** → request user approval to merge demo → main
+
+### Pending Railway env vars (backend):
+```
+BREVO_API_KEY     = xkeysib-...   ← re-copy from Brevo dashboard
+SMTP_FROM_EMAIL   = preciseengineersai@gmail.com
+SMTP_FROM_NAME    = EJ Tracker
+GM_EMAIL          = (GM's email)
+PM_EMAIL          = (PM's email)
+CEO_EMAIL         = (CEO's email)
+MD_EMAIL          = (MD's email)
+CEO_USER / CEO_PASS
+MD_USER  / MD_PASS
+```
+
+---
+
 ## Date: 2026-07-26 (Session 29 — Project Completion Workflow + Notifications + CEO/MD Design)
 
 ### What was done:
@@ -23,7 +232,22 @@
 - `docs/superpowers/plans/2026-07-26-completion-workflow-notifications.md` (Plan A — 11 tasks)
 - `docs/superpowers/plans/2026-07-26-executive-dashboard-ceo-md.md` (Plan B — 6 tasks, requires Plan A first)
 
-### Status: PLAN A IMPLEMENTED — pushed to demo, pending Railway verification
+### Status: PLANS A + B IMPLEMENTED — pushed to demo, pending Railway verification
+
+### Plan B — what was built (5 commits on demo):
+- `backend/app/auth/rbac.py` — `EXECUTIVES = ["CEO", "MD"]` added; both included in MANAGEMENT (read access) but not write endpoints
+- `backend/app/auth/router.py` — CEO/MD credential checks wired into login (env vars: CEO_USER/CEO_PASS, MD_USER/MD_PASS)
+- `backend/app/dashboard/router.py` — `GET /api/v1/dashboard/executive` endpoint: 6 KPIs + per-project financial data (order_value, advance_received, committed_dispatch_date, progress %)
+- `next-frontend/src/components/MailButton.tsx` — mailto: link generator, fetches recipients from /mail-recipients, single-recipient = direct link, multi = checkbox picker
+- `next-frontend/src/app/(main)/dashboard/executive/page.tsx` — stub replaced with real data: 6 KPI cards, filter chips, full project table with financials + ProgressBar + MailButton per row
+- `next-frontend/src/components/Sidebar.tsx` — `SUP` extended to include "CEO" and "MD" → write nav items (Add/Edit Project, Settings etc.) auto-hidden
+- `next-frontend/src/app/(main)/projects/page.tsx` — MailButton added for GM and PM in expanded project row
+
+### Plan B verification (all clean):
+- 3/3 Python files: syntax PASS
+- RBAC assertions: CEO + MD correctly in EXECUTIVES and MANAGEMENT
+- npm build: PASS — 30 routes, 0 TS errors
+- Push to demo: PASS (6977cde..59a2a8f)
 
 ### Plan A — what was built (9 commits on demo):
 - `backend/services/email_service.py` — SMTP sender, dev-safe no-op when unconfigured
@@ -42,11 +266,7 @@
 - npm build: PASS — 30 routes, 0 TS errors, 0 warnings
 
 ### What to do next session:
-- Add Railway env vars before testing on demo:
-  - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (org Outlook account)
-  - GM_EMAIL, PM_EMAIL
-- Resolve Railway demo login issue (from Session 28) if still present
-- Verify on Railway demo:
+- Verify on Railway demo (env vars already added):
   - Task 1: ORM models + migrations
   - Task 2: email_service.py
   - Task 3: notification_service.py

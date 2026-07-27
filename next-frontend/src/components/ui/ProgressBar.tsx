@@ -30,7 +30,7 @@ export default function ProgressBar({
       )}
       <div className="h-2 w-full rounded-full bg-line">
         <div
-          className={`h-2 rounded-full transition-all duration-700 ${fillClasses[tone]}`}
+          className={`h-2 rounded-full ${fillClasses[tone]}`}
           style={{ width: `${clamped}%` }}
         />
       </div>

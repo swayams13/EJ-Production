@@ -37,7 +37,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 # ad-hoc lists so the matrix lives in one place.
 # Workers/Operators have NO API access: they don't log in; supervisors enter
 # progress on their behalf (entries carry operator_id for attribution).
-MANAGEMENT = ["Developer", "GM", "Admin", "Production Manager"]
+EXECUTIVES = ["CEO", "MD"]
+MANAGEMENT = ["Developer", "GM", "Admin", "Production Manager"] + EXECUTIVES
 SUPERVISORS = MANAGEMENT + ["Supervisor"]
 USER_ADMINS = ["Developer", "GM", "Production Manager"]
 

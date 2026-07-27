@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import NotificationBell from "@/components/NotificationBell";
 
 interface NavItem {
   name: string;
@@ -16,15 +15,16 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const SUP = ["Supervisor", "Operator"]; // shorthand for management-only items
+const SUP = ["Supervisor", "Operator", "CEO", "MD"]; // read-only roles excluded from write actions
+const SHOP_FLOOR = ["Supervisor", "Operator"]; // excluded from dashboards meant for executives/management
 
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Dashboards",
     items: [
       { name: "Progress", href: "/dashboard" },
-      { name: "Executive", href: "/dashboard/executive", hideForRoles: SUP },
-      { name: "Planning", href: "/dashboard/planning", hideForRoles: SUP },
+      { name: "Executive", href: "/dashboard/executive", hideForRoles: SHOP_FLOOR },
+      { name: "Planning", href: "/dashboard/planning", hideForRoles: SHOP_FLOOR },
       { name: "WIP Tracking", href: "/dashboard/wip" },
       { name: "Materials", href: "/dashboard/materials" },
     ],
@@ -102,7 +102,7 @@ export default function Sidebar() {
           <h2 className="font-display uppercase tracking-wide text-xl font-extrabold text-white">
             EJ Tracker
           </h2>
-          <NotificationBell />
+
         </div>
         {role && (
           <div className="mt-2 inline-block rounded border border-brand/40 bg-brand/20 px-2 py-1 text-xs font-medium text-[#9fd6d0]">

@@ -75,6 +75,7 @@ class Project(Base):
     order_value = Column(Float, nullable=True)                 # quotation value ₹
     advance_received = Column(Float, default=0.0)              # % advance paid
     committed_dispatch_date = Column(Date, nullable=True)      # client-committed date
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # who created this project; NULL for pre-migration rows
 
     production_lines = relationship("ProjectProductionLine", back_populates="project", cascade="all, delete-orphan")
     resource_assignment = relationship("ProjectResourceAssignment", uselist=False, back_populates="project", cascade="all, delete-orphan")
@@ -249,6 +250,7 @@ class PurchaseOrder(Base):
     expected_delivery_date = Column(Date, nullable=True)
     status = Column(String, default="draft")  # draft|raised|sent|partially_received|received|cancelled
     raised_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    raised_by_username = Column(String, nullable=True)  # env-var management logins have no users row (see AuditLog.username)
     total_value = Column(Float, nullable=True)
     delay_reason = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
@@ -295,6 +297,7 @@ class GoodsReceipt(Base):
     purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False)
     receipt_date = Column(Date, default=date.today)
     received_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    received_by_username = Column(String, nullable=True)  # env-var management logins have no users row (see AuditLog.username)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -515,6 +518,10 @@ def init_db():
         "ALTER TABLE project_production_lines ADD COLUMN variable_qtys_json TEXT;",
         "ALTER TABLE parts ADD COLUMN qty_per_unit DOUBLE PRECISION DEFAULT 1.0;",
         "ALTER TABLE parts ADD COLUMN total_qty INTEGER DEFAULT 0;",
+        # --- executive morning briefing ---
+        "ALTER TABLE projects ADD COLUMN created_by INTEGER;",
+        "ALTER TABLE purchase_orders ADD COLUMN raised_by_username VARCHAR;",
+        "ALTER TABLE goods_receipts ADD COLUMN received_by_username VARCHAR;",
     ]
     
     for query in columns:

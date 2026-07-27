@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, MetricCard, Badge, Button, ProgressBar, Spinner, Table, THead, TBody, Tr, Th, Td, Modal } from "@/components/ui";
+import MailButton from "@/components/MailButton";
 import { useToast } from "@/components/ui/useToast";
 
 interface Bellow {
@@ -226,6 +227,18 @@ export default function ProjectsList() {
                               if (res.ok) { const preview = await res.json(); setCompletionModal({ projectId: p.id, preview }); }
                             }}>Mark as Complete</Button>
                           )}
+                        </div>
+                      )}
+                      {(userRole === "GM" || userRole === "Production Manager") && (
+                        <div className="mt-2">
+                          <MailButton
+                            projectContext={{
+                              quotation_no: p.quotation_no,
+                              project_name: p.project_name || "",
+                              status: p.status,
+                              target_date: p.target_date,
+                            }}
+                          />
                         </div>
                       )}
                     </Td>

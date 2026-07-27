@@ -6,11 +6,12 @@ from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 from datetime import datetime
 import io
+import os
 
 from backend.services.db_service import get_db, Project, ProjectProductionLine, MaterialHold, PurchaseOrder, PurchaseOrderLine, Part, PartProcess, WarehouseStock
 from backend.services.notification_service import create_notification
 from backend.services.production_service import get_company_capacity_status, generate_master_production_register_excel, aggregate_line_feet
-from backend.app.auth.rbac import require_roles, SUPERVISORS
+from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT, EXECUTIVES
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["Dashboard"])
 
@@ -141,38 +142,267 @@ def get_wip_lines(db: Session = Depends(get_db), current_user: dict = Depends(re
 
 
 @router.get("/executive")
-def get_executive_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):
-    total_active = db.query(Project).filter(Project.status == "Active").count()
-    total_hold = db.query(Project).filter(Project.status == "Hold").count()
-    total_completed = db.query(Project).filter(Project.status == "Completed").count()
-    
-    active_projects = db.query(Project).filter(Project.status != "Completed").all()
-    avg_progress = 0
-    if active_projects:
-        from backend.services.mes_service import MESService
-        total_p = sum([MESService.calculate_project_progress(db, p.id) for p in active_projects])
-        avg_progress = round(total_p / len(active_projects), 1)
-        
-    wip = get_wip_dashboard(db)
-    dept_loads = []
-    colors = ["orange", "emerald", "blue", "purple"]
-    for i, shop in enumerate(["Fabrication Shop", "Assembly Shop", "Bellows Shop", "Machining Shop"]):
-        data = wip.get(shop, {"required": 0, "completed": 0})
-        load = 0
-        if data["required"] > 0:
-            load = round(((data["required"] - data["completed"]) / data["required"]) * 100)
-        dept_loads.append({"name": shop, "load": load, "color": colors[i]})
-    
-    result = {
-        "kpis": [
-            {"label": "Active Projects", "value": str(total_active), "trend": "Ongoing jobs", "color": "blue"},
-            {"label": "Projects at Hold", "value": str(total_hold), "trend": "Pending clarification", "color": "rose"},
-            {"label": "Avg Progress", "value": f"{avg_progress}%", "trend": "Overall completion", "color": "emerald"},
-            {"label": "Completed", "value": str(total_completed), "trend": "All time", "color": "amber"}
-        ],
-        "departments": dept_loads
+def executive_dashboard(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(EXECUTIVES + ["Developer"])),
+):
+    from backend.services.db_service import ProjectCompletionRequest
+    from datetime import date as _date_today
+
+    today = _date_today.today()
+    projects = db.query(Project).all()
+
+    total_active = sum(1 for p in projects if p.status == "Active")
+    total_on_hold = sum(1 for p in projects if p.status == "Hold")
+    total_completed = sum(1 for p in projects if p.status == "Completed")
+    pipeline_value = sum((p.order_value or 0) for p in projects if p.status != "Completed")
+    on_time = sum(
+        1 for p in projects
+        if p.status == "Active" and p.committed_dispatch_date and p.committed_dispatch_date >= today
+    )
+    delayed = sum(
+        1 for p in projects
+        if p.status == "Active" and p.committed_dispatch_date and p.committed_dispatch_date < today
+    )
+
+    project_rows = []
+    for p in projects:
+        line_ids = [l.id for l in db.query(ProjectProductionLine.id).filter_by(project_id=p.id).all()]
+        part_ids = [pt.id for pt in db.query(Part.id).filter(Part.production_line_id.in_(line_ids)).all()] if line_ids else []
+        processes = db.query(PartProcess).filter(PartProcess.part_id.in_(part_ids)).all() if part_ids else []
+
+        if processes:
+            total_qty_sum = 0
+            completed_qty_sum = 0
+            for pp in processes:
+                part = db.query(Part).filter(Part.id == pp.part_id).first()
+                if part and part.total_qty:
+                    total_qty_sum += part.total_qty
+                    completed_qty_sum += min(pp.completed_qty, part.total_qty)
+            progress = round((completed_qty_sum / total_qty_sum * 100)) if total_qty_sum else 0
+        else:
+            progress = 100 if p.status == "Completed" else 0
+
+        pending_req = db.query(ProjectCompletionRequest).filter_by(project_id=p.id, status="pending").first()
+
+        project_rows.append({
+            "id": p.id,
+            "quotation_no": p.quotation_no,
+            "project_name": p.project_name,
+            "client_name": p.client_name,
+            "status": p.status,
+            "order_value": p.order_value,
+            "advance_received": p.advance_received,
+            "committed_dispatch_date": p.committed_dispatch_date.isoformat() if p.committed_dispatch_date else None,
+            "target_date": p.target_date.isoformat() if p.target_date else None,
+            "progress_pct": progress,
+            "completion_request_status": "pending" if pending_req else None,
+        })
+
+    return {
+        "kpis": {
+            "total_active": total_active,
+            "total_on_hold": total_on_hold,
+            "total_completed": total_completed,
+            "pipeline_value": pipeline_value,
+            "on_time": on_time,
+            "delayed": delayed,
+        },
+        "projects": project_rows,
     }
-    return {"success": True, "message": "Executive dashboard retrieved", "data": result}
+
+@router.get("/executive-briefing")
+def executive_briefing(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(EXECUTIVES + ["Developer"])),
+):
+    from datetime import date as _date, timedelta
+    from backend.services.db_service import (
+        User, WeldingLog, WorkOrder, AuditLog, GoodsReceipt,
+        ProjectHoldHistory, ProjectCompletionRequest,
+    )
+    from backend.services.briefing_service import (
+        summarize_production, resolve_and_rank_activity, build_leaderboard, on_time_pct, resolve_role,
+    )
+
+    today = _date.today()
+    window_start = today - timedelta(days=14)
+    # Management logins (GM/PM/CEO/MD/Developer) may be env-var-only, with no
+    # `users` table row — resolve_role falls back to these when a DB User match fails.
+    env_values = {k: os.getenv(k) for k in ("DEV_USER", "GM_USER", "PM_USER", "CEO_USER", "MD_USER")}
+
+    # --- production feet: one 14-day query, yesterday/7d derived in Python ---
+    feet_rows = (
+        db.query(
+            WeldingLog.date.label("date"),
+            WeldingLog.process_type.label("process_type"),
+            sqlfunc.sum(WeldingLog.feet_done).label("feet"),
+            sqlfunc.count(WeldingLog.id).label("entries"),
+        )
+        .filter(WeldingLog.date >= window_start, WeldingLog.date <= today)
+        .group_by(WeldingLog.date, WeldingLog.process_type)
+        .all()
+    )
+    production = summarize_production(feet_rows, today)
+
+    # --- today's allotted work ---
+    today_wo_rows = (
+        db.query(WorkOrder, Project.quotation_no, Project.project_name)
+        .join(Project, Project.id == WorkOrder.project_id)
+        .filter(WorkOrder.date == today)
+        .all()
+    )
+    today_allotted = [
+        {
+            "project_id": wo.project_id,
+            "quotation_no": quotation_no,
+            "project_name": project_name,
+            "process_type": wo.process_type,
+            "target_feet": wo.target_feet,
+            "actual_feet": wo.actual_feet or 0.0,
+            "pct": round((wo.actual_feet or 0.0) / wo.target_feet * 100) if wo.target_feet else 0,
+            "status": wo.status,
+        }
+        for wo, quotation_no, project_name in today_wo_rows
+    ]
+
+    # --- activity feed: union of 5 sources, normalized then ranked ---
+    raw_events = []
+
+    audit_rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.timestamp >= window_start)
+        .order_by(AuditLog.timestamp.desc())
+        .limit(200)
+        .all()
+    )
+    for a in audit_rows:
+        raw_events.append({
+            "timestamp": a.timestamp, "user_id": a.user_id, "username": a.username,
+            "action": a.action, "detail": a.details, "project_ref": None,
+        })
+
+    po_rows = (
+        db.query(PurchaseOrder)
+        .filter(PurchaseOrder.raised_by_username.isnot(None), PurchaseOrder.created_at >= window_start)
+        .all()
+    )
+    for po in po_rows:
+        raw_events.append({
+            "timestamp": po.created_at, "user_id": po.raised_by, "username": po.raised_by_username,
+            "action": "PO raised", "detail": f"Raised PO {po.po_number}", "project_ref": None,
+        })
+
+    gr_rows = (
+        db.query(GoodsReceipt)
+        .filter(GoodsReceipt.received_by_username.isnot(None), GoodsReceipt.created_at >= window_start)
+        .all()
+    )
+    for gr in gr_rows:
+        raw_events.append({
+            "timestamp": gr.created_at, "user_id": gr.received_by, "username": gr.received_by_username,
+            "action": "Goods receipt recorded", "detail": f"Recorded receipt for PO #{gr.purchase_order_id}", "project_ref": None,
+        })
+
+    completion_rows = (
+        db.query(ProjectCompletionRequest, Project.quotation_no)
+        .join(Project, Project.id == ProjectCompletionRequest.project_id)
+        .filter(ProjectCompletionRequest.requested_at >= window_start)
+        .all()
+    )
+    for req, quotation_no in completion_rows:
+        raw_events.append({
+            "timestamp": req.requested_at, "user_id": None, "username": req.requested_by,
+            "action": "Completion requested", "detail": f"Submitted completion for {quotation_no}", "project_ref": quotation_no,
+        })
+        if req.reviewed_at and req.reviewed_by:
+            detail = f"{req.status.capitalize()} completion for {quotation_no}"
+            if req.rejection_reason:
+                detail += f" — {req.rejection_reason}"
+            raw_events.append({
+                "timestamp": req.reviewed_at, "user_id": None, "username": req.reviewed_by,
+                "action": f"Completion {req.status}", "detail": detail, "project_ref": quotation_no,
+            })
+
+    # "Project created" events arrive via the audit_rows query above — create_project
+    # writes an AuditLog row (action="Create", table_name="projects") alongside
+    # Project.created_by, so the feed works even for env-var-only creators.
+
+    event_user_ids = {e["user_id"] for e in raw_events if e.get("user_id")}
+    event_usernames = {e["username"] for e in raw_events if e.get("username")}
+    users_by_id = {u.id: u for u in db.query(User).filter(User.id.in_(event_user_ids)).all()} if event_user_ids else {}
+    users_by_username = {u.username: u for u in db.query(User).filter(User.username.in_(event_usernames)).all()} if event_usernames else {}
+
+    activity = resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=50, env_values=env_values)
+
+    # --- leaderboard: AuditLog entry counts per user ---
+    yesterday = today - timedelta(days=1)
+    week_start = today - timedelta(days=7)
+    y_counts = dict(
+        db.query(AuditLog.user_id, sqlfunc.count(AuditLog.id))
+        .filter(sqlfunc.date(AuditLog.timestamp) == yesterday, AuditLog.user_id.isnot(None))
+        .group_by(AuditLog.user_id).all()
+    )
+    w_counts = dict(
+        db.query(AuditLog.user_id, sqlfunc.count(AuditLog.id))
+        .filter(sqlfunc.date(AuditLog.timestamp) >= week_start, sqlfunc.date(AuditLog.timestamp) < today, AuditLog.user_id.isnot(None))
+        .group_by(AuditLog.user_id).all()
+    )
+    leaderboard_ids = set(y_counts) | set(w_counts)
+    leaderboard_users = {u.id: u for u in db.query(User).filter(User.id.in_(leaderboard_ids)).all()} if leaderboard_ids else {}
+    leaderboard = build_leaderboard(y_counts, w_counts, leaderboard_users)
+
+    # --- by_role rollups ---
+    all_projects = db.query(Project).all()
+    company_on_time_pct = on_time_pct(all_projects, today)
+
+    # ProjectCompletionRequest submission/review is already RBAC-gated to a single role
+    # each (submit: Production Manager/Developer; approve/reject: GM/Developer — see
+    # backend/app/projects/completion.py), so no extra role join/lookup is needed here.
+    pm_completions = db.query(ProjectCompletionRequest).count()
+    gm_approved = db.query(ProjectCompletionRequest).filter(ProjectCompletionRequest.status == "approved").count()
+    gm_rejected = db.query(ProjectCompletionRequest).filter(ProjectCompletionRequest.status == "rejected").count()
+
+    # PO/GR raising IS open to all of MANAGEMENT (not PM-exclusive), so these do need
+    # real role resolution, with the env-var fallback for management logins with no
+    # `users` row.
+    po_rows_all = db.query(PurchaseOrder).filter(PurchaseOrder.raised_by_username.isnot(None)).all()
+    gr_rows_all = db.query(GoodsReceipt).filter(GoodsReceipt.received_by_username.isnot(None)).all()
+    pm_related_usernames = {po.raised_by_username for po in po_rows_all} | {gr.received_by_username for gr in gr_rows_all}
+    pm_related_users = {u.username: u for u in db.query(User).filter(User.username.in_(pm_related_usernames)).all()} if pm_related_usernames else {}
+
+    def _role_for(username):
+        u = pm_related_users.get(username)
+        return resolve_role(username, u.role if u else None, env_values)
+
+    pm_pos = sum(1 for po in po_rows_all if _role_for(po.raised_by_username) == "Production Manager")
+    pm_grs = sum(1 for gr in gr_rows_all if _role_for(gr.received_by_username) == "Production Manager")
+    holds_total = db.query(ProjectHoldHistory).count()
+    resumes_total = db.query(ProjectHoldHistory).filter(ProjectHoldHistory.resume_date.isnot(None)).count()
+
+    return {
+        "production": production,
+        "today_allotted": today_allotted,
+        "activity": activity,
+        "people": {
+            "leaderboard": leaderboard,
+            "by_role": {
+                "pm": {
+                    "pos_raised": pm_pos,
+                    "goods_receipts": pm_grs,
+                    "completion_requests_submitted": pm_completions,
+                    "projects_on_time_pct": company_on_time_pct,
+                },
+                "gm": {
+                    "completions_approved": gm_approved,
+                    "completions_rejected": gm_rejected,
+                    "holds_total": holds_total,
+                    "resumes_total": resumes_total,
+                    "projects_on_time_pct": company_on_time_pct,
+                },
+            },
+        },
+    }
 
 @router.get("/planning")
 def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):

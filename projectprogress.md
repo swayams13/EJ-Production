@@ -1,5 +1,32 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-27 (Session 33 — Executive Briefing PM/GM Attribution Fix)
+
+### What was done:
+
+Follow-up to Session 32's found-but-unfixed gap (env-var management logins have no `users` row, so PM/GM KPIs and "project created" attribution silently returned zero/nothing). User asked to fix it immediately rather than defer.
+
+**Root cause traced further than Session 32 found it:** it wasn't just `Project.created_by` — the same env-var-login gap also zeroed out `people.by_role.pm.completion_requests_submitted` and `people.by_role.gm.completions_approved/rejected` (both joined `User.role`, which requires a DB row that env-var GM/PM logins don't have). Separately, `PurchaseOrder.raised_by` was found to be **never set at all** in `create_po` — an unrelated pre-existing bug, not env-var-specific.
+
+**Fix (details in `problemsresolved.md`):**
+- Added `raised_by_username`/`received_by_username` columns (mirrors the existing `AuditLog.username` workaround for the same problem).
+- `create_project` now also writes an `AuditLog` row so "project created" survives without a `users` row.
+- Fixed `create_po` to actually set `raised_by`/`raised_by_username` (was a no-op).
+- New `resolve_role()` helper in `briefing_service.py` (TDD, 3 new unit tests) resolves role via env-var match when no DB user exists.
+- Simplified the PM/GM completion-request KPI queries — dropped an unnecessary `User`-role join since those actions are already RBAC-gated to one role each.
+
+**Verified against the real dev Postgres DB** (not just unit tests): started the backend, confirmed all 3 new/changed columns via `information_schema.columns`, raised a real test PO as the env-var Developer login, confirmed `raised_by_username` populated correctly and `pos_raised` correctly excluded it (role mismatch, not just blind counting), and confirmed real historical completion-request events now resolve to `"Production Manager"`/`"GM"` instead of `"—"` in both the activity feed and the KPI counts. Test data cleaned up afterward. `python test_briefing_service.py` and `npm run build` both pass.
+
+### What's still pending:
+- Actual browser walkthrough of the 3-tab page (visual rendering, tab clicks, console errors) — not yet done by a human.
+- CEO/MD login not exercised locally (no `CEO_USER`/`CEO_PASS` in local `.env`); only `Developer` role tested.
+- Broader auth-model question (should every management role have a real `users` row?) intentionally left open — today's fix solves the practical symptom without that larger change.
+
+### Commit this session:
+- `fix: attribute PM/GM actions correctly when logged in via env-var credentials`
+
+---
+
 ## Date: 2026-07-27 (Session 32 — Executive Morning Briefing)
 
 ### What was built (Tasks 1-5, already committed on `demo` before this verification session):

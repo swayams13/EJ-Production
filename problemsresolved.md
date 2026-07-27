@@ -5,6 +5,22 @@ Update this alongside `projectprogress.md` whenever a non-trivial problem is sol
 
 ---
 
+## 2026-07-27 — Executive briefing PM/GM attribution fixed (follow-up to the entry below)
+
+**Fix applied same day**, in a scoped follow-up (chose option 2 from below — narrower fix, no auth-model change):
+
+- Added `raised_by_username` (`purchase_orders`) and `received_by_username` (`goods_receipts`) companion string columns, mirroring the existing `AuditLog.username` pattern (`AuditLog` already solves exactly this problem for its own rows — same fix, applied consistently).
+- `create_project` now also writes an `AuditLog` row (`action="Create", table_name="projects"`) with the real username, so "Project created" survives in the activity feed even when `created_by` is `NULL`. `Project.created_by` is kept as-is (harmless, populates correctly whenever a real DB user creates a project).
+- **Separately found and fixed a second, unrelated bug while investigating:** `create_po` (`backend/app/procurement/router.py`) never set `raised_by` at all — not an env-var issue, just missing from the `PurchaseOrder(...)` constructor. Fixed to mirror the existing `log_receipt`/`received_by` pattern.
+- New `resolve_role(username, known_role, env_values)` helper (`backend/services/briefing_service.py`, unit-tested in `test_briefing_service.py`) falls back to matching `DEV_USER`/`GM_USER`/`PM_USER`/`CEO_USER`/`MD_USER` env-var values when no DB `User` row exists. Used both in the activity feed (actor_role) and the PM/GM PO/GR KPI counts.
+- Simplified `pm_completions`/`gm_approved`/`gm_rejected`: dropped the `User`-role join entirely — `ProjectCompletionRequest` submission/review is already RBAC-gated to a single role each (submit: Production Manager/Developer; approve/reject: GM/Developer, see `backend/app/projects/completion.py`), so no role lookup was needed there in the first place.
+
+**Verified against the real dev Postgres DB:** confirmed all three new/changed columns exist via `information_schema.columns`; raised a test PO as the env-var `Developer` login → `raised_by_username` correctly stored `"Developer"` (the actual env-var value) while `raised_by` stayed `NULL` as expected → `people.by_role.pm.pos_raised` correctly stayed `0` (role mismatch: "Developer" ≠ "Production Manager", proving the role distinction works, not just counting everything) → re-fetched `/executive-briefing` and saw real historical completion-request events now resolve to `actor_role: "Production Manager"` / `"GM"` (previously would have been `"—"`). Test PO deleted afterward; `npm run build` and `python test_briefing_service.py` both pass.
+
+**Left as-is:** option 1 (backing every management login with a real `users` row) was not done — the option-2 fix above resolves the practical symptom (attribution in this feature) without touching the shared auth model, which still has broader blast radius across other endpoints not investigated here.
+
+---
+
 ## 2026-07-27 — Executive briefing "Project created" activity event can never fire (found, not fixed)
 
 **Symptom:** During manual end-to-end verification of the new `GET /api/v1/dashboard/executive-briefing` endpoint, a test project created via the API (as a logged-in `Developer`-role user) did not appear in the endpoint's `activity` feed or affect `people.leaderboard`, even though the endpoint explicitly builds a "Project created" event from `Project.created_by`.

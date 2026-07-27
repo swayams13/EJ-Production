@@ -47,3 +47,17 @@ def summarize_production(rows, today):
     trend_14d = [{**by_date[d], "date": d.isoformat()} for d in sorted(by_date.keys())]
 
     return {"yesterday": y_bucket, "last_7d": w_bucket, "trend_14d": trend_14d}
+
+
+def on_time_pct(projects, today):
+    """
+    projects: iterable of objects with .status and .committed_dispatch_date.
+    Returns the rounded percentage of Active, dated projects whose
+    committed_dispatch_date is today or later. 100 if there are none
+    (nothing to be late on).
+    """
+    active_with_date = [p for p in projects if p.status == "Active" and p.committed_dispatch_date]
+    if not active_with_date:
+        return 100
+    on_time = sum(1 for p in active_with_date if p.committed_dispatch_date >= today)
+    return round(on_time / len(active_with_date) * 100)

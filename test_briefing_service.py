@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from datetime import date, datetime, timedelta
-from backend.services.briefing_service import summarize_production
+from backend.services.briefing_service import summarize_production, on_time_pct
 
 
 def _row(d, process_type, feet, entries):
@@ -33,7 +33,32 @@ def test_summarize_production_ignores_unknown_process_type():
     assert result["yesterday"]["total_feet"] == 0.0
 
 
+def test_on_time_pct_all_on_time():
+    today = date(2026, 7, 27)
+    projects = [
+        SimpleNamespace(status="Active", committed_dispatch_date=today + timedelta(days=5)),
+        SimpleNamespace(status="Completed", committed_dispatch_date=today - timedelta(days=5)),
+    ]
+    assert on_time_pct(projects, today) == 100
+
+
+def test_on_time_pct_mixed():
+    today = date(2026, 7, 27)
+    projects = [
+        SimpleNamespace(status="Active", committed_dispatch_date=today + timedelta(days=5)),
+        SimpleNamespace(status="Active", committed_dispatch_date=today - timedelta(days=5)),
+    ]
+    assert on_time_pct(projects, today) == 50
+
+
+def test_on_time_pct_no_active_projects_returns_100():
+    assert on_time_pct([], date(2026, 7, 27)) == 100
+
+
 if __name__ == "__main__":
     test_summarize_production_buckets_yesterday_and_week()
     test_summarize_production_ignores_unknown_process_type()
+    test_on_time_pct_all_on_time()
+    test_on_time_pct_mixed()
+    test_on_time_pct_no_active_projects_returns_100()
     print("OK")

@@ -28,8 +28,8 @@ Picked up the open items from Session 33's pending list (browser walkthrough, CE
 Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. Nothing below is built yet — this is a scoped list to start the next brainstorming session from, not a commitment.
 
 **High value, low effort (data already exists in the schema, just not surfaced):**
-1. **Material risk digest** — `/dashboard/materials` already computes stock-vs-demand RAG status. Add a "N projects blocked on material" tile to the Briefing tab so delays are explained without digging into the Materials page separately.
-2. **Daily email digest** — email infra (Brevo) and the briefing data both already exist; add a scheduled job that emails CEO/MD this same briefing every morning (e.g. 8am) instead of requiring them to open the page.
+1. **Material risk digest** — `/dashboard/materials` already computes stock-vs-demand RAG status. Add a "N projects blocked on material" tile to the Briefing tab so delays are explained without digging into the Materials page separately. **(Done — see Session 35 below.)**
+2. **Daily email digest** — email infra (Brevo) and the briefing data both already exist; add a scheduled job that emails CEO/MD this same briefing every morning (e.g. 8am) instead of requiring them to open the page. **(Done — see Session 35 below.)**
 3. **Attendance snapshot** — `AttendanceLog` exists; a "42/50 workers present today" tile is one query away and explains capacity dips.
 4. **Overtime signal** — `WorkOrder.is_overtime` / `DailyTaskAssignment.is_overtime` exist; "12 overtime hours logged yesterday" is a cost/fatigue flag.
 
@@ -45,6 +45,51 @@ Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. N
 11. Weekly PDF/Excel export of the whole briefing.
 
 **Recommendation for next session:** start with #1 (material risk digest) and #2 (daily email digest) — both reuse infrastructure that's already working end-to-end, and together they turn the briefing from "a page you have to remember to check" into something that actually reaches the CEO/MD unprompted.
+
+---
+
+## Date: 2026-07-27 (Session 35 — Material Risk Digest + Daily Email Digest, Briefing v2)
+
+### What was done:
+
+Picked up backlog items #1 and #2 from Session 33/34's Briefing v2 list above. Both features were built via an 8-task implementation plan (`docs/superpowers/plans/2026-07-27-briefing-v2-material-risk-and-email-digest.md`) executed with subagent-driven development — an independent implementer + independent task reviewer per task. All 8 task reviews came back clean/approved (a few cosmetic/deferred notes only, logged in the plan's ledger — no code fixes needed).
+
+**Part 1 — Material risk digest:**
+- `_compute_material_rows` extracted as a reusable pure function out of `get_materials_dashboard` (`backend/app/dashboard/router.py`). The materials notification side effect (GM/PM notification-dedup queries) was deliberately kept in `get_materials_dashboard` itself and **not** pulled into the extracted function — so calling the pure computation from the briefing endpoint doesn't also fire notification checks on every briefing page load.
+- `summarize_material_risk` added to `backend/services/briefing_service.py`, unit-tested.
+- Wired into `GET /api/v1/dashboard/executive-briefing` as a new `materials` field.
+- Frontend: a matching "Material Risk" section plus a 5th KPI card added to the Briefing tab (`next-frontend/src/app/dashboard/executive/page.tsx`).
+- `npm run build` passes; backend changes curl-verified manually (this repo has no pytest suite — verification is via `test_briefing_service.py`-style unit tests plus manual curl, consistent with prior sessions).
+
+**Part 2 — Daily email digest:**
+- `executive_briefing`'s response-building logic extracted into a reusable `get_executive_briefing_data` function — kept in `backend/app/dashboard/router.py` rather than moved to `backend/services/briefing_service.py` as the original design spec suggested, because that would make a service-layer module import from an app/router module, backwards from how every other file in this codebase is layered (see `problemsresolved.md`).
+- `format_briefing_email` added, unit-tested, formatting the briefing payload into an email body.
+- `scripts/send_daily_briefing.py` created, following this repo's existing `scripts/` convention (not `backend/scripts/`) — fails loud (exit 1) if neither `CEO_EMAIL` nor `MD_EMAIL` is configured, rather than silently no-op'ing.
+- **Important finding during review (Task 7):** `scripts/send_daily_briefing.py` transitively imports `backend.app.auth.router` at module load time (via `backend.app.dashboard.router` → `backend.app.auth.rbac` → `backend.app.auth.router`), which raises `RuntimeError` at import if `JWT_SECRET_KEY` is unset — confirmed by direct source read of `backend/app/auth/router.py`. The script's own code is correct; this just means the Railway Cron Job's env vars must include `JWT_SECRET_KEY`, which the original plan had missed.
+
+### Railway Cron Job setup (manual — not done from this environment, no Railway access):
+
+1. In the Railway project that hosts the `demo` backend service, click **+ New** → **Cron Job**.
+2. Connect it to the same GitHub repo, branch `demo`.
+3. Set the **Command**: `python scripts/send_daily_briefing.py`
+4. Set the **Schedule** (cron syntax, UTC): `30 2 * * *` (2:30 AM UTC = 8:00 AM IST).
+5. Under **Variables**, either link the same variable group as the backend service, or copy in these 7: `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, and **`JWT_SECRET_KEY`** (the last one is required just for the script to *import* successfully — see finding above; `CEO_EMAIL`/`MD_EMAIL` are new and not set anywhere yet, same gap pattern as the still-pending `CEO_USER`/`MD_USER` from Session 30).
+6. Deploy, then manually trigger one run from the Railway dashboard to confirm it succeeds before waiting for the schedule.
+
+### What's still pending:
+- **The Railway Cron Job itself needs manual setup by the user** (steps above) — nothing works in production until that's done.
+- **A human still needs to do the full browser walkthrough** of the new Material Risk tile/section on the live Briefing tab — no browser tool was available during implementation, only curl and `npm run build` verification.
+- Backlog items #3-11 (attendance snapshot, overtime signal, vendor delay ranking, etc.) remain untouched for a future session.
+
+### Commits this session:
+- `aded09c` — refactor: extract `_compute_material_rows` from `get_materials_dashboard`
+- `bf412a3` — feat: add `summarize_material_risk` aggregation function
+- `860a41d` — feat: add materials risk digest to executive-briefing endpoint
+- `abbc492` — feat: show material risk digest on executive Briefing tab
+- `10c254d` — refactor: extract `get_executive_briefing_data` so the daily email script can reuse it
+- `fbfea5e` — feat: add `format_briefing_email` formatter
+- `e85e25c` — feat: add daily briefing email script for Railway Cron Job
+- `docs: log Session 35 — material risk digest + daily email digest` (this entry + `problemsresolved.md`)
 
 ---
 

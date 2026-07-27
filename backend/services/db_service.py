@@ -75,6 +75,7 @@ class Project(Base):
     order_value = Column(Float, nullable=True)                 # quotation value ₹
     advance_received = Column(Float, default=0.0)              # % advance paid
     committed_dispatch_date = Column(Date, nullable=True)      # client-committed date
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # who created this project; NULL for pre-migration rows
 
     production_lines = relationship("ProjectProductionLine", back_populates="project", cascade="all, delete-orphan")
     resource_assignment = relationship("ProjectResourceAssignment", uselist=False, back_populates="project", cascade="all, delete-orphan")
@@ -515,6 +516,8 @@ def init_db():
         "ALTER TABLE project_production_lines ADD COLUMN variable_qtys_json TEXT;",
         "ALTER TABLE parts ADD COLUMN qty_per_unit DOUBLE PRECISION DEFAULT 1.0;",
         "ALTER TABLE parts ADD COLUMN total_qty INTEGER DEFAULT 0;",
+        # --- executive morning briefing ---
+        "ALTER TABLE projects ADD COLUMN created_by INTEGER;",
     ]
     
     for query in columns:

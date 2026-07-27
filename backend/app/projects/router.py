@@ -6,7 +6,7 @@ import json
 from typing import List, Optional
 from pydantic import BaseModel
 
-from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory, MaterialHold, PurchaseOrder, PurchaseOrderLine, ProjectCompletionRequest
+from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory, MaterialHold, PurchaseOrder, PurchaseOrderLine, ProjectCompletionRequest, User
 from backend.services.notification_service import create_notification
 from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet, get_productivity_rates
 from backend.app.projects.schemas import ProjectCreate, ProjectUpdate, SimulationRequest, DurationRequest, SimulateDurationRequest, BellowItem
@@ -108,7 +108,9 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db), current_us
     existing = db.query(Project).filter(Project.quotation_no == req.quotation_no).first()
     if existing:
         raise HTTPException(status_code=400, detail="Project Code already exists")
-        
+
+    creator = db.query(User).filter_by(username=current_user["username"]).first()
+
     new_proj = Project(
         quotation_no=req.quotation_no,
         client_name="",
@@ -122,6 +124,7 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db), current_us
         order_value=req.order_value,
         advance_received=req.advance_received or 0.0,
         committed_dispatch_date=req.committed_dispatch_date,
+        created_by=creator.id if creator else None,
     )
     db.add(new_proj)
     db.commit()

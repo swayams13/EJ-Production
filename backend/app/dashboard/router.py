@@ -6,6 +6,7 @@ from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 from datetime import datetime
 import io
+import os
 
 from backend.services.db_service import get_db, Project, ProjectProductionLine, MaterialHold, PurchaseOrder, PurchaseOrderLine, Part, PartProcess, WarehouseStock
 from backend.services.notification_service import create_notification
@@ -221,11 +222,14 @@ def executive_briefing(
         ProjectHoldHistory, ProjectCompletionRequest,
     )
     from backend.services.briefing_service import (
-        summarize_production, resolve_and_rank_activity, build_leaderboard, on_time_pct,
+        summarize_production, resolve_and_rank_activity, build_leaderboard, on_time_pct, resolve_role,
     )
 
     today = _date.today()
     window_start = today - timedelta(days=14)
+    # Management logins (GM/PM/CEO/MD/Developer) may be env-var-only, with no
+    # `users` table row — resolve_role falls back to these when a DB User match fails.
+    env_values = {k: os.getenv(k) for k in ("DEV_USER", "GM_USER", "PM_USER", "CEO_USER", "MD_USER")}
 
     # --- production feet: one 14-day query, yesterday/7d derived in Python ---
     feet_rows = (
@@ -280,23 +284,23 @@ def executive_briefing(
 
     po_rows = (
         db.query(PurchaseOrder)
-        .filter(PurchaseOrder.raised_by.isnot(None), PurchaseOrder.created_at >= window_start)
+        .filter(PurchaseOrder.raised_by_username.isnot(None), PurchaseOrder.created_at >= window_start)
         .all()
     )
     for po in po_rows:
         raw_events.append({
-            "timestamp": po.created_at, "user_id": po.raised_by, "username": None,
+            "timestamp": po.created_at, "user_id": po.raised_by, "username": po.raised_by_username,
             "action": "PO raised", "detail": f"Raised PO {po.po_number}", "project_ref": None,
         })
 
     gr_rows = (
         db.query(GoodsReceipt)
-        .filter(GoodsReceipt.received_by.isnot(None), GoodsReceipt.created_at >= window_start)
+        .filter(GoodsReceipt.received_by_username.isnot(None), GoodsReceipt.created_at >= window_start)
         .all()
     )
     for gr in gr_rows:
         raw_events.append({
-            "timestamp": gr.created_at, "user_id": gr.received_by, "username": None,
+            "timestamp": gr.created_at, "user_id": gr.received_by, "username": gr.received_by_username,
             "action": "Goods receipt recorded", "detail": f"Recorded receipt for PO #{gr.purchase_order_id}", "project_ref": None,
         })
 
@@ -320,23 +324,16 @@ def executive_briefing(
                 "action": f"Completion {req.status}", "detail": detail, "project_ref": quotation_no,
             })
 
-    created_rows = (
-        db.query(Project)
-        .filter(Project.created_by.isnot(None), Project.created_at >= window_start)
-        .all()
-    )
-    for p in created_rows:
-        raw_events.append({
-            "timestamp": p.created_at, "user_id": p.created_by, "username": None,
-            "action": "Project created", "detail": f"Created project {p.quotation_no}", "project_ref": p.quotation_no,
-        })
+    # "Project created" events arrive via the audit_rows query above — create_project
+    # writes an AuditLog row (action="Create", table_name="projects") alongside
+    # Project.created_by, so the feed works even for env-var-only creators.
 
     event_user_ids = {e["user_id"] for e in raw_events if e.get("user_id")}
     event_usernames = {e["username"] for e in raw_events if e.get("username")}
     users_by_id = {u.id: u for u in db.query(User).filter(User.id.in_(event_user_ids)).all()} if event_user_ids else {}
     users_by_username = {u.username: u for u in db.query(User).filter(User.username.in_(event_usernames)).all()} if event_usernames else {}
 
-    activity = resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=50)
+    activity = resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=50, env_values=env_values)
 
     # --- leaderboard: AuditLog entry counts per user ---
     yesterday = today - timedelta(days=1)
@@ -359,27 +356,27 @@ def executive_briefing(
     all_projects = db.query(Project).all()
     company_on_time_pct = on_time_pct(all_projects, today)
 
-    pm_pos = db.query(PurchaseOrder).join(User, User.id == PurchaseOrder.raised_by).filter(User.role == "Production Manager").count()
-    pm_grs = db.query(GoodsReceipt).join(User, User.id == GoodsReceipt.received_by).filter(User.role == "Production Manager").count()
-    pm_completions = (
-        db.query(ProjectCompletionRequest)
-        .join(User, User.username == ProjectCompletionRequest.requested_by)
-        .filter(User.role == "Production Manager")
-        .count()
-    )
+    # ProjectCompletionRequest submission/review is already RBAC-gated to a single role
+    # each (submit: Production Manager/Developer; approve/reject: GM/Developer — see
+    # backend/app/projects/completion.py), so no extra role join/lookup is needed here.
+    pm_completions = db.query(ProjectCompletionRequest).count()
+    gm_approved = db.query(ProjectCompletionRequest).filter(ProjectCompletionRequest.status == "approved").count()
+    gm_rejected = db.query(ProjectCompletionRequest).filter(ProjectCompletionRequest.status == "rejected").count()
 
-    gm_approved = (
-        db.query(ProjectCompletionRequest)
-        .join(User, User.username == ProjectCompletionRequest.reviewed_by)
-        .filter(User.role == "GM", ProjectCompletionRequest.status == "approved")
-        .count()
-    )
-    gm_rejected = (
-        db.query(ProjectCompletionRequest)
-        .join(User, User.username == ProjectCompletionRequest.reviewed_by)
-        .filter(User.role == "GM", ProjectCompletionRequest.status == "rejected")
-        .count()
-    )
+    # PO/GR raising IS open to all of MANAGEMENT (not PM-exclusive), so these do need
+    # real role resolution, with the env-var fallback for management logins with no
+    # `users` row.
+    po_rows_all = db.query(PurchaseOrder).filter(PurchaseOrder.raised_by_username.isnot(None)).all()
+    gr_rows_all = db.query(GoodsReceipt).filter(GoodsReceipt.received_by_username.isnot(None)).all()
+    pm_related_usernames = {po.raised_by_username for po in po_rows_all} | {gr.received_by_username for gr in gr_rows_all}
+    pm_related_users = {u.username: u for u in db.query(User).filter(User.username.in_(pm_related_usernames)).all()} if pm_related_usernames else {}
+
+    def _role_for(username):
+        u = pm_related_users.get(username)
+        return resolve_role(username, u.role if u else None, env_values)
+
+    pm_pos = sum(1 for po in po_rows_all if _role_for(po.raised_by_username) == "Production Manager")
+    pm_grs = sum(1 for gr in gr_rows_all if _role_for(gr.received_by_username) == "Production Manager")
     holds_total = db.query(ProjectHoldHistory).count()
     resumes_total = db.query(ProjectHoldHistory).filter(ProjectHoldHistory.resume_date.isnot(None)).count()
 

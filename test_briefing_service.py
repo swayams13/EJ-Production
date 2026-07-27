@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from datetime import date, datetime, timedelta
-from backend.services.briefing_service import summarize_production, on_time_pct, build_leaderboard, resolve_and_rank_activity
+from backend.services.briefing_service import summarize_production, on_time_pct, build_leaderboard, resolve_and_rank_activity, resolve_role
 
 
 def _row(d, process_type, feet, entries):
@@ -88,6 +88,23 @@ def test_resolve_and_rank_activity_falls_back_to_username():
     assert result[0]["actor_role"] == "—"
 
 
+def test_resolve_role_prefers_known_role():
+    env_values = {"PM_USER": "someone_else"}
+    assert resolve_role("pm_user", "Production Manager", env_values) == "Production Manager"
+
+
+def test_resolve_role_falls_back_to_env_var_match():
+    env_values = {"DEV_USER": "dev1", "GM_USER": "gm1", "PM_USER": "pm1", "CEO_USER": "ceo1", "MD_USER": "md1"}
+    assert resolve_role("pm1", None, env_values) == "Production Manager"
+    assert resolve_role("gm1", None, env_values) == "GM"
+
+
+def test_resolve_role_no_match_returns_none():
+    env_values = {"PM_USER": "pm1"}
+    assert resolve_role("nobody", None, env_values) is None
+    assert resolve_role(None, None, env_values) is None
+
+
 if __name__ == "__main__":
     test_summarize_production_buckets_yesterday_and_week()
     test_summarize_production_ignores_unknown_process_type()
@@ -98,4 +115,7 @@ if __name__ == "__main__":
     test_build_leaderboard_unknown_user_falls_back_to_id()
     test_resolve_and_rank_activity_sorts_and_caps()
     test_resolve_and_rank_activity_falls_back_to_username()
+    test_resolve_role_prefers_known_role()
+    test_resolve_role_falls_back_to_env_var_match()
+    test_resolve_role_no_match_returns_none()
     print("OK")

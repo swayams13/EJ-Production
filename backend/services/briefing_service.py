@@ -85,16 +85,51 @@ def build_leaderboard(yesterday_counts, week_counts, users_by_id):
     return rows
 
 
-def resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=50):
+_MANAGEMENT_ENV_ROLES = {
+    "DEV_USER": "Developer",
+    "GM_USER": "GM",
+    "PM_USER": "Production Manager",
+    "CEO_USER": "CEO",
+    "MD_USER": "MD",
+}
+
+
+def resolve_role(username, known_role, env_values):
+    """
+    username: the actor's username, or None.
+    known_role: role from a matching DB User row, or None when no such row
+      exists — true for the management logins (GM/PM/CEO/MD/Developer) that
+      only ever exist as environment variables, never as a `users` table row
+      (see AuditLog.username for the same, established workaround).
+    env_values: dict of {env_var_name: os.getenv(env_var_name)} for
+      DEV_USER/GM_USER/PM_USER/CEO_USER/MD_USER — the caller resolves
+      os.getenv() so this function stays pure and testable.
+    Returns known_role if set, else the role whose env var value equals
+    username, else None.
+    """
+    if known_role:
+        return known_role
+    if not username:
+        return None
+    for env_key, role in _MANAGEMENT_ENV_ROLES.items():
+        if username == env_values.get(env_key):
+            return role
+    return None
+
+
+def resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=50, env_values=None):
     """
     raw_events: list of dicts with 'timestamp' (datetime), 'action' (str),
       'detail' (str), 'project_ref' (str|None), and either 'user_id' (int|None)
       or 'username' (str|None) identifying the actor.
     users_by_id / users_by_username: dict of id/username -> object with
       .full_name and .role.
+    env_values: optional dict for resolve_role's env-var fallback (see above);
+      defaults to {} (no env-var role resolution) if omitted.
     Returns newest-first list capped at `limit`:
       {timestamp: iso str, actor_name, actor_role, action, detail, project_ref}
     """
+    env_values = env_values or {}
     resolved = []
     for e in raw_events:
         user = None
@@ -103,7 +138,7 @@ def resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=
         if user is None and e.get("username"):
             user = users_by_username.get(e["username"])
         actor_name = user.full_name if (user and user.full_name) else (e.get("username") or "Unknown")
-        actor_role = user.role if user else "—"
+        actor_role = resolve_role(e.get("username"), user.role if user else None, env_values) or "—"
         resolved.append({
             "timestamp": e["timestamp"],
             "actor_name": actor_name,

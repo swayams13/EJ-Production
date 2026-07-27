@@ -6,7 +6,7 @@ import json
 from typing import List, Optional
 from pydantic import BaseModel
 
-from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory, MaterialHold, PurchaseOrder, PurchaseOrderLine, ProjectCompletionRequest, User
+from backend.services.db_service import get_db, Project, ProjectResourceAssignment, ProjectProductionLine, ProjectHoldHistory, MaterialHold, PurchaseOrder, PurchaseOrderLine, ProjectCompletionRequest, User, AuditLog
 from backend.services.notification_service import create_notification
 from backend.services.production_service import sync_project_production_lines, calculate_project_duration, get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet, get_productivity_rates
 from backend.app.projects.schemas import ProjectCreate, ProjectUpdate, SimulationRequest, DurationRequest, SimulateDurationRequest, BellowItem
@@ -128,6 +128,17 @@ def create_project(req: ProjectCreate, db: Session = Depends(get_db), current_us
     )
     db.add(new_proj)
     db.commit()
+
+    db.add(AuditLog(
+        user_id=creator.id if creator else None,
+        username=current_user["username"],
+        action="Create",
+        table_name="projects",
+        record_id=new_proj.id,
+        details=f"Created project {new_proj.quotation_no}",
+    ))
+    db.commit()
+
     for role in ["GM", "CEO", "MD"]:
         create_notification(
             db, role, "project_created",

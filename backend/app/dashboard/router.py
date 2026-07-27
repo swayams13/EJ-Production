@@ -211,11 +211,7 @@ def executive_dashboard(
         "projects": project_rows,
     }
 
-@router.get("/executive-briefing")
-def executive_briefing(
-    db: Session = Depends(get_db),
-    user=Depends(require_roles(EXECUTIVES + ["Developer"])),
-):
+def get_executive_briefing_data(db: Session) -> dict:
     from datetime import date as _date, timedelta
     from backend.services.db_service import (
         User, WeldingLog, WorkOrder, AuditLog, GoodsReceipt,
@@ -384,6 +380,7 @@ def executive_briefing(
     materials = summarize_material_risk(_compute_material_rows(db))
 
     return {
+        "today": today.isoformat(),
         "production": production,
         "today_allotted": today_allotted,
         "activity": activity,
@@ -407,6 +404,13 @@ def executive_briefing(
             },
         },
     }
+
+@router.get("/executive-briefing")
+def executive_briefing(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles(EXECUTIVES + ["Developer"])),
+):
+    return get_executive_briefing_data(db)
 
 @router.get("/planning")
 def get_planning_dashboard(db: Session = Depends(get_db), current_user: dict = Depends(require_roles(SUPERVISORS))):

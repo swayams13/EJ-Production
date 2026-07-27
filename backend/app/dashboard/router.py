@@ -643,11 +643,7 @@ class MaterialRow(BaseModel):
     projects: List[MaterialProjectItem]
 
 
-@router.get("/materials", response_model=List[MaterialRow])
-def get_materials_dashboard(
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_roles(SUPERVISORS)),
-):
+def _compute_material_rows(db: Session) -> List[MaterialRow]:
     # Pre-fetch A: all warehouse stock rows
     stock_rows = db.query(WarehouseStock).all()
     stock_map: dict = {(r.material_name, r.size, r.joint_type): r for r in stock_rows}
@@ -778,6 +774,16 @@ def get_materials_dashboard(
     # Sort: red (highest net_gap first) → amber → green
     _order = {"red": 0, "amber": 1, "green": 2}
     rows.sort(key=lambda r: (_order[r.status], -r.net_gap))
+
+    return rows
+
+
+@router.get("/materials", response_model=List[MaterialRow])
+def get_materials_dashboard(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_roles(SUPERVISORS)),
+):
+    rows = _compute_material_rows(db)
 
     from datetime import timedelta
     from backend.services.db_service import Notification as NotifModel

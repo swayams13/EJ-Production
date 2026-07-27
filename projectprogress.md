@@ -1,5 +1,57 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-27 (Session 31 — Notification Bell Fix)
+
+### What was done:
+
+**Bug fix: notification bell dropdown was off-screen (invisible)**
+- Root cause: `NotificationBell` was rendered inside the sidebar (256px wide, fixed at `left:0`). The dropdown is `w-80` (320px) with `right-0`, so it extended 320px leftward from the button — entirely off-screen.
+- Fix: removed bell from `Sidebar.tsx`, added it as a top-right header element on `dashboard/page.tsx` only (with `Dashboard` title on the left, bell on the right).
+
+**Bug fix: notification list was always empty despite count showing correctly**
+- Root cause: count endpoint (`GET /unread-count`) is an exact path match — no redirect. List endpoint is registered as `@router.get("/")` in FastAPI, which serves at `/api/v1/notifications/` (with trailing slash). Frontend was calling `/api/v1/notifications?limit=20` (no trailing slash) → FastAPI sent a 307 redirect → on Railway the Authorization header was stripped on the redirect → 401 response → `if (res.ok)` failed silently → empty list.
+- Fix: changed frontend fetch URL from `/api/v1/notifications?limit=20` to `/api/v1/notifications/` (trailing slash, no redirect).
+
+**Confirmed working by user on Railway demo.**
+
+**Commits pushed to demo this session:**
+- `ffadfe2` — fix(notifications): move bell to dashboard header so dropdown is visible
+- `f6742fd` — fix(notifications): use trailing slash on list fetch to avoid 307 redirect stripping auth header
+
+### What to do next session:
+
+1. **Fix Brevo API key** — user needs to go to brevo.com → Settings → SMTP & API → API Keys → copy key fresh (no spaces), update `BREVO_API_KEY` in Railway backend env vars. Key starts with `xkeysib-`
+2. **Verify sender** — in Brevo → Senders & IP → Senders → add `preciseengineersai@gmail.com` → click verification link (if not done yet)
+3. **Run test-email endpoint** to confirm `"ok": true`:
+   ```js
+   fetch('https://ej-production-demo.up.railway.app/api/v1/notifications/test-email', {
+     method: 'POST',
+     headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+   }).then(r => r.json()).then(d => console.log(JSON.stringify(d, null, 2)))
+   ```
+4. **Full end-to-end Railway verification** once email confirmed:
+   - PM submits completion request → GM gets in-app bell + email
+   - GM approves → PM gets in-app bell + email, project status flips to Completed
+   - GM rejects with reason → PM gets notification with reason
+   - CEO/MD login works, executive dashboard loads at `/dashboard/executive`
+   - MailButton visible and generates correct `mailto:` links
+5. **After Railway demo verified** → request user approval to merge demo → main
+
+### Pending Railway env vars (backend):
+```
+BREVO_API_KEY     = xkeysib-...   ← re-copy from Brevo dashboard
+SMTP_FROM_EMAIL   = preciseengineersai@gmail.com
+SMTP_FROM_NAME    = EJ Tracker
+GM_EMAIL          = (GM's email)
+PM_EMAIL          = (PM's email)
+CEO_EMAIL         = (CEO's email)
+MD_EMAIL          = (MD's email)
+CEO_USER / CEO_PASS
+MD_USER  / MD_PASS
+```
+
+---
+
 ## Date: 2026-07-27 (Session 30 — Email Delivery Debugging)
 
 ### What was done:

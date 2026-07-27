@@ -181,3 +181,37 @@ def summarize_material_risk(rows, top_n=5):
             for r in top
         ],
     }
+
+
+def format_briefing_email(data: dict) -> str:
+    """
+    data: shaped like get_executive_briefing_data's return value
+      (backend.app.dashboard.router) — needs "today", "production",
+      "today_allotted", "materials", "activity".
+    Returns a condensed plain-text digest (Brevo's send_system_email is
+    plain-text only — see backend.services.email_service).
+    """
+    y = data["production"]["yesterday"]
+    w = data["production"]["last_7d"]
+    today_allotted = data["today_allotted"]
+    target_feet = round(sum(w_o["target_feet"] for w_o in today_allotted))
+    materials = data["materials"]
+    activity = data["activity"][:5]
+
+    lines = [
+        f"EJ Tracker — Morning Briefing — {data['today']}",
+        "",
+        f"Yesterday: {y['total_feet']} ft ({y['entries']} entries)",
+        f"Last 7 days: {w['total_feet']} ft",
+        f"Today's allotted work: {len(today_allotted)} work orders, {target_feet} ft target",
+        f"Projects blocked on material: {materials['projects_blocked']}",
+        "",
+        "Recent activity:",
+    ]
+    if activity:
+        for a in activity:
+            lines.append(f"- {a['actor_name']} — {a['action']} — {a['detail']}")
+    else:
+        lines.append("- No recent activity.")
+
+    return "\n".join(lines)

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from datetime import date, datetime, timedelta
 from backend.services.briefing_service import (
     summarize_production, on_time_pct, build_leaderboard, resolve_and_rank_activity,
-    resolve_role, summarize_material_risk,
+    resolve_role, summarize_material_risk, format_briefing_email,
 )
 
 
@@ -141,6 +141,37 @@ def test_summarize_material_risk_ignores_amber_and_green():
     assert result == {"projects_blocked": 0, "top_risks": []}
 
 
+def _briefing_fixture(**overrides):
+    base = {
+        "today": "2026-07-28",
+        "production": {
+            "yesterday": {"tig_feet": 100.0, "mig_feet": 50.0, "grinding_feet": 0.0, "total_feet": 150.0, "entries": 3},
+            "last_7d": {"tig_feet": 400.0, "mig_feet": 200.0, "grinding_feet": 50.0, "total_feet": 650.0, "entries": 20},
+            "trend_14d": [],
+        },
+        "today_allotted": [{"target_feet": 100}, {"target_feet": 50}],
+        "activity": [{"actor_name": "Alice", "action": "Update", "detail": "Logged 40ft TIG"}],
+        "materials": {"projects_blocked": 2, "top_risks": []},
+    }
+    base.update(overrides)
+    return base
+
+
+def test_format_briefing_email_includes_key_numbers():
+    text = format_briefing_email(_briefing_fixture())
+    assert "EJ Tracker — Morning Briefing — 2026-07-28" in text
+    assert "Yesterday: 150.0 ft (3 entries)" in text
+    assert "Last 7 days: 650.0 ft" in text
+    assert "2 work orders, 150 ft target" in text
+    assert "Projects blocked on material: 2" in text
+    assert "Alice — Update — Logged 40ft TIG" in text
+
+
+def test_format_briefing_email_empty_activity():
+    text = format_briefing_email(_briefing_fixture(activity=[]))
+    assert "No recent activity." in text
+
+
 if __name__ == "__main__":
     test_summarize_production_buckets_yesterday_and_week()
     test_summarize_production_ignores_unknown_process_type()
@@ -157,4 +188,6 @@ if __name__ == "__main__":
     test_summarize_material_risk_counts_distinct_blocked_projects()
     test_summarize_material_risk_sorts_top_n_by_net_gap_desc()
     test_summarize_material_risk_ignores_amber_and_green()
+    test_format_briefing_email_includes_key_numbers()
+    test_format_briefing_email_empty_activity()
     print("OK")

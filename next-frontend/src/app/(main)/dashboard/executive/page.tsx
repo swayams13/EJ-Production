@@ -90,10 +90,19 @@ interface RoleKpis {
   };
 }
 
+interface MaterialRisk {
+  material_name: string;
+  size: number | null;
+  joint_type: string | null;
+  net_gap: number;
+  projects: string[];
+}
+
 interface Briefing {
   production: { yesterday: ProductionBucket; last_7d: ProductionBucket; trend_14d: TrendDay[] };
   today_allotted: TodayAllotted[];
   activity: ActivityItem[];
+  materials: { projects_blocked: number; top_risks: MaterialRisk[] };
   people: { leaderboard: LeaderboardRow[]; by_role: RoleKpis };
 }
 
@@ -236,7 +245,7 @@ export default function ExecutiveDashboard() {
 
       {tab === "briefing" && (
         <div className="flex flex-col gap-8">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <MetricCard label="Feet Yesterday" value={Math.round(briefing.production.yesterday.total_feet)} tone="neutral" />
             <MetricCard label="Feet Last 7 Days" value={Math.round(briefing.production.last_7d.total_feet)} tone="neutral" />
             <MetricCard label="Entries Yesterday" value={briefing.production.yesterday.entries} tone="neutral" />
@@ -244,6 +253,11 @@ export default function ExecutiveDashboard() {
               label="Today's Target Feet"
               value={Math.round(briefing.today_allotted.reduce((s, w) => s + w.target_feet, 0))}
               tone="neutral"
+            />
+            <MetricCard
+              label="Projects Blocked on Material"
+              value={briefing.materials.projects_blocked}
+              tone={briefing.materials.projects_blocked > 0 ? "critical" : "neutral"}
             />
           </div>
 
@@ -286,6 +300,31 @@ export default function ExecutiveDashboard() {
                 ))}
               </TBody>
             </Table>
+          </div>
+
+          <div>
+            <h2 className="mb-3 font-display text-lg font-bold uppercase tracking-wide text-ink">
+              Material Risk
+            </h2>
+            {briefing.materials.top_risks.length === 0 ? (
+              <p className="text-sm text-ink-soft">No material shortages blocking projects.</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-line">
+                {briefing.materials.top_risks.map((r, i) => (
+                  <div key={i} className="flex items-start justify-between gap-4 py-2.5">
+                    <div>
+                      <span className="font-semibold text-ink">
+                        {r.material_name}
+                        {r.size ? ` — ${r.size}mm` : ""}
+                        {r.joint_type ? ` (${r.joint_type})` : ""}
+                      </span>
+                      <p className="text-sm text-ink-soft">{r.projects.join(", ")}</p>
+                    </div>
+                    <Badge tone="critical">Gap: {r.net_gap}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

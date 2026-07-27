@@ -1,5 +1,32 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-27 (Session 32 — Executive Morning Briefing)
+
+### What was built (Tasks 1-5, already committed on `demo` before this verification session):
+- `Project.created_by` FK column + startup migration (`ALTER TABLE projects ADD COLUMN created_by INTEGER;`).
+- `backend/services/briefing_service.py` — pure aggregation functions (`summarize_production`, `on_time_pct`, `build_leaderboard`, `resolve_and_rank_activity`), unit-tested per plan's Task 2.
+- `GET /api/v1/dashboard/executive-briefing` — new endpoint aggregating 14-day production trend, today's allotted work, activity feed (capped at 50), and per-role (PM/GM) KPIs.
+- Hand-rolled `BarChart` and `Donut` frontend chart components (no new npm dependency).
+- `next-frontend/src/app/dashboard/executive/page.tsx` rebuilt as a 3-tab page: Briefing / People & KPIs / Projects (Projects tab preserves the prior page's content unchanged).
+
+### What was verified this session (Task 6 — no browser tool available, verified via backend/API/build instead):
+1. **Backend boot**: started `uvicorn backend.main:app --port 8003` against the real dev Postgres DB. All startup migrations ran (most log "already applied" `DuplicateColumn`/`DuplicateTable` warnings for pre-existing columns, which is the established idempotent pattern in this repo — expected, not a new error). The new `created_by` migration is silent-on-success by design (bare `try/except: pass`, same as its neighbors), so absence of a log line doesn't confirm it — directly queried `information_schema.columns` instead: `[('created_by', 'integer')]` confirmed present.
+2. **Auth**: logged in via `POST /api/v1/auth/login` using the local `DEV_USER`/`DEV_PASS` env-var account (role `Developer`, which is included in the endpoint's `EXECUTIVES + ["Developer"]` allow-list — `.env` has no `CEO_USER`/`CEO_PASS`/`MD_USER`/`MD_PASS` set locally, so CEO/MD login could not be exercised in this environment). Got a valid JWT.
+3. **New endpoint**: `curl GET /api/v1/dashboard/executive-briefing` with the JWT → **HTTP 200**, JSON matched the plan's §5.2 shape exactly: `production.{yesterday,last_7d,trend_14d}`, `today_allotted`, `activity` (4 real entries from existing completion-request audit history), `people.{leaderboard, by_role.{pm,gm}}`.
+4. **End-to-end `created_by` attribution — found a real gap**: created a test project (`POST /api/v1/projects`) as the `Developer`-role login, then queried the DB directly. `created_by` came back **NULL**, not the creator's user id. Root cause: `backend/app/projects/router.py`'s `create_project` resolves the creator via `db.query(User).filter_by(username=current_user["username"]).first()` — but every management/executive login in this system (`DEV_USER`, `GM_USER`, `PM_USER`, `CEO_USER`, `MD_USER`) is an env-var login with **no corresponding row in the `users` table** (confirmed: `users` table has 59 rows, all role `Operator`/synced-from-Excel workers — zero management-role DB users). So `creator` is always `None` for any real management login today, `created_by` is always written as `NULL`, and the endpoint's "Project created" activity event (filtered on `Project.created_by.isnot(None)`) can never appear in the feed as currently deployed. Confirmed directly: created `BRIEFING-TEST-001`, re-fetched the briefing endpoint, the new project did **not** appear in `activity` or affect `people.leaderboard`. Test project deleted afterward (`DELETE /api/v1/projects/5`) to leave the DB clean. This is a pre-existing architecture gap (env-var logins were never backed by DB `User` rows anywhere else in the app either), not something introduced or fixable within Task 6's scope — flagged here and in `problemsresolved.md` for a future session to decide: either back CEO/MD/GM/PM logins with real DB `User` rows, or have `create_project` fall back to resolving `created_by` by role name when no DB user matches.
+5. **Frontend build**: `npm --prefix next-frontend run build` → compiled successfully (Next.js 16.2.9, Turbopack), TypeScript passed, all 30 routes generated including `/dashboard/executive` as a static route. No build errors.
+
+### What still needs a human in a browser (not verifiable from this session):
+- Actual visual rendering of the Briefing tab (KPI strip, 14-day trend bar chart, process-split donut, activity feed formatting).
+- People & KPIs tab rendering (PM/GM KPI cards, leaderboard, worker efficiency bars) and their empty states.
+- Projects tab regression check against the old page (6 KPIs, status donut, filter chips, MailButton) — confirm nothing visually broke.
+- Actual CEO/MD login (only `Developer` role was exercised locally; Railway env vars for `CEO_USER`/`MD_USER` are listed as pending from Session 31).
+- Console-error-free confirmation while clicking between tabs.
+- Deciding whether the `created_by`/env-var-login gap above needs a fix before this is considered "done," or is acceptable as-is (activity feed still shows completion-request events correctly; only project-creation events are silently dropped).
+
+### Commits this session:
+- `docs: update projectprogress for executive morning briefing session` (this entry + `problemsresolved.md`)
+
 ## Date: 2026-07-27 (Session 31 — Notification Bell Fix)
 
 ### What was done:

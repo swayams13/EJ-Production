@@ -5,6 +5,24 @@ Update this alongside `projectprogress.md` whenever a non-trivial problem is sol
 
 ---
 
+## 2026-07-27 — Executive briefing "Project created" activity event can never fire (found, not fixed)
+
+**Symptom:** During manual end-to-end verification of the new `GET /api/v1/dashboard/executive-briefing` endpoint, a test project created via the API (as a logged-in `Developer`-role user) did not appear in the endpoint's `activity` feed or affect `people.leaderboard`, even though the endpoint explicitly builds a "Project created" event from `Project.created_by`.
+
+**Root cause:** `create_project` (`backend/app/projects/router.py`) resolves the project creator via `db.query(User).filter_by(username=current_user["username"]).first()` and writes `created_by = creator.id if creator else None`. Every management/executive login in this app (`DEV_USER`, `GM_USER`, `PM_USER`, `CEO_USER`, `MD_USER`) is an env-var login (`backend/app/auth/router.py`) with no corresponding row in the `users` table — confirmed directly: the `users` table has 59 rows, all `Operator` role (workers synced from Excel), zero management-role users. So `creator` is always `None` for any real login today, `created_by` is always written `NULL`, and the briefing endpoint's activity-feed query (`Project.created_by.isnot(None)`) filters every project-creation event out — the feature is currently dead code in practice, even though it will populate correctly for any project row where `created_by` happens to be set.
+
+**Verified concretely:** created project `BRIEFING-TEST-001` via `POST /api/v1/projects` as the `DEV_USER` login → DB row showed `created_by = NULL` → re-fetched `/executive-briefing` → project absent from `activity` and `people.leaderboard`. Test project deleted afterward (`DELETE /api/v1/projects/5`) to leave the dev DB clean.
+
+**Fix:** Not applied in this session — this is an architecture decision (how management logins map to `User` rows) that predates and extends beyond the executive-briefing feature, so it wasn't fixed under Task 6's "verify + document" scope. Flagged here per this repo's convention of logging non-trivial problems found during verification.
+
+**Options for a future session:**
+1. Back `CEO_USER`/`MD_USER`/`GM_USER`/`PM_USER`/`DEV_USER` logins with real rows in the `users` table (matches how `Operator` accounts already work), so `creator` resolves correctly everywhere that looks up `User` by username — not just this endpoint.
+2. Or, narrower fix scoped to this feature only: have `create_project` fall back to writing a sentinel/role-based value into `created_by` (or a separate `created_by_role` column) when no DB `User` row matches, so the activity feed can still attribute "created by GM" etc. without a full auth-model change.
+
+**Why not fixed now:** Changing the login/user model has blast radius across every endpoint that resolves `current_user` to a DB `User` row, not just this one; deciding between the two options above needs a product call, not just a code fix.
+
+---
+
 ## 2026-07-22 — Procurement dashboard loading 1–2 minutes in production
 
 **Symptom:** Clicking the procurement (morning list) dashboard took 1–2 minutes or more to load, sometimes timing out.

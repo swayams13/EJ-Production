@@ -83,3 +83,37 @@ def build_leaderboard(yesterday_counts, week_counts, users_by_id):
         })
     rows.sort(key=lambda r: r["entries_7d"], reverse=True)
     return rows
+
+
+def resolve_and_rank_activity(raw_events, users_by_id, users_by_username, limit=50):
+    """
+    raw_events: list of dicts with 'timestamp' (datetime), 'action' (str),
+      'detail' (str), 'project_ref' (str|None), and either 'user_id' (int|None)
+      or 'username' (str|None) identifying the actor.
+    users_by_id / users_by_username: dict of id/username -> object with
+      .full_name and .role.
+    Returns newest-first list capped at `limit`:
+      {timestamp: iso str, actor_name, actor_role, action, detail, project_ref}
+    """
+    resolved = []
+    for e in raw_events:
+        user = None
+        if e.get("user_id") is not None:
+            user = users_by_id.get(e["user_id"])
+        if user is None and e.get("username"):
+            user = users_by_username.get(e["username"])
+        actor_name = user.full_name if (user and user.full_name) else (e.get("username") or "Unknown")
+        actor_role = user.role if user else "—"
+        resolved.append({
+            "timestamp": e["timestamp"],
+            "actor_name": actor_name,
+            "actor_role": actor_role,
+            "action": e["action"],
+            "detail": e["detail"],
+            "project_ref": e.get("project_ref"),
+        })
+    resolved.sort(key=lambda r: r["timestamp"], reverse=True)
+    top = resolved[:limit]
+    for r in top:
+        r["timestamp"] = r["timestamp"].isoformat()
+    return top

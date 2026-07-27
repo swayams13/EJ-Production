@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from datetime import date, datetime, timedelta
-from backend.services.briefing_service import summarize_production, on_time_pct, build_leaderboard
+from backend.services.briefing_service import summarize_production, on_time_pct, build_leaderboard, resolve_and_rank_activity
 
 
 def _row(d, process_type, feet, entries):
@@ -69,6 +69,25 @@ def test_build_leaderboard_unknown_user_falls_back_to_id():
     assert result[0]["role"] == "—"
 
 
+def test_resolve_and_rank_activity_sorts_and_caps():
+    users_by_id = {1: SimpleNamespace(full_name="Alice", role="Supervisor")}
+    events = [
+        {"timestamp": datetime(2026, 7, 27, 9, 0), "user_id": 1, "action": "Update", "detail": "d1", "project_ref": None},
+        {"timestamp": datetime(2026, 7, 27, 10, 0), "user_id": 1, "action": "Update", "detail": "d2", "project_ref": None},
+    ]
+    result = resolve_and_rank_activity(events, users_by_id, {}, limit=1)
+    assert len(result) == 1
+    assert result[0]["detail"] == "d2"
+    assert result[0]["actor_name"] == "Alice"
+
+
+def test_resolve_and_rank_activity_falls_back_to_username():
+    events = [{"timestamp": datetime(2026, 7, 27, 9, 0), "username": "pm_user", "action": "Completion requested", "detail": "d", "project_ref": "Q1"}]
+    result = resolve_and_rank_activity(events, {}, {}, limit=10)
+    assert result[0]["actor_name"] == "pm_user"
+    assert result[0]["actor_role"] == "—"
+
+
 if __name__ == "__main__":
     test_summarize_production_buckets_yesterday_and_week()
     test_summarize_production_ignores_unknown_process_type()
@@ -77,4 +96,6 @@ if __name__ == "__main__":
     test_on_time_pct_no_active_projects_returns_100()
     test_build_leaderboard_sorts_by_week_desc()
     test_build_leaderboard_unknown_user_falls_back_to_id()
+    test_resolve_and_rank_activity_sorts_and_caps()
+    test_resolve_and_rank_activity_falls_back_to_username()
     print("OK")

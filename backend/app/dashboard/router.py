@@ -223,6 +223,7 @@ def executive_briefing(
     )
     from backend.services.briefing_service import (
         summarize_production, resolve_and_rank_activity, build_leaderboard, on_time_pct, resolve_role,
+        summarize_material_risk,
     )
 
     today = _date.today()
@@ -380,10 +381,13 @@ def executive_briefing(
     holds_total = db.query(ProjectHoldHistory).count()
     resumes_total = db.query(ProjectHoldHistory).filter(ProjectHoldHistory.resume_date.isnot(None)).count()
 
+    materials = summarize_material_risk(_compute_material_rows(db))
+
     return {
         "production": production,
         "today_allotted": today_allotted,
         "activity": activity,
+        "materials": materials,
         "people": {
             "leaderboard": leaderboard,
             "by_role": {

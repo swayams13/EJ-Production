@@ -1,5 +1,19 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-28 (Session 36 — Executive Dashboard Performance Fix, merged from demo)
+
+### What was done:
+Cherry-picked only the perf fix from `demo` (Session 36 there) — the rest of what's on `demo` (Session 35, material risk digest + daily email digest) hasn't had a human browser verification pass yet, so it stays on `demo` until that happens.
+
+`GET /api/v1/dashboard/executive` had an N+1 query pattern: 4+ queries per project, including a per-process re-query of `Part` it already had. Batched into 2 queries total via `selectinload`. Also added 14 `CREATE INDEX IF NOT EXISTS` statements to `init_db()` for FK/date columns (`welding_logs.date`, `audit_logs.timestamp`, `work_orders.date/project_id`, the projects→lines→parts→processes FK chain) that Postgres doesn't auto-index and were being sequentially scanned on every dashboard/briefing request.
+
+Full detail in the `demo`-branch entry for Session 36 above this point in history (see `demo` branch `projectprogress.md` or commit `63b18a0`).
+
+### Commit merged:
+- `63b18a0` (cherry-picked as `486b31f` on `main`) — perf: fix N+1 queries and add missing FK/date indexes on executive dashboard
+
+---
+
 ## Date: 2026-07-27 (Session 34 — Briefing Chart Stagger + CEO/MD Sidebar Visibility)
 
 ### What was done:

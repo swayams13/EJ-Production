@@ -1,5 +1,33 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Pending (deferred 2026-07-28):
+- **Railway Cron Job for daily briefing email** — `scripts/send_daily_briefing.py` exists and works, but the scheduled trigger isn't set up yet. In Railway: create a new service from the same GitHub repo (branch `demo`), then in that service's Settings → Deploy set **Cron Schedule** to `30 2 * * *` (2:30 AM UTC = 8:00 AM IST) and **Custom Start Command** to `python scripts/send_daily_briefing.py`. Needs env vars `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, `JWT_SECRET_KEY` (`CEO_EMAIL`/`MD_EMAIL` not set anywhere yet — need real addresses). Trigger one manual run to confirm before relying on the schedule. User will do this later.
+
+## Date: 2026-07-28 (Session 36 — Executive Dashboard Performance Fix)
+
+### What was done:
+
+User reported the Executive dashboard taking noticeably longer to load, suspecting a DB query issue. Root-caused rather than guessed at a fix (systematic-debugging: read the actual query code before touching anything).
+
+1. **N+1 queries in `GET /api/v1/dashboard/executive`** (`executive_dashboard` in `backend/app/dashboard/router.py`): for every project it ran 4 separate queries (production lines → parts → processes → pending completion request), and *inside* the processes loop it re-queried `Part` individually per process — data it already had two lines earlier. Total query count scaled as `O(projects + total_processes)`, degrading further as the DB grows. Fixed by batch-loading all lines with `selectinload(parts).selectinload(processes)` in one query, and all pending-completion-request project ids in a second query, then computing per-project progress from the preloaded objects in Python — 2 queries total regardless of project/process count.
+2. **Missing indexes on hot filter/join columns**: `welding_logs.date`, `audit_logs.timestamp`, `work_orders.date/project_id`, and the FK columns joining projects→lines→parts→processes were unindexed (Postgres doesn't auto-index foreign keys, only primary keys), so every dashboard/briefing request did sequential scans on them. Added 14 `CREATE INDEX IF NOT EXISTS` statements to `init_db()`'s existing idempotent startup-migration pattern in `backend/services/db_service.py` — same list-and-loop convention already used there for `ALTER TABLE ADD COLUMN` migrations.
+
+`get_executive_briefing_data` (the `/executive-briefing` endpoint, loaded by the same page) was already written with a correct batch-fetch pattern from Sessions 32-35 — no N+1 there, it just benefits from the new indexes too.
+
+**Verified:** booted the backend against the real local Postgres DB, ran `init_db()` to confirm all 14 indexes create idempotently (re-running doesn't error), logged in as the `Developer` env-var user, curled both `/api/v1/dashboard/executive` and `/api/v1/dashboard/executive-briefing` — both HTTP 200, same KPI/project data as before the fix.
+
+### What's still pending:
+- No before/after timing measurement on the actual Railway production DB — local dev data (5 projects, empty `welding_logs`/`audit_logs`) is too small to benchmark meaningfully. Worth a quick "does it feel faster" check once deployed.
+- Railway Cron Job (above) and Session 33 backlog items #3-11 (below) are unchanged by this session.
+
+### Commit this session:
+- `63b18a0` — perf: fix N+1 queries and add missing FK/date indexes on executive dashboard (pushed to `demo`)
+
+### Note on this file:
+Before this session, `projectprogress.md` was found with unstaged local edits that had reverted the Session 35 entry below back out of the file (it appeared reset to its post-Session-34 state, with the "Pending" note above layered on top) — origin unknown; not made by this session, and not explained by stash or other commits touching the file. The Session 35 work itself is real and safely committed on `demo` regardless (`aded09c`…`e85e25c`), so nothing was at risk of being lost from git history — but the file's own narrative would have gone stale. Restored the Session 35 entry from `HEAD` (`ef12eeb`) below, merged alongside the pending note and this session's entry.
+
+---
+
 ## Date: 2026-07-27 (Session 34 — Briefing Chart Stagger + CEO/MD Sidebar Visibility)
 
 ### What was done:
@@ -23,13 +51,13 @@ Picked up the open items from Session 33's pending list (browser walkthrough, CE
 
 ---
 
-## Backlog: Executive Morning Briefing v2 ideas (not started — pick up here next session)
+## Backlog: Executive Morning Briefing v2 ideas
 
-Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. Nothing below is built yet — this is a scoped list to start the next brainstorming session from, not a commitment.
+Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. #1 and #2 are done (see Session 35). #3-11 remain a scoped list to start a future brainstorming session from, not a commitment.
 
 **High value, low effort (data already exists in the schema, just not surfaced):**
-1. **Material risk digest** — `/dashboard/materials` already computes stock-vs-demand RAG status. Add a "N projects blocked on material" tile to the Briefing tab so delays are explained without digging into the Materials page separately. **(Done — see Session 35 below.)**
-2. **Daily email digest** — email infra (Brevo) and the briefing data both already exist; add a scheduled job that emails CEO/MD this same briefing every morning (e.g. 8am) instead of requiring them to open the page. **(Done — see Session 35 below.)**
+1. **Material risk digest** — `/dashboard/materials` already computes stock-vs-demand RAG status. Add a "N projects blocked on material" tile to the Briefing tab so delays are explained without digging into the Materials page separately. **(Done — see Session 35.)**
+2. **Daily email digest** — email infra (Brevo) and the briefing data both already exist; add a scheduled job that emails CEO/MD this same briefing every morning (e.g. 8am) instead of requiring them to open the page. **(Done — see Session 35; Railway Cron Job trigger still pending, see top of file.)**
 3. **Attendance snapshot** — `AttendanceLog` exists; a "42/50 workers present today" tile is one query away and explains capacity dips.
 4. **Overtime signal** — `WorkOrder.is_overtime` / `DailyTaskAssignment.is_overtime` exist; "12 overtime hours logged yesterday" is a cost/fatigue flag.
 
@@ -43,8 +71,6 @@ Brainstormed 2026-07-27 after Session 33 shipped and verified the v1 briefing. N
 9. Drill-down from an activity-feed line or project row into its full history (explicitly deferred in the original 2026-07-27 spec too).
 10. Payment collection tracking (`advance_received` vs `order_value`, overdue amounts).
 11. Weekly PDF/Excel export of the whole briefing.
-
-**Recommendation for next session:** start with #1 (material risk digest) and #2 (daily email digest) — both reuse infrastructure that's already working end-to-end, and together they turn the briefing from "a page you have to remember to check" into something that actually reaches the CEO/MD unprompted.
 
 ---
 
@@ -441,10 +467,6 @@ App is now being used concurrently by 3–10 team members on the custom Railway 
 - `0e8b86d` — merge demo → main (Railway production deploy triggered)
 
 ### Status: COMPLETE — merged to main, live on Railway
-
-### What to do next session:
-- Confirm procurement dashboard loads fast in production (target < 10 seconds) — pending from Session 24
-- Continue any pending Session 23 verification (Supervisor → Attendance → Quick Mark + Excel upload flow)
 
 ---
 

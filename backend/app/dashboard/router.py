@@ -146,6 +146,7 @@ def executive_dashboard(
     db: Session = Depends(get_db),
     user=Depends(require_roles(EXECUTIVES + ["Developer"])),
 ):
+    from sqlalchemy.orm import selectinload
     from backend.services.db_service import ProjectCompletionRequest
     from datetime import date as _date_today
 
@@ -165,25 +166,39 @@ def executive_dashboard(
         if p.status == "Active" and p.committed_dispatch_date and p.committed_dispatch_date < today
     )
 
+    # Batch-load lines/parts/processes for ALL projects in 3 queries total instead of
+    # per-project N+1 queries (previously re-queried Part per process too).
+    lines_by_project: dict = {}
+    for line in (
+        db.query(ProjectProductionLine)
+        .options(selectinload(ProjectProductionLine.parts).selectinload(Part.processes))
+        .all()
+    ):
+        lines_by_project.setdefault(line.project_id, []).append(line)
+
+    pending_project_ids = {
+        r[0] for r in db.query(ProjectCompletionRequest.project_id).filter_by(status="pending").all()
+    }
+
     project_rows = []
     for p in projects:
-        line_ids = [l.id for l in db.query(ProjectProductionLine.id).filter_by(project_id=p.id).all()]
-        part_ids = [pt.id for pt in db.query(Part.id).filter(Part.production_line_id.in_(line_ids)).all()] if line_ids else []
-        processes = db.query(PartProcess).filter(PartProcess.part_id.in_(part_ids)).all() if part_ids else []
+        total_qty_sum = 0
+        completed_qty_sum = 0
+        has_processes = False
+        for line in lines_by_project.get(p.id, []):
+            for part in line.parts:
+                for pp in part.processes:
+                    has_processes = True
+                    if part.total_qty:
+                        total_qty_sum += part.total_qty
+                        completed_qty_sum += min(pp.completed_qty, part.total_qty)
 
-        if processes:
-            total_qty_sum = 0
-            completed_qty_sum = 0
-            for pp in processes:
-                part = db.query(Part).filter(Part.id == pp.part_id).first()
-                if part and part.total_qty:
-                    total_qty_sum += part.total_qty
-                    completed_qty_sum += min(pp.completed_qty, part.total_qty)
+        if has_processes:
             progress = round((completed_qty_sum / total_qty_sum * 100)) if total_qty_sum else 0
         else:
             progress = 100 if p.status == "Completed" else 0
 
-        pending_req = db.query(ProjectCompletionRequest).filter_by(project_id=p.id, status="pending").first()
+        pending_req = p.id in pending_project_ids
 
         project_rows.append({
             "id": p.id,

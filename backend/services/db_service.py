@@ -530,7 +530,32 @@ def init_db():
                 conn.execute(text(query))
         except Exception:
             pass
-            
+
+    # Foreign-key / date-filter columns that get scanned on every dashboard and
+    # executive-briefing request but aren't auto-indexed by Postgres (only PKs are).
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS ix_welding_logs_date ON welding_logs (date);",
+        "CREATE INDEX IF NOT EXISTS ix_welding_logs_production_line_id ON welding_logs (production_line_id);",
+        "CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs (timestamp);",
+        "CREATE INDEX IF NOT EXISTS ix_audit_logs_user_id ON audit_logs (user_id);",
+        "CREATE INDEX IF NOT EXISTS ix_work_orders_date ON work_orders (date);",
+        "CREATE INDEX IF NOT EXISTS ix_work_orders_project_id ON work_orders (project_id);",
+        "CREATE INDEX IF NOT EXISTS ix_project_production_lines_project_id ON project_production_lines (project_id);",
+        "CREATE INDEX IF NOT EXISTS ix_parts_production_line_id ON parts (production_line_id);",
+        "CREATE INDEX IF NOT EXISTS ix_part_processes_part_id ON part_processes (part_id);",
+        "CREATE INDEX IF NOT EXISTS ix_purchase_orders_created_at ON purchase_orders (created_at);",
+        "CREATE INDEX IF NOT EXISTS ix_goods_receipts_created_at ON goods_receipts (created_at);",
+        "CREATE INDEX IF NOT EXISTS ix_project_completion_requests_project_id ON project_completion_requests (project_id);",
+        "CREATE INDEX IF NOT EXISTS ix_project_completion_requests_status ON project_completion_requests (status);",
+        "CREATE INDEX IF NOT EXISTS ix_project_completion_requests_requested_at ON project_completion_requests (requested_at);",
+    ]
+    for query in indexes:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(query))
+        except Exception:
+            pass
+
     # Safe migration for workforce_master
     try:
         with engine.begin() as conn:

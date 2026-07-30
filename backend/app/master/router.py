@@ -72,23 +72,21 @@ def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db), cur
 
 def auto_sync_all_projects_with_master():
     from backend.services.db_service import SessionLocal, ProjectProductionLine, Project, ProjectResourceAssignment
-    from backend.services.production_service import get_welding_master_latest, calculate_required_resources_for_deadline, compute_master_feet
+    from backend.services.production_service import get_weld_master_lookup, resolve_master_row, calculate_required_resources_for_deadline, compute_master_feet
     from datetime import date
 
     db = SessionLocal()
     try:
-        master_records = get_welding_master_latest()
-        master_data = {(m.size, m.joint_type): m for m in master_records}
+        master_data = get_weld_master_lookup()
 
         lines = db.query(ProjectProductionLine).all()
         for line in lines:
             size = line.size
             qty = line.quantity
             j_type = getattr(line, 'joint_type', 'EJ')
+            tag = getattr(line, 'joint_type_code', None)
 
-            m = master_data.get((size, j_type))
-            if not m and j_type == 'DJ':
-                m = master_data.get((size, 'EJ'))
+            m = resolve_master_row(master_data, tag, j_type, size)
 
             if m:
                 new_tig, new_mig, new_grind = compute_master_feet(m, j_type, qty)

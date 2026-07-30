@@ -391,6 +391,7 @@ export default function EditProjects() {
           mig_feet: Number(customSizeData.mig_feet),
           grinding_feet: Number(customSizeData.grinding_feet),
           joint_type: customSizeData.joint_type,
+          tag_no: bellows[customSizeRowIndex]?.joint_type_code || null,
         }),
       });
       const data = await res.json();

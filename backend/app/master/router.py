@@ -35,7 +35,23 @@ def get_welding_master_api(current_user: dict = Depends(require_roles(SUPERVISOR
 @router.post("/welding-size")
 def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
     from backend.services.db_service import WeldingMaster
-    
+
+    if req.tag_no:
+        from backend.services.production_service import upsert_tag_welding_master
+        wm = upsert_tag_welding_master(req.tag_no, req.size, req.tig_feet, req.mig_feet, req.grinding_feet)
+        return {
+            "success": True,
+            "message": f"Custom size saved for tag {req.tag_no}",
+            "data": {
+                "size": wm.size,
+                "type": wm.joint_type,
+                "tag_no": wm.tag_no,
+                "tig_feet": round(wm.tig_feet, 2) if wm.tig_feet else 0,
+                "mig_feet": round(wm.mig_feet, 2) if wm.mig_feet else 0,
+                "grinding_feet": round(wm.grinding_feet, 2) if wm.grinding_feet else 0,
+            }
+        }
+
     latest = db.query(WeldingMaster).filter(
         WeldingMaster.joint_type == req.joint_type
     ).order_by(WeldingMaster.version.desc()).first()

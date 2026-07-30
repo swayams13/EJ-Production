@@ -14,3 +14,4 @@ class WeldingSizeCreate(BaseModel):
     mig_feet: float
     grinding_feet: float
     joint_type: str
+    tag_no: str | None = None

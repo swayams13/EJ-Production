@@ -152,6 +152,46 @@ def get_weld_master_lookup():
     return lookup
 
 
+def upsert_tag_welding_master(tag_no, size, tig_feet, mig_feet, grinding_feet):
+    """
+    Insert-or-update the tag-specific WeldingMaster row for (tag_no, size).
+    Used by scripts/import_tag_welding_master.py (the one-off GM-file seed
+    import) and by the Custom Size frontend flow when a PM/GM fills a
+    tag+size gap. There is always exactly one row per (tag_no, size),
+    updated in place - tag-specific rows are not part of the joint_type
+    version-history lineage that generic rows use.
+    """
+    session = SessionLocal()
+    try:
+        row = session.query(WeldingMaster).filter(
+            WeldingMaster.tag_no == tag_no, WeldingMaster.size == size
+        ).first()
+        weld_family = joint_catalog.weld_family_for(tag_no)
+        if row:
+            row.tig_feet = tig_feet
+            row.mig_feet = mig_feet
+            row.grinding_feet = grinding_feet
+            row.total_welding_feet = tig_feet + mig_feet
+            row.joint_type = weld_family
+        else:
+            row = WeldingMaster(
+                size=size,
+                tag_no=tag_no,
+                joint_type=weld_family,
+                tig_feet=tig_feet,
+                mig_feet=mig_feet,
+                total_welding_feet=tig_feet + mig_feet,
+                grinding_feet=grinding_feet,
+                version=1,
+            )
+            session.add(row)
+        session.commit()
+        session.refresh(row)
+        return row
+    finally:
+        session.close()
+
+
 def _import_ej_master_dataframe(df):
     """
     Shared EJ import logic: takes a raw EJ welding-feet DataFrame (as read from

@@ -1,5 +1,81 @@
 # EJ Production Tracker - Daily Progress Log
 
+## Date: 2026-07-30 (Session 37 — Tag-Level Welding Feet, merged from demo)
+
+Note: Session 35 (material risk digest + daily email digest) has not had a human
+browser-verification pass yet, so it stays on `demo` and is skipped here — this cherry-pick
+brings over Session 37 (tag-level welding feet) only, same pattern as the Session 36 merge below.
+
+### What was done:
+
+Implemented the plan at `docs/superpowers/plans/2026-07-30-tag-level-welding-feet.md` (spec:
+`docs/superpowers/specs/2026-07-30-tag-level-welding-feet-design.md`) task-by-task via
+subagent-driven-development. Replaced the one-size-fits-all `(size, joint_type)` welding-feet
+lookup with a tag-aware lookup that uses the GM's exact per-tag TIG/MIG/Grinding numbers where
+available, falling back to the old generic EJ/DJ numbers everywhere else.
+
+1. **Committed the GM's 4 reference files** at the repo root: `Feet - S-EJ-F.xlsx`,
+   `Feet - S-EJ-F-S-L.xlsx`, `Feet - U-EJ-F-S-L.xlsx`, `Feet - DEJ-F.xlsx`.
+2. **Added `WeldingMaster.tag_no`** (nullable, indexed) — `NULL` = today's generic weld-family
+   row, unchanged; non-null = a tag-specific row for that exact tag. Idempotent
+   `ALTER TABLE`/`CREATE INDEX` migration added to `init_db()`.
+3. **`canonical_weld_tag()`** (`joint_catalog.py`) aliases the 6 "Matching Flange" variants
+   (e.g. `S-EJ-F-1MF-S-L`) to their base tag, since an MF variant only bolts on a Matching Flange
+   and welds identically to its base tag — no separate data needed for those 6.
+4. **`resolve_master_row()`** (`production_service.py`) centralizes the tag-first/generic-fallback
+   resolution: tag-specific row → generic `(size, weld_family)` row → DJ→EJ same-size fallback
+   (unchanged). Single source of truth, TDD'd in `test_weld_tag_resolution.py`.
+5. **Wired into both sync call sites** — `sync_project_production_lines` and
+   `auto_sync_all_projects_with_master` (`master/router.py`) — via the new
+   `get_weld_master_lookup()` + `resolve_master_row()`. Zero behavior change until tag-specific
+   rows exist (verified server boots clean before the seed import).
+6. **`POST /master/welding-size` accepts an optional `tag_no`** — the existing "Custom Size"
+   gap-fill flow now writes a tag-specific row (via new `upsert_tag_welding_master()`) instead of
+   a generic one when a tag is known, so PMs/GMs filling a Custom Size for a specific tag+size
+   gap (e.g. size 125) get exact per-tag data going forward, not just the generic fallback.
+7. **Frontend Custom Size modal** (add + edit project pages) now passes the row's
+   `joint_type_code` as `tag_no` in the save request.
+8. **Seed import script** `scripts/import_tag_welding_master.py` parses the GM's 4 files
+   (2 distinct column layouts; `S-EJ-F-S-L`/`U-EJ-F-S-L` have a blank divider row at row 26
+   before data resumes at 1600mm — the parser scans past it rather than stopping at first blank,
+   confirmed by direct cell inspection, not inferred from formulas) and upserts all rows via
+   `upsert_tag_welding_master`. TDD'd against exact expected values in
+   `test_import_tag_welding_master.py`. Run against the local dev DB: 133 tag-specific rows now
+   seeded (`S-EJ-F`: 22 sizes, `S-EJ-F-S-L`: 37, `U-EJ-F-S-L`: 37, `DEJ-F`: 37).
+9. **End-to-end verification**: exercised `get_weld_master_lookup` → `resolve_master_row` →
+   `compute_master_feet` directly against the seeded local dev DB for all 4 seeded tags plus one
+   MF-aliased tag, all at size 50, plus `S-EJ-F-S-L` at size 125 (no tag-specific data for that
+   size). All values matched the GM's numbers exactly; `S-EJ-F-1MF-S-L` resolved to the identical
+   master row as `S-EJ-F-S-L` (`master_id=472`, confirming the alias resolves end-to-end, not
+   just in the unit test); size 125 correctly fell back to the generic EJ master row
+   (`tag_no=None`) instead of erroring or returning zero. Updated
+   `docs/EJ_DJ_CALCULATION_LOGIC.md`'s now-outdated "Simple and Universal share the same EJ
+   master" claim to describe the new tag-first/generic-fallback resolution order.
+
+**Coverage:** 10 of the 12 catalog tags now have tag-specific data (4 seeded directly + 6 via
+MF-alias). The 2 Weldend variants (`S-EJ-W-S-L`, `U-EJ-W-S-L`) have no GM file yet and still
+resolve through the generic EJ fallback — same as every tag did before this session.
+
+### What's still pending:
+- **2 Weldend tags** (`S-EJ-W-S-L`, `U-EJ-W-S-L`) still need GM-sourced Excel files; once
+  supplied, add their filenames to `EJ_TAG_FILES`/`DJ_TAG_FILES` in
+  `scripts/import_tag_welding_master.py` and re-run it.
+- No DB-level unique constraint on `(tag_no, size)` — app-level only (`upsert_tag_welding_master`'s
+  query-then-insert-or-update), matching the spec's stated decision.
+- Railway Cron Job for daily briefing email (Session 35/36, unchanged — see note at top of file).
+
+### Commits this session:
+- `b6b7b08` — chore: add GM's 4 tag-specific welding-feet reference files
+- `9a59e2c` — feat: add tag_no column to WeldingMaster for tag-specific welding-feet data
+- `155bfb8` — feat: add canonical_weld_tag MF-variant alias resolution
+- `8b9de0f` — feat: add resolve_master_row centralized tag-first/generic-fallback lookup
+- `f19bf49` — feat: use tag-aware welding-feet lookup in both project-sync call sites
+- `09e8fc9` — feat: accept tag_no in POST /master/welding-size for tag-specific gap fills
+- `22b344e` — feat: pass tag_no when saving a Custom Size gap fill
+- `c106d17` — feat: seed-import the GM's 4 tag-specific welding-feet files
+
+---
+
 ## Date: 2026-07-28 (Session 36 — Executive Dashboard Performance Fix, merged from demo)
 
 ### What was done:

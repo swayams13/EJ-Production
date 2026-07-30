@@ -17,10 +17,32 @@ Key rules:
   `ProjectProductionLine.variable_qtys_json`), DERIVED (`Lug = 2 × Limit rod`), STATUS (Paint —
   a line-level status, not a quantity: Yet to start / Started / In progress / Completed).
 - **`joint_type` (the old EJ/DJ column) still exists and still drives welding feet** — it now
-  holds the tag's `weld_family`. Per the current requirement, **Simple AND Universal expansion
-  joints both use the EJ welding master (same feet per size), and Dismantling uses the DJ master.**
-  So `compute_master_feet` / `aggregate_line_feet` / the whole resource calc below are UNCHANGED —
+  holds the tag's `weld_family`, used as the fallback key described below.
+  `compute_master_feet` / `aggregate_line_feet` / the whole resource calc below are UNCHANGED —
   Universal is not auto-doubled for welding. (Revisit if that changes.)
+- **2026-07-30 update: tag-aware welding-feet lookup.** The old "Simple AND Universal both use
+  the same EJ master (same feet per size)" claim is now only the *fallback* path, not the whole
+  story. `resolve_master_row(lookup, tag, weld_family, size)` (`production_service.py`) is the
+  single place both sync call sites (`sync_project_production_lines` and
+  `auto_sync_all_projects_with_master`) resolve a line's `WeldingMaster` row from, in this order:
+  1. A **tag-specific** row (`WeldingMaster.tag_no` set) for `(size, canonical_weld_tag(tag))` —
+     the GM's exact per-tag TIG/MIG/Grinding numbers. `canonical_weld_tag()`
+     (`joint_catalog.py`) aliases the 6 "Matching Flange" variants (e.g. `S-EJ-F-1MF-S-L`) to
+     their base tag (`S-EJ-F-S-L`), since an MF variant only bolts on a Matching Flange and
+     welds identically to its base tag. 10 of the 12 catalog tags now have tag-specific data
+     this way (4 seeded directly + 6 via MF-alias); the 2 Weldend variants (`S-EJ-W-S-L`,
+     `U-EJ-W-S-L`) don't yet and fall through to step 2.
+  2. The **generic** `(size, weld_family)` row — today's original EJ/DJ-only master, used for
+     the 2 not-yet-supplied Weldend tags and any size gap in the tag-specific data (e.g. size
+     125, which none of the GM's 4 files cover).
+  3. The pre-existing DJ→EJ same-size fallback (unchanged).
+
+  Tag-specific rows are seeded by the one-off `scripts/import_tag_welding_master.py` (parses the
+  GM's 4 Excel files: `Feet - S-EJ-F.xlsx`, `Feet - S-EJ-F-S-L.xlsx`, `Feet - U-EJ-F-S-L.xlsx`,
+  `Feet - DEJ-F.xlsx`) and can also be created/updated one row at a time via the existing "Custom
+  Size" frontend flow (`POST /master/welding-size` with an optional `tag_no`) when a PM/GM fills
+  a tag+size gap. Full rationale:
+  [docs/superpowers/specs/2026-07-30-tag-level-welding-feet-design.md](superpowers/specs/2026-07-30-tag-level-welding-feet-design.md).
 - `templates.py` now exposes `PROCESS_ROUTES` (component → process steps) and `COMPONENT_WEIGHTS`
   (normalized per line so weights still sum to 100 — the progress formula below depends on that).
 

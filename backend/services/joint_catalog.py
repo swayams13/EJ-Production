@@ -333,6 +333,28 @@ def category_for(tag_no):
     return jt["category"] if jt else None
 
 
+# MF ("Matching Flange") variants add only a bolted-on Matching Flange
+# (see their `components` lists: Matching Flanges + Bolts, Nuts + Gaskets -
+# a bolted joint, not a weld) - no welded component differs from their base
+# tag, so they use the base tag's welding-feet data rather than needing
+# their own.
+WELD_TAG_ALIAS = {
+    "S-EJ-F-1MF-S-L": "S-EJ-F-S-L",
+    "S-EJ-F-2MF-S-L": "S-EJ-F-S-L",
+    "U-EJ-F-1MF-S-L": "U-EJ-F-S-L",
+    "U-EJ-F-2MF-S-L": "U-EJ-F-S-L",
+    "DEJ-F-1MF": "DEJ-F",
+    "DEJ-F-2MF": "DEJ-F",
+}
+
+
+def canonical_weld_tag(tag_no):
+    """Resolve a tag to the tag whose WeldingMaster row it should use.
+    MF variants alias to their base tag. Unaliased tags (including the 2
+    Weldend variants with no GM data yet) resolve to themselves."""
+    return WELD_TAG_ALIAS.get(tag_no, tag_no)
+
+
 def variable_component_names(tag_no):
     """Names of the ENTER (user-supplied) components for a tag."""
     jt = _BY_TAG.get(tag_no)

@@ -132,6 +132,26 @@ def resolve_master_row(lookup, tag, weld_family, size):
     return None
 
 
+def get_weld_master_lookup():
+    """
+    Build the (size, key) -> WeldingMaster row dict consumed by
+    resolve_master_row. Merges the existing generic "latest version per weld
+    family" rows (keyed by (size, joint_type)) with any tag-specific rows
+    (keyed by (size, tag_no)).
+    """
+    lookup = {(m.size, m.joint_type): m for m in get_welding_master_latest()}
+
+    session = SessionLocal()
+    try:
+        tag_rows = session.query(WeldingMaster).filter(WeldingMaster.tag_no.isnot(None)).all()
+    finally:
+        session.close()
+    for m in tag_rows:
+        lookup[(m.size, m.tag_no)] = m
+
+    return lookup
+
+
 def _import_ej_master_dataframe(df):
     """
     Shared EJ import logic: takes a raw EJ welding-feet DataFrame (as read from
@@ -347,7 +367,7 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
     """
     session = SessionLocal()
     try:
-        master_data = {(m.size, m.joint_type): m for m in get_welding_master_latest()}
+        master_data = get_weld_master_lookup()
         existing_lines = session.query(ProjectProductionLine).filter(ProjectProductionLine.project_id == project_id).all()
 
         from backend.services.mes_service import MESService
@@ -391,13 +411,9 @@ def sync_project_production_lines(project_id, sizes_and_qtys):
             weld_family = joint_catalog.weld_family_for(tag) if tag else item.get('type', 'EJ')
             category = item.get('joint_category') or (joint_catalog.category_for(tag) if tag else None)
 
-            # Welding-feet master (EJ for Simple+Universal, DJ for Dismantling)
-            m = master_data.get((size, weld_family))
-            if not m and weld_family == 'DJ':
-                m_ej = master_data.get((size, 'EJ'))
-                if m_ej:
-                    logger.warning("No DJ master data for size=%s; falling back to EJ master record.", size)
-                    m = m_ej
+            # Welding-feet master: tag-specific GM data first, generic
+            # weld-family data as fallback (see resolve_master_row).
+            m = resolve_master_row(master_data, tag, weld_family, size)
 
             tig, mig, grind = compute_master_feet(m, weld_family, qty)
             var_json = json.dumps(variable_qtys) if variable_qtys else None

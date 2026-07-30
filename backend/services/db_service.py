@@ -92,6 +92,7 @@ class WeldingMaster(Base):
     total_welding_feet = Column(Float, default=0.0)
     grinding_feet = Column(Float, default=0.0)
     joint_type = Column(String, default="EJ")
+    tag_no = Column(String, nullable=True, index=True)  # NULL = generic weld-family row; set = tag-specific row
     version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -498,6 +499,11 @@ def init_db():
         pass
     try:
         with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE welding_master ADD COLUMN tag_no VARCHAR;"))
+    except Exception:
+        pass  # Column might already exist
+    try:
+        with engine.begin() as conn:
             conn.execute(text("ALTER TABLE production_logs ADD COLUMN feet_done FLOAT;"))
     except Exception:
         pass # Column might already exist
@@ -548,6 +554,7 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS ix_project_completion_requests_project_id ON project_completion_requests (project_id);",
         "CREATE INDEX IF NOT EXISTS ix_project_completion_requests_status ON project_completion_requests (status);",
         "CREATE INDEX IF NOT EXISTS ix_project_completion_requests_requested_at ON project_completion_requests (requested_at);",
+        "CREATE INDEX IF NOT EXISTS ix_welding_master_tag_no_size ON welding_master (tag_no, size);",
     ]
     for query in indexes:
         try:

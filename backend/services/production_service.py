@@ -94,6 +94,44 @@ def aggregate_line_feet(lines):
     return tot_tig, tot_mig, tot_grind
 
 
+def resolve_master_row(lookup, tag, weld_family, size):
+    """
+    Resolve which WeldingMaster row a production line should use. Single
+    source of truth for this resolution, used by both
+    sync_project_production_lines and auto_sync_all_projects_with_master.
+
+    Resolution order:
+    1. Tag-specific row for (size, canonical_weld_tag(tag)) - exact
+       GM-sourced numbers for that tag; MF variants alias to their base tag.
+    2. Generic row for (size, weld_family) - today's EJ/DJ-only fallback,
+       used when no tag-specific data exists yet (unresolved tags, or a
+       size gap in the tag-specific data).
+    3. DJ-only same-size EJ fallback (pre-existing behavior, unchanged): if
+       there is no DJ data at all for this size, an EJ record is used as a
+       same-size approximation - compute_master_feet folds its footage
+       entirely into MIG since DJ has no TIG process.
+    """
+    canonical = joint_catalog.canonical_weld_tag(tag) if tag else None
+    m = lookup.get((size, canonical)) if canonical else None
+    if m:
+        return m
+
+    m = lookup.get((size, weld_family))
+    if m:
+        return m
+
+    if weld_family == 'DJ':
+        m = lookup.get((size, 'EJ'))
+        if m:
+            logger.warning(
+                "No DJ master data for size=%s (tag=%s); falling back to EJ master record.",
+                size, tag
+            )
+        return m
+
+    return None
+
+
 def _import_ej_master_dataframe(df):
     """
     Shared EJ import logic: takes a raw EJ welding-feet DataFrame (as read from

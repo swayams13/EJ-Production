@@ -1,6 +1,6 @@
 # EJ Production Tracker - Daily Progress Log
 
-## Date: 2026-07-30 (Session 37 — Tag-Level Welding Feet, merged from demo)
+## Date: 2026-07-30 (Session 37 — Tag-Level Welding Feet, merged from demo 2026-08-01)
 
 Note: Session 35 (material risk digest + daily email digest) has not had a human
 browser-verification pass yet, so it stays on `demo` and is skipped here — this cherry-pick

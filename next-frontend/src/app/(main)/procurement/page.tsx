@@ -238,7 +238,14 @@ export default function ProcurementDashboard() {
   };
 
   const handleCreatePO = (item: MorningListItem) => {
-    router.push(`/procurement/po?prefill=${encodeURIComponent(JSON.stringify(item))}`);
+    const payload = [{
+      part_id: item.part_id,
+      material_name: item.material_name,
+      size: item.size,
+      joint_type: item.joint_type,
+      ordered_qty: item.still_needs_ordering,
+    }];
+    router.push(`/procurement/po?prefill=${encodeURIComponent(JSON.stringify(payload))}`);
   };
 
   const handleLogReason = (item: MorningListItem) => {

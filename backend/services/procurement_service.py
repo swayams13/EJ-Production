@@ -228,6 +228,7 @@ def get_morning_list(db: Session) -> list:
                     "line_id": line.id,
                     "size": line.size,
                     "joint_type": line.joint_type,
+                    "joint_type_code": line.joint_type_code,
                     "part_id": part.id,
                     "material_name": part.name,
                     "total_qty": part.total_qty,

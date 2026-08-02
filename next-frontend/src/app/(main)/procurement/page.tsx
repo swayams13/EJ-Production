@@ -33,9 +33,15 @@ function daysLeftClass(days: number): string {
 
 interface MorningListItem {
   part_id: number;
+  project_id: number;
+  quotation_no: string;
   project_name: string;
+  client_name: string;
+  line_id: number;
+  joint_type_code: string | null;
   priority: string;
   target_date: string | null;
+  order_by_date: string | null;
   days_to_order_by: number;
   material_name: string;
   size: number;
@@ -187,6 +193,11 @@ export default function ProcurementDashboard() {
   const [reason, setReason] = useState("");
   const [savingReason, setSavingReason] = useState(false);
 
+  // Browse-by-project mode
+  const [view, setView] = useState<"priorities" | "browse">("priorities");
+  const [browseProjectId, setBrowseProjectId] = useState<number | null>(null);
+  const [browseLineId, setBrowseLineId] = useState<number | null>(null);
+
   // ponytail: localStorage role check — matches vendors/po page pattern
   const isManagement = typeof window !== "undefined" && localStorage.getItem("user_role") === "MANAGEMENT";
 
@@ -285,6 +296,54 @@ export default function ProcurementDashboard() {
   const orange = items.filter(i => i.bucket === "ORANGE");
   const green = items.filter(i => i.bucket === "GREEN");
 
+  type BucketCounts = { RED: number; ORANGE: number; GREEN: number };
+  const emptyCounts = (): BucketCounts => ({ RED: 0, ORANGE: 0, GREEN: 0 });
+
+  type ProjectGroup = {
+    project_id: number; quotation_no: string; project_name: string;
+    client_name: string; target_date: string | null; counts: BucketCounts;
+  };
+  const projectGroups: ProjectGroup[] = Object.values(
+    items.reduce<Record<number, ProjectGroup>>((acc, item) => {
+      const g = acc[item.project_id] ?? {
+        project_id: item.project_id, quotation_no: item.quotation_no,
+        project_name: item.project_name, client_name: item.client_name,
+        target_date: item.target_date, counts: emptyCounts(),
+      };
+      if (item.bucket === "RED" || item.bucket === "ORANGE" || item.bucket === "GREEN") {
+        g.counts[item.bucket]++;
+      }
+      acc[item.project_id] = g;
+      return acc;
+    }, {})
+  );
+
+  type JobGroup = { line_id: number; joint_type_code: string | null; size: number; counts: BucketCounts };
+  const jobGroupsForProject = (projectId: number): JobGroup[] => Object.values(
+    items.filter(i => i.project_id === projectId).reduce<Record<number, JobGroup>>((acc, item) => {
+      const g = acc[item.line_id] ?? {
+        line_id: item.line_id, joint_type_code: item.joint_type_code,
+        size: item.size, counts: emptyCounts(),
+      };
+      if (item.bucket === "RED" || item.bucket === "ORANGE" || item.bucket === "GREEN") {
+        g.counts[item.bucket]++;
+      }
+      acc[item.line_id] = g;
+      return acc;
+    }, {})
+  );
+
+  const materialsForLine = (lineId: number): MorningListItem[] =>
+    items.filter(i => i.line_id === lineId);
+
+  const openBrowseProject = (projectId: number) => {
+    setBrowseProjectId(projectId);
+    setBrowseLineId(null);
+  };
+  const openBrowseLine = (lineId: number) => {
+    setBrowseLineId(lineId);
+  };
+
   const totalItems = items.length;
 
   return (
@@ -306,10 +365,21 @@ export default function ProcurementDashboard() {
         )}
       </div>
 
+      <div className="flex gap-2">
+        <Button variant={view === "priorities" ? "primary" : "secondary"} onClick={() => setView("priorities")}>
+          Today&apos;s Priorities
+        </Button>
+        <Button variant={view === "browse" ? "primary" : "secondary"} onClick={() => setView("browse")}>
+          Browse by Project
+        </Button>
+      </div>
+
       {fetchError && (
         <Alert tone="critical" title="Error loading morning list">{fetchError}</Alert>
       )}
 
+      {view === "priorities" && (
+      <>
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card>
@@ -459,6 +529,125 @@ export default function ProcurementDashboard() {
           title="All clear — nothing to order today"
           description="No procurement action needed. Check back tomorrow or view all POs for open orders."
         />
+      )}
+      </>
+      )}
+
+      {view === "browse" && (
+        <div className="flex flex-col gap-4">
+          {browseProjectId === null && (
+            <Card>
+              <CardHeader title="Projects" />
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>Project</Th>
+                    <Th>Client</Th>
+                    <Th>Target Date</Th>
+                    <Th numeric>Red</Th>
+                    <Th numeric>Orange</Th>
+                    <Th numeric>Green</Th>
+                    <Th></Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {projectGroups.map(g => (
+                    <Tr key={g.project_id}>
+                      <Td>
+                        <div className="font-semibold text-ink">{g.project_name}</div>
+                        <div className="font-data text-xs text-ink-soft">{g.quotation_no}</div>
+                      </Td>
+                      <Td>{g.client_name}</Td>
+                      <Td className="font-data text-sm">{g.target_date ?? "—"}</Td>
+                      <Td numeric>{g.counts.RED > 0 && <Badge tone="critical">{g.counts.RED}</Badge>}</Td>
+                      <Td numeric>{g.counts.ORANGE > 0 && <Badge tone="warning">{g.counts.ORANGE}</Badge>}</Td>
+                      <Td numeric>{g.counts.GREEN > 0 && <Badge tone="success">{g.counts.GREEN}</Badge>}</Td>
+                      <Td numeric>
+                        <Button variant="secondary" onClick={() => openBrowseProject(g.project_id)}>Open</Button>
+                      </Td>
+                    </Tr>
+                  ))}
+                  {projectGroups.length === 0 && (
+                    <Tr><Td colSpan={7} className="py-8 text-center text-ink-soft">Nothing to order right now.</Td></Tr>
+                  )}
+                </TBody>
+              </Table>
+            </Card>
+          )}
+
+          {browseProjectId !== null && browseLineId === null && (
+            <Card>
+              <CardHeader
+                title={`Jobs — ${projectGroups.find(g => g.project_id === browseProjectId)?.project_name ?? ""}`}
+                action={<Button variant="ghost" onClick={() => setBrowseProjectId(null)}>&larr; Projects</Button>}
+              />
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>Tag</Th>
+                    <Th numeric>Size</Th>
+                    <Th numeric>Red</Th>
+                    <Th numeric>Orange</Th>
+                    <Th numeric>Green</Th>
+                    <Th></Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {jobGroupsForProject(browseProjectId).map(g => (
+                    <Tr key={g.line_id}>
+                      <Td className="font-data font-semibold text-ink">{g.joint_type_code ?? "—"}</Td>
+                      <Td numeric>{g.size}</Td>
+                      <Td numeric>{g.counts.RED > 0 && <Badge tone="critical">{g.counts.RED}</Badge>}</Td>
+                      <Td numeric>{g.counts.ORANGE > 0 && <Badge tone="warning">{g.counts.ORANGE}</Badge>}</Td>
+                      <Td numeric>{g.counts.GREEN > 0 && <Badge tone="success">{g.counts.GREEN}</Badge>}</Td>
+                      <Td numeric>
+                        <Button variant="secondary" onClick={() => openBrowseLine(g.line_id)}>Open</Button>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </Card>
+          )}
+
+          {browseLineId !== null && (
+            <Card>
+              <CardHeader
+                title="Materials"
+                action={<Button variant="ghost" onClick={() => setBrowseLineId(null)}>&larr; Jobs</Button>}
+              />
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>Material</Th>
+                    <Th numeric>Size</Th>
+                    <Th numeric>Qty Needed</Th>
+                    <Th>Order By</Th>
+                    <Th>Status</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {materialsForLine(browseLineId).map(item => (
+                    <Tr key={item.part_id}>
+                      <Td>{item.material_name}</Td>
+                      <Td numeric>{item.size}</Td>
+                      <Td numeric>{item.still_needs_ordering}</Td>
+                      <Td className="font-data text-sm">{item.order_by_date ?? "—"}</Td>
+                      <Td>
+                        <Badge tone={item.bucket === "RED" ? "critical" : item.bucket === "ORANGE" ? "warning" : "success"}>
+                          {item.bucket}
+                        </Badge>
+                      </Td>
+                    </Tr>
+                  ))}
+                  {materialsForLine(browseLineId).length === 0 && (
+                    <Tr><Td colSpan={5} className="py-8 text-center text-ink-soft">All materials ordered for this job.</Td></Tr>
+                  )}
+                </TBody>
+              </Table>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );

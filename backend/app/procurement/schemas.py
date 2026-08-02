@@ -82,6 +82,8 @@ class AllocationResponse(BaseModel):
     part_id: int
     allocated_qty: int
     already_received: int
+    project_name: Optional[str] = None
+    job_tag: Optional[str] = None
 
     class Config:
         from_attributes = True

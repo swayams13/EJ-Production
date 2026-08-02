@@ -7,7 +7,7 @@ from backend.services.db_service import (
     get_db, Vendor, WarehouseStock, MaterialLeadTime,
     PurchaseOrder, PurchaseOrderLine, PurchaseOrderLineAllocation,
     GoodsReceipt, GoodsReceiptLine, PartProcess, Part, User,
-    DailyProcurementLog, MaterialHold,
+    DailyProcurementLog, MaterialHold, ProjectProductionLine,
 )
 from backend.app.auth.rbac import require_roles, SUPERVISORS, MANAGEMENT
 from backend.app.procurement.schemas import (
@@ -166,12 +166,38 @@ def create_po(body: POCreate, db: Session = Depends(get_db), user=Depends(requir
     return po
 
 
+def _resolve_allocation_trace(alloc):
+    """(project_name, job_tag) for a PO line allocation, via its part's production line."""
+    part = alloc.part
+    line = part.production_line if part else None
+    if not line:
+        return None, None
+    project_name = line.project.project_name if line.project else None
+    return project_name, line.joint_type_code
+
+
 @router.get("/po/{po_id}", response_model=POResponse)
 def get_po(po_id: int, db: Session = Depends(get_db), _=Depends(require_roles(SUPERVISORS))):
-    po = db.query(PurchaseOrder).filter_by(id=po_id).first()
+    po = (
+        db.query(PurchaseOrder)
+        .filter_by(id=po_id)
+        .options(
+            subqueryload(PurchaseOrder.lines)
+            .subqueryload(PurchaseOrderLine.allocations)
+            .subqueryload(PurchaseOrderLineAllocation.part)
+            .subqueryload(Part.production_line)
+            .subqueryload(ProjectProductionLine.project)
+        )
+        .first()
+    )
     if not po:
         raise HTTPException(404, "PO not found")
-    return po
+
+    response = POResponse.model_validate(po)
+    for line, line_resp in zip(po.lines, response.lines):
+        for alloc, alloc_resp in zip(line.allocations, line_resp.allocations):
+            alloc_resp.project_name, alloc_resp.job_tag = _resolve_allocation_trace(alloc)
+    return response
 
 
 @router.patch("/po/{po_id}/status")

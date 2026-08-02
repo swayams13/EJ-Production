@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
   Button, Card, CardHeader, CardBody,
@@ -38,6 +38,7 @@ interface POLine {
   joint_type: string;
   ordered_qty: number;
   unit_price: string;
+  part_id?: number;
 }
 interface PO {
   id: number;
@@ -61,7 +62,16 @@ const EMPTY_FORM = {
 };
 
 export default function POListPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center p-16"><Spinner label="Loading purchase orders…" /></div>}>
+      <POListPageContent />
+    </Suspense>
+  );
+}
+
+function POListPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast, toasts } = useToast();
   const [pos, setPos] = useState<PO[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -97,6 +107,30 @@ export default function POListPage() {
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    const prefill = searchParams.get("prefill");
+    if (!prefill || !isManagement) return;
+    try {
+      const parsed = JSON.parse(prefill) as Array<{
+        part_id: number; material_name: string; size: number; joint_type: string; ordered_qty: number;
+      }>;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setForm({ ...EMPTY_FORM });
+        setLines(parsed.map(p => ({
+          material_name: p.material_name,
+          size: p.size,
+          joint_type: p.joint_type,
+          ordered_qty: p.ordered_qty,
+          unit_price: "",
+          part_id: p.part_id,
+        })));
+        setFormOpen(true);
+      }
+    } catch {
+      // ponytail: malformed prefill param — ignore, form stays closed
+    }
+  }, []);
+
   const vendorName = (id: number | null) => vendors.find(v => v.id === id)?.name ?? "—";
 
   const filtered = pos.filter(p => {
@@ -130,7 +164,7 @@ export default function POListPage() {
           joint_type: l.joint_type,
           ordered_qty: +l.ordered_qty,
           unit_price: l.unit_price ? +l.unit_price : null,
-          allocations: [],
+          allocations: l.part_id ? [{ part_id: l.part_id, allocated_qty: +l.ordered_qty }] : [],
         })),
       };
       const res = await apiFetch(`${API}/api/v1/procurement/po`, {

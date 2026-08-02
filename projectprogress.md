@@ -3,6 +3,42 @@
 ## Pending (deferred 2026-07-28):
 - **Railway Cron Job for daily briefing email** — `scripts/send_daily_briefing.py` exists and works, but the scheduled trigger isn't set up yet. In Railway: create a new service from the same GitHub repo (branch `demo`), then in that service's Settings → Deploy set **Cron Schedule** to `30 2 * * *` (2:30 AM UTC = 8:00 AM IST) and **Custom Start Command** to `python scripts/send_daily_briefing.py`. Needs env vars `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, `JWT_SECRET_KEY` (`CEO_EMAIL`/`MD_EMAIL` not set anywhere yet — need real addresses). Trigger one manual run to confirm before relying on the schedule. User will do this later.
 
+## Date: 2026-08-02 (Session 38 — Procurement Browse Mode + Linked PO Creation, merged to main)
+
+### What was done:
+
+User wanted the procurement dashboard restructured — too many materials to order in one flat list, hard to browse by project. Brainstormed, spec'd, planned, and implemented via `superpowers` skills. Full detail: spec at `docs/superpowers/specs/2026-08-02-procurement-browse-and-linked-po-design.md`, plan at `docs/superpowers/plans/2026-08-02-procurement-browse-and-linked-po.md`.
+
+1. **Design**: kept the existing urgency-first flat list ("Today's Priorities") as the default view — its value is "what's overdue right now" — and added a "Browse by Project" tab as an alternative, reusing the same `/morning-list` payload grouped client-side by `project_id`/`line_id`. No new backend list endpoints needed.
+2. **Executed the 5-task plan via a dynamic multi-agent workflow.** Task 1 (backend traceability) ran concurrently with the Task 2→3→4 chain, which had to run sequentially since all three edit `procurement/page.tsx` and would otherwise race; Task 5 waited on both:
+   - Task 1: `GET /po/{id}` now resolves each allocation's project name + job tag (`joint_type_code`) via a new `_resolve_allocation_trace()`, unit-tested DB-free with `SimpleNamespace` fakes (`test_po_allocation_trace.py`).
+   - Task 2: fixed a pre-existing dead code path — the flat list's "Create PO" button already navigated to `/procurement/po?prefill=<JSON>`, but the destination page never read the param. Added `useSearchParams()` consumption (wrapped in `Suspense`, required by Next 16) and wired `part_id` through into the submitted PO line's allocation.
+   - Task 3: added the Projects → Jobs → Materials drill-down panels. Also had to add `joint_type_code` to `get_morning_list()`'s per-item dict, since the exact-tag requirement (all 12 tags from `joint_catalog.py`, not a collapsed SEJ/DEJ/UJ label — per explicit user correction during design) wasn't actually in that payload yet.
+   - Task 4: checkbox selection + "Raise PO" button in the Materials panel, reusing Task 2's prefill mechanism for multiple items at once.
+   - Task 5: PO detail page now shows `— <project name> / <job tag>` under each expanded allocation.
+3. **Real browser verification** (not just lint/type-check) via claude-in-chrome against the actual local dev Postgres DB: logged in as `PM`, drilled through all 3 browse panels, created 2 test POs (one single-item, one multi-item prefill), confirmed both saved with the correct material/size/joint/qty and correct part-linked allocations, and confirmed the traceability sub-row rendered correctly — cross-checked the one case where it showed blank directly against the DB (`joint_type_code` genuinely `NULL` for that line, so blank was correct, not a bug).
+4. **Found and root-caused a real pre-existing bug** while verifying: every procurement page's `isManagement` check compared `localStorage.user_role` to the literal string `"MANAGEMENT"`, but login stores the real role name (`"Production Manager"`, `"GM"`, etc.) — so every management-gated action across the whole module (New PO, Create PO, status changes, receipts, vendor/stock/settings edits) was invisible to any real logged-in user, not just something broken by this session's changes. Fixed once at the root rather than patched per-page: added a shared `isManagementRole()` helper (`next-frontend/src/lib/auth.ts`) mirroring backend `rbac.py`'s `MANAGEMENT` role list, pointed all 6 call sites at it. Re-verified with a real (non-overridden) PM login — management buttons now appear correctly. Full detail in `problemsresolved.md`.
+5. Cancelled the 2 test POs (`PO-VERIFY-001`, `PO-VERIFY-002`) after verification to leave the dev DB clean.
+6. Pushed to `demo`. Per explicit user instruction, cherry-picked only these 9 commits (not the other 25 unrelated commits also sitting on `demo`, from Session 35's briefing work etc.) onto `main` and pushed — clean cherry-pick, zero file overlap confirmed against the skipped commits before doing it. Railway should now be deploying this.
+
+### What's still pending:
+- **Cosmetic bug found, not fixed**: the PO creation form's Material `<select>` (`po/page.tsx`) only lists a fixed generic set of names (`MATERIALS` const) that doesn't match real BOM part names (e.g. "Bellows (B)", "PIPE-1 (P1)"). When prefilled with a real name not in that static list, the dropdown visually shows the wrong material (defaults to "Element") — confirmed via 2 real test POs that the underlying saved `material_name` is still correct, so this is display-only today. Risk: a user who "corrects" the visibly-wrong dropdown would silently overwrite the correct `material_name` while the `part_id` allocation link stays unchanged, creating a label/data mismatch. Needs a decision (free-text field vs. extending the static list) before fixing — out of scope of the approved spec for this session.
+- The other 25 commits already on `demo` (Session 35's briefing work, documented below) are still not on `main` — deliberately held back this session per the user's explicit choice; a future session's call.
+- Railway Cron Job for daily briefing email — unchanged, see note at top of file.
+
+### Commits this session (pushed to `demo`, then cherry-picked onto `main`):
+- `dd82cf3` — docs: add design spec for procurement browse mode + linked PO creation
+- `8d6a78d` — docs: use exact joint_type_code tag for job badges, not SEJ/DEJ/UJ category
+- `f69d1ab` — docs: add implementation plan for procurement browse mode + linked PO
+- `ebe90f2` — feat: resolve project/job trace on PO line allocations
+- `87e4e71` — feat: wire up PO prefill so Create PO actually pre-fills the form
+- `d461f99` — feat: add read-only Project -> Job -> Material browse view to procurement dashboard
+- `36fbcaf` — feat: select materials in browse mode and raise a PO pre-filled from the selection
+- `fd9067c` — feat: show project/job traceability on PO allocation detail rows
+- `8ee2322` — fix: check MANAGEMENT role membership instead of a literal string
+
+---
+
 ## Date: 2026-07-30 (Session 37 — Tag-Level Welding Feet, merged to main 2026-08-01)
 
 ### What was done:

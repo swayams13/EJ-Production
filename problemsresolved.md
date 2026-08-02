@@ -5,6 +5,30 @@ Update this alongside `projectprogress.md` whenever a non-trivial problem is sol
 
 ---
 
+## 2026-08-02 — Every procurement management action was invisible to real logins (Session 38)
+
+**Symptom:** While doing real browser verification (not just lint) of a new procurement feature, "Create PO", "+ New PO", and every other management-only button (status changes, receipts, vendor/stock/settings edits) were completely absent when logged in normally as `PM` (role `"Production Manager"`). They only appeared after manually overriding `localStorage.user_role` to the literal string `"MANAGEMENT"` in the browser console for testing.
+
+**Root cause:** all 6 procurement pages (`procurement/page.tsx`, `po/page.tsx`, `po/[id]/page.tsx`, `vendors/page.tsx`, `stock/page.tsx`, `settings/page.tsx`) independently computed `isManagement` as `localStorage.getItem("user_role") === "MANAGEMENT"` — an equality check against a literal string. But `next-frontend/src/app/page.tsx`'s login handler stores the *actual* role returned by the backend (`localStorage.setItem("user_role", data.role)`), which is one of `"Developer"`, `"GM"`, `"Admin"`, `"Production Manager"`, `"CEO"`, `"MD"`, `"Supervisor"` — never the literal string `"MANAGEMENT"`. Backend `rbac.py` defines `MANAGEMENT` as a *list* of those role names for exactly this kind of membership check; the frontend check was comparing against the list's name instead of testing membership in it. This predates and is unrelated to the feature being verified — every login has always hit this.
+
+**Fix:** root-caused rather than patched per-page (6 identical buggy call sites would have meant 6 identical fixes, or worse, 6 slightly-different ones next time someone touched one). Added `next-frontend/src/lib/auth.ts` exporting `isManagementRole(role: string | null): boolean`, mirroring backend `rbac.py`'s `MANAGEMENT` list. Pointed all 6 call sites at it instead of the literal-string comparison. Did **not** change what gets stored in `localStorage.user_role` itself — `Sidebar.tsx` displays the real role name as a badge, `RouteGuard.tsx` does an exact `=== "Supervisor"` check, and `page.tsx`'s post-login redirect checks `=== "Supervisor"` too — all of those depend on the stored value being the real role string, so normalizing it to `"MANAGEMENT"` at login time would have broken them instead.
+
+**Verified:** logged in fresh via the actual login form (`PM` / real password, no localStorage tricks) and confirmed "Create", "+ New PO", "Mark as raised", "Cancel PO", and "Log Receipt" all now render correctly. `npm --prefix next-frontend run lint` — same 56 pre-existing problems, zero new ones.
+
+---
+
+## 2026-08-02 — PO form's Material dropdown shows the wrong value for real BOM part names (found, not fixed)
+
+**Symptom:** Discovered during the same browser verification pass above. Pre-filling the new PO form with a real BOM part's material name (e.g. "Bellows (B)", "PIPE-1 (P1)") via the `?prefill=` flow made the Material `<select>` visually display "Element" instead — the first option in the list — rather than the actual material.
+
+**Root cause:** `po/page.tsx`'s Material `<select>` only renders options from a fixed `MATERIALS` constant (~21 generic names like "Element", "Collar", "Flange") that predates this session and was designed for manual PO entry, not for real BOM data. Real seeded project parts use different, more specific names (e.g. "PIPE-1 (P1)", "Compensator Flanges (F)") that were never in that list. A React controlled `<select>` whose `value` doesn't match any `<option>` falls back to displaying the first option, even though the underlying state still holds the correct string.
+
+**Confirmed not a data bug:** created 2 real test POs through the prefill flow (one single-item "Bellows (B)", one multi-item "PIPE-1 (P1)"/"PIPE-2 (P2)") and opened each afterward — both saved with the correct `material_name` and correct part-linked allocation, despite the dropdown showing the wrong thing during entry. The bug is purely visual, in this one case.
+
+**Not fixed this session** — out of scope of the approved plan, and fixing it means a product decision (make the field free-text, or extend `MATERIALS` to match real BOM names) rather than a mechanical patch. **Risk if left as-is:** a user who notices the "wrong" dropdown and manually re-selects a material from the list to "correct" it would silently overwrite the correct `material_name` in state while the `part_id` allocation link stays pointed at the original part — a genuine label/data mismatch, unlike the read-only display glitch today.
+
+---
+
 ## 2026-07-27 — Material risk digest + daily email digest: three design decisions (Session 35)
 
 Not a bug-fix session, but per this repo's convention, logging the non-trivial design/architecture decisions made while building the two Briefing v2 features (full detail in `projectprogress.md`).

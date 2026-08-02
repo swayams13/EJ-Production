@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { isManagementRole } from "@/lib/auth";
 import {
   Card, CardHeader,
   Table, THead, TBody, Tr, Th, Td,
@@ -24,7 +25,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState<string | null>(null);
   // ponytail: localStorage role check — matches vendors page pattern
-  const isManagement = typeof window !== "undefined" && localStorage.getItem("user_role") === "MANAGEMENT";
+  const isManagement = typeof window !== "undefined" && isManagementRole(localStorage.getItem("user_role"));
 
   const load = async () => {
     setLoading(true);

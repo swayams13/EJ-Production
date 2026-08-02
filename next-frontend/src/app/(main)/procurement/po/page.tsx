@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { isManagementRole } from "@/lib/auth";
 import {
   Button, Card, CardHeader, CardBody,
   Input, Label, Select, Textarea,
@@ -85,7 +86,7 @@ function POListPageContent() {
   const [saving, setSaving] = useState(false);
 
   // ponytail: localStorage role check — matches vendors page pattern
-  const isManagement = typeof window !== "undefined" && localStorage.getItem("user_role") === "MANAGEMENT";
+  const isManagement = typeof window !== "undefined" && isManagementRole(localStorage.getItem("user_role"));
 
   const load = async () => {
     setLoading(true);

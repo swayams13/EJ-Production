@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { isManagementRole } from "@/lib/auth";
 import {
   Button, Card, CardHeader, CardBody,
   Input, Label, Select,
@@ -46,7 +47,7 @@ export default function StockPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   // ponytail: localStorage role check — matches vendors page pattern
-  const isManagement = typeof window !== "undefined" && localStorage.getItem("user_role") === "MANAGEMENT";
+  const isManagement = typeof window !== "undefined" && isManagementRole(localStorage.getItem("user_role"));
 
   const load = async () => {
     setLoading(true);

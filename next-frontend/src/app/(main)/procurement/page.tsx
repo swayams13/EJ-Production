@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { isManagementRole } from "@/lib/auth";
 import {
   Button, Card, CardHeader, CardBody,
   Textarea, Label,
@@ -200,7 +201,7 @@ export default function ProcurementDashboard() {
   const [selectedPartIds, setSelectedPartIds] = useState<Set<number>>(new Set());
 
   // ponytail: localStorage role check — matches vendors/po page pattern
-  const isManagement = typeof window !== "undefined" && localStorage.getItem("user_role") === "MANAGEMENT";
+  const isManagement = typeof window !== "undefined" && isManagementRole(localStorage.getItem("user_role"));
 
   const load = async () => {
     setLoading(true);

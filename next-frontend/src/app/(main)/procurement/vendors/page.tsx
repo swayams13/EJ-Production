@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { isManagementRole } from "@/lib/auth";
 import {
   Button, Card, CardHeader, CardBody,
   Input, Label, Textarea,
@@ -38,7 +39,7 @@ export default function VendorsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
-  const isManagement = typeof window !== "undefined" && localStorage.getItem("user_role") === "MANAGEMENT";
+  const isManagement = typeof window !== "undefined" && isManagementRole(localStorage.getItem("user_role"));
 
   const load = async () => {
     setLoading(true);

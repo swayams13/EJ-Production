@@ -3,6 +3,41 @@
 ## Pending (deferred 2026-07-28):
 - **Railway Cron Job for daily briefing email** — `scripts/send_daily_briefing.py` exists and works, but the scheduled trigger isn't set up yet. In Railway: create a new service from the same GitHub repo (branch `demo`), then in that service's Settings → Deploy set **Cron Schedule** to `30 2 * * *` (2:30 AM UTC = 8:00 AM IST) and **Custom Start Command** to `python scripts/send_daily_briefing.py`. Needs env vars `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, `JWT_SECRET_KEY` (`CEO_EMAIL`/`MD_EMAIL` not set anywhere yet — need real addresses). Trigger one manual run to confirm before relying on the schedule. User will do this later.
 
+## Date: 2026-08-03 (Session 40 — QA-Sweep Fix Implementation Plan, no code changed)
+
+### What was done:
+Follow-up to Session 39's QA sweep. User asked to resolve all 33 findings via subagents, in priority order, with the plan written now and execution deferred to next session. Used `superpowers:writing-plans` to produce a full implementation plan.
+
+Before writing, clarified genuine product decisions with the user rather than guessing (writing-plans forbids placeholders/TBDs):
+- Completion approval: **gate on progress** — block submit/approve unless the project is effectively 100% complete, rather than reconciling welding data or leaving the divergence undocumented.
+- Vendor delete: **block (400)** if any PO still references the vendor, instead of silently nulling `vendor_id`.
+- Lead-time PATCH on an unknown material name: **404**, not silent upsert.
+- Employee deletion by a Production Manager: mid-conversation the user redefined this from a simple "change the role list?" question into a real feature request — **PM can't delete directly; PM requests it, only Developer/GM/Admin can approve (not PM — no self-approval), and CEO/MD are notified the moment the request is created.** Traced the exact reuse path before writing the plan: extends the existing `ChangeRequest` model with a new `subject_type="employee_delete"`, following the same `PurchaseOrder.raised_by`/`raised_by_username` pattern already in this codebase for the "env-var login has no DB user row" gap.
+- Three other role-list "divergences" (scheduler employee DELETE excluding PM, `generate-work-orders` excluding CEO/MD, Executive Dashboard excluding GM/PM) — **all confirmed intentional, no code change for any of them.**
+
+Re-read the actual current source (not just the audit report's summaries) for every file the plan touches, to avoid the false-positive-audit-claim mistake logged in `mistakes.md` #3 — this surfaced a few corrections to the original report's framing, e.g.:
+- The `upsert_tag_welding_master` "silently drops joint_type" finding turned out to be by-design (tag_no authoritatively determines joint family via `joint_catalog.weld_family_for`) — the real fix is rejecting an *unrecognized* tag_no, not passing through a submitted joint_type.
+- The scheduler `handleSubmitOverride` frontend handler *does* have a `res.ok` check with a toast — the "silent failure" only happens because `apiFetch()` itself throws before reaching that check, when the CORS/middleware bug (Task 1) makes a 500 look like a network failure to the browser.
+- `POST /projects/duration` isn't a pure calculator like `/simulate*` — it persists to `ProjectResourceAssignment`, confirmed by tracing `calculate_project_duration`'s body.
+
+### Plan:
+Saved to `docs/superpowers/plans/2026-08-03-qa-sweep-fixes.md` (25 tasks, ~3,100 lines, TDD-style with real diffs and repo-convention tests — plain `assert` functions, no pytest, matching `test_work_orders.py`/`test_po_allocation_trace.py`). Ordered by blast radius, not by the report's severity labels:
+- **Tier 0**: CORS/error-middleware ordering fix (unlocks visibility for every later "silent failure" finding).
+- **Tier 1 (Critical)**: `current_user["id"]` KeyError killing the whole Change-Request system, plus the new PM employee-deletion workflow built on that same fix.
+- **Tier 2 (High)**: cascade-delete gaps (projects, users), work-order regeneration data loss, PO status/receipt validation, FK-violation 500s.
+- **Tier 3 (Medium)**: validation-bounds sweep, the decisions above, status enums, frontend date-range/visibility bugs.
+- **Tier 4 (Low)**: 404 consistency, cosmetic frontend warnings, deleting the dead `/api/v1/inventory` router, hardening the env-var login loop.
+
+### Commits (pushed to `demo`):
+- `3d75169` — docs: log Session 39 (full-codebase QA sweep, no code changed)
+- `1c307aa` — docs: add implementation plan for QA-sweep fixes (25 tasks, priority order)
+
+### What's still pending:
+- **Nothing implemented yet** — plan only, per user's explicit "write the plan now, execute next session."
+- Next session: execute `docs/superpowers/plans/2026-08-03-qa-sweep-fixes.md` task-by-task via `superpowers:subagent-driven-development` (recommended — fresh subagent per task, review between tasks), in the numbered order (some tasks in the same tier touch the same file, e.g. Task 9 and Task 14 both edit `WorkOrderComplete`, Task 11 and Task 15 both edit procurement schemas — order matters).
+
+---
+
 ## Date: 2026-08-03 (Session 39 — Full-codebase QA Sweep, no code changed)
 
 ### What was done:

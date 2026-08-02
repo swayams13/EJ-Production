@@ -29,7 +29,7 @@ Separately, raising a PO means retyping material/size/qty from scratch on the PO
 ### Three drill-down levels, one page, local state (no new routes)
 
 1. **Projects** — one row per project with ≥1 item in the morning-list (projects with nothing pending don't appear — keeps the list short). Shows project number/name, client, target date, and RED/ORANGE/GREEN badge counts rolled up from that project's items.
-2. **Jobs** — after clicking a project: one row per distinct `line_id` (production line) within that project, tagged with a short badge derived from `joint_category` (`SIMPLE_EJ`→"SEJ", `UNIVERSAL_EJ`→"UJ", `DJ`→"DEJ") plus its own RED/ORANGE/GREEN counts. Breadcrumb back to Projects.
+2. **Jobs** — after clicking a project: one row per distinct `line_id` (production line) within that project, tagged with its exact `joint_type_code` (one of the 12 tags defined in `backend/services/joint_catalog.py`: `S-EJ-F`, `S-EJ-F-S-L`, `S-EJ-F-1MF-S-L`, `S-EJ-F-2MF-S-L`, `S-EJ-W-S-L`, `U-EJ-F-S-L`, `U-EJ-F-1MF-S-L`, `U-EJ-F-2MF-S-L`, `U-EJ-W-S-L`, `DEJ-F`, `DEJ-F-1MF`, `DEJ-F-2MF`) shown verbatim as the badge — not collapsed to a SEJ/DEJ/UJ category — plus its own RED/ORANGE/GREEN counts. Breadcrumb back to Projects.
 3. **Materials** — after clicking a job: same row shape as today's flat table (material, size, qty needed, order-by date, bucket), scoped to that job's `line_id`. Each row gets a checkbox.
 
 All grouping/counting is done client-side by `project_id` and `line_id`, both already present on every morning-list item. No backend change in this section.
@@ -74,7 +74,7 @@ class AllocationResponse(BaseModel):
     allocated_qty: int
     already_received: int
     project_name: Optional[str] = None
-    job_tag: Optional[str] = None   # ProjectProductionLine.joint_type_code, e.g. "DEJ-F" — the specific tag, not the SEJ/DEJ/UJ badge used in Section 1
+    job_tag: Optional[str] = None   # ProjectProductionLine.joint_type_code, e.g. "DEJ-F" — same specific tag shown as the Jobs-level badge in Section 1
 ```
 Populate them in `get_po()` (`router.py:169-174`) with one bulk join: `Part -> ProjectProductionLine -> Project`, keyed by the `part_id`s present across the PO's lines (avoid N+1 — one query for all parts referenced by this PO, not one per allocation).
 

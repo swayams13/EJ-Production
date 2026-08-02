@@ -3,6 +3,35 @@
 ## Pending (deferred 2026-07-28):
 - **Railway Cron Job for daily briefing email** — `scripts/send_daily_briefing.py` exists and works, but the scheduled trigger isn't set up yet. In Railway: create a new service from the same GitHub repo (branch `demo`), then in that service's Settings → Deploy set **Cron Schedule** to `30 2 * * *` (2:30 AM UTC = 8:00 AM IST) and **Custom Start Command** to `python scripts/send_daily_briefing.py`. Needs env vars `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, `JWT_SECRET_KEY` (`CEO_EMAIL`/`MD_EMAIL` not set anywhere yet — need real addresses). Trigger one manual run to confirm before relying on the schedule. User will do this later.
 
+## Date: 2026-08-03 (Session 39 — Full-codebase QA Sweep, no code changed)
+
+### What was done:
+User asked for a thorough, phase-wise bug hunt across every module built so far, via API testing and the Chrome extension, before anything reaches production — explicitly requested a multi-subagent effort. Planned first (confirmed scope with user: full sandbox-based write testing, hunt for a Supervisor test account since none was seeded), then ran:
+1. **Phase 0**: `pg_dump` backup of local `ej_tracker` DB before any write testing; created a sandbox `qa_supervisor` DB account (role="Supervisor") since none existed by default.
+2. **Phase 1**: 7 parallel background agents, one per module cluster (Auth/Users/Audit, Master/Inventory, Procurement, Projects/Completion, Production, Scheduler/Workforce, Dashboard/Notifications), each fuzzing every documented endpoint directly over HTTP across all 6 roles — auth bypass, malformed/boundary/injection input, full CRUD on `QA_SANDBOX_`-prefixed sandbox data.
+3. **Phase 2**: 2 sequential Chrome-driven walkthroughs (had to be sequential — shared browser localStorage means concurrent role logins clobber each other) — full 24-page sweep as Developer, then a targeted Supervisor pass — to see how the backend findings actually surface to a real user.
+4. Independently verified the two highest-severity claims against source before reporting (per `mistakes.md`'s lesson on unverified audit claims) rather than trusting agent reports at face value.
+5. Compiled everything into a single severity-ranked report artifact (not pasted into chat — 33 findings plus 7 confirmed-clean callouts) with repro steps and fix direction per finding: **https://claude.ai/code/artifact/7bf790ce-655c-4dfc-89b2-a521cdeed45d**
+
+### Headline findings (full detail + repro in the artifact above):
+- **Critical**: the Change-Request workflow (Supervisor proposes → PM approves, a real daily flow) is completely dead — `scheduler/router.py` reads `current_user["id"]`, but the JWT/user dict only ever carries `username`/`role`. Every create/approve/reject 500s, and the frontend has no try/catch around it, so it fails 100% silently in the UI.
+- **Systemic infra bug**: `ServerErrorMiddleware` sits outside `CORSMiddleware` in `backend/main.py`, so any unhandled 500 anywhere in the app loses its CORS headers — the browser can't read the response and reports a generic "Failed to fetch" instead of the real error. This is why several bugs present as silent failures instead of visible ones.
+- **High**: `DELETE /api/v1/projects/{id}` 500s for any project with production lines — confirmed independently by two separate agents. `delete_project()`'s manual cascade list predates `material_holds`, `job_final_checks`, and `assembly_steps`, none of which were ever added to it. Essentially no real, actively-worked project can be deleted today.
+- **High**: `generate-work-orders` unconditionally deletes all work orders for a date before regenerating — including ones already marked Completed with real `actual_feet`. A retry or re-plan silently destroys finished production records.
+- **High**: `PATCH /po/{id}/status` and `POST /po/{id}/receipt` have no validation — any status string, any transition, over-receipt, and negative quantities that corrupt `reserved_qty` are all accepted (masked from normal users by the UI's fixed-button flow, but reachable via direct API calls).
+- **Medium (systemic)**: the same "unvalidated string/negative-number" shape recurs across ~10 independently-written endpoints (work order/attendance/PO/final-check status fields, welder/pool counts, welding feet, lead times) — worth one batch-fix PR rather than ten separate ones.
+- **Good news, explicitly confirmed rather than assumed**: no SQL injection anywhere across all 7 modules; JWT `alg:none`/type-confusion attacks correctly rejected; RBAC role gating matches `rbac.py` everywhere tested; the Session 26 `resolved_holds` fix and Session 38's `isManagement` fix are both genuinely solid, no regressions.
+- The entire `/api/v1/inventory` router is dead code (never mounted in `main.py`, fully superseded by `WarehouseStock`) — not a live vulnerability since nothing calls it, but confusing to leave in the tree.
+
+### Cleanup:
+Every sandbox agent deleted its own `QA_SANDBOX_*` records; final DB checks confirmed zero remain in any table. One real record was briefly touched by accident (a `job_final_checks` status on real project `PROJ221`, from using a placeholder id before scoping to a sandbox project) — caught by the agent itself, verified via the audit log it had no prior history, and restored to `"pending"` immediately. No other real data was affected. `qa_supervisor` sandbox account left in place (id 62) for future testing sessions.
+
+### What's still pending:
+- **Nothing was fixed this session** — this was audit-only, by design, so the user could review and prioritize before any code changes. See the artifact's "Fix priority order" section for the recommended sequence (CORS/middleware fix first — it makes every other silent failure visible — then the change-request KeyError, then the cascade-delete gaps, then PO/work-order validation).
+- Next session: work through the priority list above once the user confirms which to tackle and in what order.
+
+---
+
 ## Date: 2026-08-02 (Session 38 — Procurement Browse Mode + Linked PO Creation, merged to main)
 
 ### What was done:

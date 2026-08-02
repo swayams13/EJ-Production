@@ -35,6 +35,8 @@ interface Allocation {
   part_id: number;
   allocated_qty: number;
   already_received: number;
+  project_name?: string | null;
+  job_tag?: string | null;
 }
 
 interface POLine {
@@ -374,6 +376,12 @@ export default function PODetailPage() {
                   <Tr key={`alloc-${alloc.id}`} className="bg-paper">
                     <Td colSpan={3} className="pl-8 text-sm text-ink-soft">
                       Part ID: <span className="font-data font-bold text-ink">{alloc.part_id}</span>
+                      {alloc.project_name && (
+                        <span className="ml-2">
+                          — <span className="font-semibold text-ink">{alloc.project_name}</span>
+                          {alloc.job_tag && <span className="font-data text-ink-soft"> / {alloc.job_tag}</span>}
+                        </span>
+                      )}
                     </Td>
                     <Td numeric>
                       <span className="font-data text-sm text-ink-soft">{alloc.allocated_qty} allocated</span>

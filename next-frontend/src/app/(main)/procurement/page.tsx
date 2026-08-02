@@ -197,6 +197,7 @@ export default function ProcurementDashboard() {
   const [view, setView] = useState<"priorities" | "browse">("priorities");
   const [browseProjectId, setBrowseProjectId] = useState<number | null>(null);
   const [browseLineId, setBrowseLineId] = useState<number | null>(null);
+  const [selectedPartIds, setSelectedPartIds] = useState<Set<number>>(new Set());
 
   // ponytail: localStorage role check — matches vendors/po page pattern
   const isManagement = typeof window !== "undefined" && localStorage.getItem("user_role") === "MANAGEMENT";
@@ -256,6 +257,18 @@ export default function ProcurementDashboard() {
       joint_type: item.joint_type,
       ordered_qty: item.still_needs_ordering,
     }];
+    router.push(`/procurement/po?prefill=${encodeURIComponent(JSON.stringify(payload))}`);
+  };
+
+  const handleRaisePOFromSelection = () => {
+    const selected = items.filter(i => selectedPartIds.has(i.part_id));
+    const payload = selected.map(i => ({
+      part_id: i.part_id,
+      material_name: i.material_name,
+      size: i.size,
+      joint_type: i.joint_type,
+      ordered_qty: i.still_needs_ordering,
+    }));
     router.push(`/procurement/po?prefill=${encodeURIComponent(JSON.stringify(payload))}`);
   };
 
@@ -342,6 +355,7 @@ export default function ProcurementDashboard() {
   };
   const openBrowseLine = (lineId: number) => {
     setBrowseLineId(lineId);
+    setSelectedPartIds(new Set());
   };
 
   const totalItems = items.length;
@@ -619,6 +633,7 @@ export default function ProcurementDashboard() {
               <Table>
                 <THead>
                   <Tr>
+                    <Th></Th>
                     <Th>Material</Th>
                     <Th numeric>Size</Th>
                     <Th numeric>Qty Needed</Th>
@@ -629,6 +644,17 @@ export default function ProcurementDashboard() {
                 <TBody>
                   {materialsForLine(browseLineId).map(item => (
                     <Tr key={item.part_id}>
+                      <Td numeric>
+                        <input
+                          type="checkbox"
+                          checked={selectedPartIds.has(item.part_id)}
+                          onChange={() => setSelectedPartIds(s => {
+                            const next = new Set(s);
+                            if (next.has(item.part_id)) next.delete(item.part_id); else next.add(item.part_id);
+                            return next;
+                          })}
+                        />
+                      </Td>
                       <Td>{item.material_name}</Td>
                       <Td numeric>{item.size}</Td>
                       <Td numeric>{item.still_needs_ordering}</Td>
@@ -641,10 +667,17 @@ export default function ProcurementDashboard() {
                     </Tr>
                   ))}
                   {materialsForLine(browseLineId).length === 0 && (
-                    <Tr><Td colSpan={5} className="py-8 text-center text-ink-soft">All materials ordered for this job.</Td></Tr>
+                    <Tr><Td colSpan={6} className="py-8 text-center text-ink-soft">All materials ordered for this job.</Td></Tr>
                   )}
                 </TBody>
               </Table>
+              {selectedPartIds.size > 0 && (
+                <CardBody className="flex justify-end p-4">
+                  <Button variant="primary" onClick={handleRaisePOFromSelection}>
+                    Raise PO ({selectedPartIds.size} selected)
+                  </Button>
+                </CardBody>
+              )}
             </Card>
           )}
         </div>

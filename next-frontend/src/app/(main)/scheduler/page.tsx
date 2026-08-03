@@ -40,7 +40,8 @@ interface ChangeRequest {
   subject_type: string;
   subject_id: number | null;
   target_date: string | null;
-  proposed_by: number;
+  proposed_by: number | null;
+  proposed_by_username: string | null;
   status: string;
   changes_json: string;
   rejection_note: string | null;
@@ -80,6 +81,9 @@ function crSummary(cr: ChangeRequest): string {
     const c = JSON.parse(cr.changes_json);
     if (cr.subject_type === "employee_profile") {
       return `Employee profile: ${Object.keys(c.changes ?? {}).join(", ")}`;
+    }
+    if (cr.subject_type === "employee_delete") {
+      return `Delete employee: ${c.employee_name ?? `#${cr.subject_id}`}`;
     }
     const excluded = (c.exclude_user_ids ?? []).length;
     const overridden = Object.keys(c.capacity_overrides ?? {}).length;
@@ -134,6 +138,8 @@ export default function SchedulerPage() {
 
   const isManager = ["Developer", "GM", "Admin", "Production Manager", "Supervisor"].includes(userRole);
   const canEditEmployees = ["Developer", "GM", "Admin", "Production Manager"].includes(userRole);
+  const canDeleteEmployeeDirectly = ["Developer", "GM", "Admin"].includes(userRole);
+  const canRequestEmployeeDeletion = userRole === "Production Manager";
 
   useEffect(() => {
     fetchOrders();
@@ -268,6 +274,36 @@ export default function SchedulerPage() {
   };
 
   const handleDeleteEmployee = async (empId: number, name: string) => {
+    if (canRequestEmployeeDeletion) {
+      const ok = await confirm({
+        title: `Request deletion of ${name}?`,
+        description: "This sends a request to Developer/GM/Admin for approval. The employee is not removed until approved.",
+        confirmLabel: "Request Deletion",
+        tone: "danger",
+      });
+      if (!ok) return;
+      try {
+        const res = await apiFetch(`${API}/api/v1/scheduler/change-requests`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject_type: "employee_delete",
+            subject_id: empId,
+            target_date: null,
+            changes_json: JSON.stringify({ employee_name: name }),
+          }),
+        });
+        if (res.ok) {
+          showToast(`Deletion of ${name} requested — awaiting approval`, "success");
+        } else {
+          showToast("Failed to submit deletion request", "critical");
+        }
+      } catch {
+        showToast("Network error — failed to submit deletion request", "critical");
+      }
+      return;
+    }
+
     const ok = await confirm({
       title: `Delete ${name}?`,
       description: "This permanently removes the employee record. Work orders already assigned will not be affected.",
@@ -275,12 +311,16 @@ export default function SchedulerPage() {
       tone: "danger",
     });
     if (!ok) return;
-    const res = await apiFetch(`${API}/api/v1/scheduler/employees/${empId}`, { method: "DELETE" });
-    if (res.ok) {
-      showToast(`${name} deleted`, "success");
-      setEmployees(prev => prev.filter(e => e.id !== empId));
-    } else {
-      showToast("Failed to delete employee", "critical");
+    try {
+      const res = await apiFetch(`${API}/api/v1/scheduler/employees/${empId}`, { method: "DELETE" });
+      if (res.ok) {
+        showToast(`${name} deleted`, "success");
+        setEmployees(prev => prev.filter(e => e.id !== empId));
+      } else {
+        showToast("Failed to delete employee", "critical");
+      }
+    } catch {
+      showToast("Network error — failed to delete employee", "critical");
     }
   };
 
@@ -288,22 +328,26 @@ export default function SchedulerPage() {
     const entries = Object.entries(editedEmployees);
     if (!entries.length) { showToast("No changes to propose", "critical"); return; }
     let allOk = true;
-    for (const [empIdStr, changes] of entries) {
-      const payload = {
-        subject_type: "employee_profile",
-        subject_id: parseInt(empIdStr),
-        target_date: null,
-        changes_json: JSON.stringify({ employee_id: parseInt(empIdStr), changes }),
-      };
-      const res = await apiFetch(`${API}/api/v1/scheduler/change-requests`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) allOk = false;
+    try {
+      for (const [empIdStr, changes] of entries) {
+        const payload = {
+          subject_type: "employee_profile",
+          subject_id: parseInt(empIdStr),
+          target_date: null,
+          changes_json: JSON.stringify({ employee_id: parseInt(empIdStr), changes }),
+        };
+        const res = await apiFetch(`${API}/api/v1/scheduler/change-requests`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) allOk = false;
+      }
+    } catch {
+      allOk = false;
     }
     showToast(
-      allOk ? `${entries.length} change request(s) submitted for PM approval` : "Some requests failed",
+      allOk ? `${entries.length} change request(s) submitted for approval` : "Some requests failed",
       allOk ? "success" : "critical"
     );
     setWorkforceOpen(false);
@@ -326,48 +370,60 @@ export default function SchedulerPage() {
         notes: overrideNotes,
       }),
     };
-    const res = await apiFetch(`${API}/api/v1/scheduler/change-requests`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      showToast("Override request submitted for PM approval", "success");
-      setOverrideOpen(false);
-      setExcludeIds(new Set());
-      setCapacityOverrides({});
-      setOverrideNotes("");
-    } else {
-      showToast("Failed to submit override", "critical");
+    try {
+      const res = await apiFetch(`${API}/api/v1/scheduler/change-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        showToast("Override request submitted for PM approval", "success");
+        setOverrideOpen(false);
+        setExcludeIds(new Set());
+        setCapacityOverrides({});
+        setOverrideNotes("");
+      } else {
+        showToast("Failed to submit override", "critical");
+      }
+    } catch {
+      showToast("Network error — failed to submit override", "critical");
     }
   };
 
   const handleApprove = async (crId: number) => {
-    const res = await apiFetch(
-      `${API}/api/v1/scheduler/change-requests/${crId}/approve`,
-      { method: "PATCH" }
-    );
-    if (res.ok) { showToast("Approved", "success"); fetchPending(); }
-    else showToast("Failed to approve", "critical");
+    try {
+      const res = await apiFetch(
+        `${API}/api/v1/scheduler/change-requests/${crId}/approve`,
+        { method: "PATCH" }
+      );
+      if (res.ok) { showToast("Approved", "success"); fetchPending(); }
+      else showToast("Failed to approve", "critical");
+    } catch {
+      showToast("Network error — failed to approve", "critical");
+    }
   };
 
   const handleReject = async () => {
     if (!rejectCR) return;
-    const res = await apiFetch(
-      `${API}/api/v1/scheduler/change-requests/${rejectCR.id}/reject`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rejection_note: rejectNote }),
+    try {
+      const res = await apiFetch(
+        `${API}/api/v1/scheduler/change-requests/${rejectCR.id}/reject`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rejection_note: rejectNote }),
+        }
+      );
+      if (res.ok) {
+        showToast("Rejected", "success");
+        setRejectCR(null);
+        setRejectNote("");
+        fetchPending();
+      } else {
+        showToast("Failed to reject", "critical");
       }
-    );
-    if (res.ok) {
-      showToast("Rejected", "success");
-      setRejectCR(null);
-      setRejectNote("");
-      fetchPending();
-    } else {
-      showToast("Failed to reject", "critical");
+    } catch {
+      showToast("Network error — failed to reject", "critical");
     }
   };
 
@@ -565,27 +621,30 @@ export default function SchedulerPage() {
                   <Tr key={cr.id}>
                     <Td>
                       <Badge tone="brand">
-                        {cr.subject_type === "employee_profile" ? "Employee" : "Daily Plan"}
+                        {cr.subject_type === "employee_profile" ? "Employee" :
+                         cr.subject_type === "employee_delete" ? "Delete Request" : "Daily Plan"}
                       </Badge>
                     </Td>
-                    <Td>{cr.proposer?.full_name ?? `User #${cr.proposed_by}`}</Td>
+                    <Td>{cr.proposer?.full_name ?? cr.proposed_by_username ?? "Unknown"}</Td>
                     <Td className="max-w-xs truncate text-sm text-ink-soft">{crSummary(cr)}</Td>
                     <Td className="text-sm text-ink-soft">{cr.target_date ?? "—"}</Td>
                     <Td className="text-sm text-ink-soft">
                       {new Date(cr.created_at).toLocaleDateString()}
                     </Td>
                     <Td>
-                      <div className="flex gap-2">
-                        <Button variant="primary" onClick={() => handleApprove(cr.id)}>
-                          Approve
-                        </Button>
-                        <Button
-                          variant="danger"
-                          onClick={() => { setRejectCR(cr); setRejectNote(""); }}
-                        >
-                          Reject
-                        </Button>
-                      </div>
+                      {(cr.subject_type !== "employee_delete" || canDeleteEmployeeDirectly) && (
+                        <div className="flex gap-2">
+                          <Button variant="primary" onClick={() => handleApprove(cr.id)}>
+                            Approve
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={() => { setRejectCR(cr); setRejectNote(""); }}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
                     </Td>
                   </Tr>
                 ))}
@@ -713,12 +772,12 @@ export default function SchedulerPage() {
                         </Select>
                       </td>
                       <td className="py-1">
-                        {canEditEmployees && (
+                        {(canDeleteEmployeeDirectly || canRequestEmployeeDeletion) && (
                           <button
                             className="rounded px-2 py-1 text-xs text-critical hover:bg-critical/10"
                             onClick={() => handleDeleteEmployee(emp.id, emp.name)}
                           >
-                            Delete
+                            {canRequestEmployeeDeletion ? "Request Deletion" : "Delete"}
                           </button>
                         )}
                       </td>
@@ -744,6 +803,15 @@ export default function SchedulerPage() {
                 onClick={handleSaveEmployees}
               >
                 Save Changes ({Object.keys(editedEmployees).length})
+              </Button>
+            )}
+            {!canEditEmployees && isManager && (
+              <Button
+                variant="primary"
+                disabled={Object.keys(editedEmployees).length === 0}
+                onClick={handleProposeEmployeeChanges}
+              >
+                Propose Changes ({Object.keys(editedEmployees).length})
               </Button>
             )}
           </div>

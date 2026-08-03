@@ -766,6 +766,18 @@ def create_change_request(
     db.add(cr)
     db.commit()
     db.refresh(cr)
+
+    if cr.subject_type == "employee_delete" and cr.subject_id:
+        emp = db.query(Employee).filter(Employee.id == cr.subject_id).first()
+        emp_name = emp.name if emp else f"Employee #{cr.subject_id}"
+        for exec_role in ("CEO", "MD"):
+            create_notification(
+                db, exec_role, "employee_delete_request",
+                f"Employee deletion requested: {emp_name}",
+                f"{cr.proposed_by_username} requested deletion of {emp_name}. Awaiting Developer/GM/Admin approval.",
+                "/scheduler?tab=approvals",
+            )
+
     return cr
 
 
@@ -800,6 +812,8 @@ def approve_change_request(
         raise HTTPException(status_code=404, detail="Change request not found")
     if cr.status != "pending_approval":
         raise HTTPException(status_code=400, detail="Change request is not pending")
+    if cr.subject_type == "employee_delete" and current_user["role"] not in ("Developer", "GM", "Admin"):
+        raise HTTPException(status_code=403, detail="Only Developer, GM, or Admin can approve an employee-deletion request")
 
     cr.status = "approved"
     cr.approved_by = current_user.get("id")
@@ -814,6 +828,10 @@ def approve_change_request(
             for field, value in changes.items():
                 if field in allowed:
                     setattr(emp, field, value)
+    elif cr.subject_type == "employee_delete" and cr.subject_id:
+        emp = db.query(Employee).filter(Employee.id == cr.subject_id).first()
+        if emp:
+            db.delete(emp)
 
     db.commit()
     db.refresh(cr)
@@ -832,6 +850,8 @@ def reject_change_request(
         raise HTTPException(status_code=404, detail="Change request not found")
     if cr.status != "pending_approval":
         raise HTTPException(status_code=400, detail="Change request is not pending")
+    if cr.subject_type == "employee_delete" and current_user["role"] not in ("Developer", "GM", "Admin"):
+        raise HTTPException(status_code=403, detail="Only Developer, GM, or Admin can reject an employee-deletion request")
 
     cr.status = "rejected"
     cr.approved_by = current_user.get("id")

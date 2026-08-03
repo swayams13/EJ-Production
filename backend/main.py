@@ -1,7 +1,9 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, date
@@ -35,6 +37,34 @@ from backend.app.projects.completion import router as completion_router
 from backend.app.notifications.router import router as notifications_router
 
 app = FastAPI(title="EJ Production Tracker API", version="1.0.0")
+
+
+class _UnhandledExceptionMiddleware(BaseHTTPMiddleware):
+    """
+    Catches any exception that escapes routing/business logic and returns a
+    clean, generic 500 JSON body instead of a leaked traceback/SQL string.
+
+    NOT implemented as @app.exception_handler(Exception): Starlette routes an
+    Exception-keyed exception_handler to ServerErrorMiddleware, which always
+    sits *outside* CORSMiddleware (Starlette.build_middleware_stack treats the
+    500/Exception key specially, feeding it to ServerErrorMiddleware rather
+    than the user_middleware stack) — so that response never gets CORS
+    headers applied and the browser just reports "Failed to fetch". This
+    middleware is registered *before* app.add_middleware(CORSMiddleware, ...)
+    below (add_middleware prepends, so "registered first" ends up as the
+    inner layer), which puts it *inside* CORSMiddleware in the stack, so the
+    response it builds passes back through CORS normally.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception:
+            logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+app.add_middleware(_UnhandledExceptionMiddleware)
 
 app.include_router(audit_router)
 app.include_router(users_router)

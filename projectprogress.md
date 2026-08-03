@@ -3,6 +3,30 @@
 ## Pending (deferred 2026-07-28):
 - **Railway Cron Job for daily briefing email** — `scripts/send_daily_briefing.py` exists and works, but the scheduled trigger isn't set up yet. In Railway: create a new service from the same GitHub repo (branch `demo`), then in that service's Settings → Deploy set **Cron Schedule** to `30 2 * * *` (2:30 AM UTC = 8:00 AM IST) and **Custom Start Command** to `python scripts/send_daily_briefing.py`. Needs env vars `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, `JWT_SECRET_KEY` (`CEO_EMAIL`/`MD_EMAIL` not set anywhere yet — need real addresses). Trigger one manual run to confirm before relying on the schedule. User will do this later.
 
+## Date: 2026-08-03 (Session 41 — QA-Sweep Fixes: Tier 0 execution)
+
+### What was done:
+Started executing `docs/superpowers/plans/2026-08-03-qa-sweep-fixes.md` (Session 40's plan) via `superpowers:subagent-driven-development`, per user's explicit request to begin with Tier 0. Tier 0 is a single task.
+
+**Task 1 — CORS/error-middleware ordering fix (`backend/main.py`):**
+- Root cause: Starlette's `ServerErrorMiddleware` wraps the whole app outside `CORSMiddleware`, so any unhandled exception's 500 response never got CORS headers — the browser reported a generic "Failed to fetch" instead of the real error, and raw `psycopg2`/SQLAlchemy exception text could leak into API responses.
+- **Deviation from the plan, verified not just claimed:** the plan's prescribed fix (`@app.exception_handler(Exception)`) does not work on this repo's installed Starlette (1.2.1) — an `Exception`-keyed handler is always routed to the outer `ServerErrorMiddleware` regardless of registration order, confirmed independently by both the implementer and the task reviewer by reading `Starlette.build_middleware_stack` source directly. Implemented `_UnhandledExceptionMiddleware` (a `BaseHTTPMiddleware` subclass registered before `CORSMiddleware`) instead — achieves the identical behavioral goal (clean `{"detail": "Internal server error"}` 500, CORS headers intact, logged server-side via the existing module logger).
+- New test `test_cors_on_error.py` (repo root, house style — plain `assert`, no pytest) exercises real Starlette/FastAPI apps end-to-end via `TestClient`; also verified against the real `backend.main.app` object by forcing an unhandled exception through the no-auth `/api/v1/auth/login` route.
+- Task review: **Approved**, no Critical/Important findings.
+- Three minor items deferred to the plan's ledger (not blocking): `BaseHTTPMiddleware`'s known streaming-response buffering limitation (no current usage affected — both existing `StreamingResponse` call sites are fully materialized, not progressive generators); later plan tasks that grep for the literal `@app.exception_handler(Exception)` name need pointing at `_UnhandledExceptionMiddleware` instead; `requirements.txt` still doesn't pin `fastapi`/`starlette` versions, and this fix depends on unversioned Starlette-internal behavior.
+
+### Commits (on demo branch):
+- `bffd7d9` — fix: register global exception handler so 500s carry CORS headers
+
+### What's still pending:
+- Tiers 1-4 of the plan (24 remaining tasks) not yet started — Tier 1 (Critical: Change-Request `KeyError` fix + new PM employee-deletion approval workflow) is next.
+- Plan execution ledger at `.superpowers/sdd/2026-08-03-qa-sweep-fixes/progress.md` (git-ignored, session-local) tracks task-by-task state for resuming mid-plan.
+
+### What needs to be done next session:
+- Continue `superpowers:subagent-driven-development` execution of the plan starting at Tier 1, Task 2 (JWT `current_user["id"]` KeyError) onward, in the numbered order.
+
+---
+
 ## Date: 2026-08-03 (Session 40 — QA-Sweep Fix Implementation Plan, no code changed)
 
 ### What was done:

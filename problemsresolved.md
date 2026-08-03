@@ -5,6 +5,20 @@ Update this alongside `projectprogress.md` whenever a non-trivial problem is sol
 
 ---
 
+## 2026-08-03 — Unhandled 500s lost their CORS headers, browser saw generic "Failed to fetch" (Session 41)
+
+**Symptom:** Found during Session 39's QA sweep — any unhandled backend exception produced a 500 response the browser couldn't read at all, reported as a generic network error instead of the real status/body. Raw `psycopg2`/SQLAlchemy exception text could also leak into API responses.
+
+**Root cause:** Starlette's `ServerErrorMiddleware` sits outside `CORSMiddleware` in the middleware stack. An exception that isn't caught anywhere bubbles out to `ServerErrorMiddleware`, which builds its response *after* `CORSMiddleware` has already run — so the response never gets CORS headers.
+
+**Fix attempted per the QA-sweep plan, found broken, corrected:** the plan prescribed `@app.exception_handler(Exception)`. Verified (both by the implementer and independently by the task reviewer, reading `Starlette.build_middleware_stack` source) that this exact mechanism doesn't work on this repo's installed Starlette (1.2.1) — an `Exception`-keyed handler is *always* routed to the outer `ServerErrorMiddleware`, regardless of where `add_exception_handler`/`add_middleware` calls appear in the source. Implemented `_UnhandledExceptionMiddleware` instead — a `BaseHTTPMiddleware` subclass registered *before* `CORSMiddleware` (registration order here does matter: `Starlette.add_middleware` prepends to the middleware list, so earlier registration = more-inner layer = inside CORS). Achieves the identical goal: clean `{"detail": "Internal server error"}` body, CORS headers intact, real exception logged server-side via `logger.exception(...)`.
+
+**Verified:** `test_cors_on_error.py` (new, repo root, house style) confirms the bug reproduces without the middleware and is fixed with it, via `TestClient` against real Starlette/FastAPI app objects. Also forced a genuine unhandled exception through the real `backend.main.app` object (via the no-auth `/api/v1/auth/login` route, since every other route now requires auth) and confirmed the 500 carries `access-control-allow-origin` and a clean body.
+
+**Deferred, not a live issue today:** `BaseHTTPMiddleware` has a known Starlette limitation around buffering/interfering with true incremental streaming responses. Checked both existing `StreamingResponse` usages in this codebase (`dashboard/router.py`, `audit/router.py`) — both wrap fully-materialized in-memory content, not progressive generators, so no functional risk currently. Worth a comment if a future task adds true chunked streaming.
+
+---
+
 ## 2026-08-02 — Every procurement management action was invisible to real logins (Session 38)
 
 **Symptom:** While doing real browser verification (not just lint) of a new procurement feature, "Create PO", "+ New PO", and every other management-only button (status changes, receipts, vendor/stock/settings edits) were completely absent when logged in normally as `PM` (role `"Production Manager"`). They only appeared after manually overriding `localStorage.user_role` to the literal string `"MANAGEMENT"` in the browser console for testing.

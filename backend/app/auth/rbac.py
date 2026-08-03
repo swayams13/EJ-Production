@@ -25,7 +25,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return {"username": username, "role": role}
+        return {"username": username, "role": role, "id": payload.get("uid")}
     except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

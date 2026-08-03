@@ -448,8 +448,10 @@ class ChangeRequest(Base):
     subject_type = Column(String, nullable=False)   # daily_plan_override | employee_profile
     subject_id = Column(Integer, nullable=True)     # Employee.id for employee_profile; null for daily_plan_override
     target_date = Column(Date, nullable=True)       # which day the daily_plan_override applies to
-    proposed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    proposed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    proposed_by_username = Column(String, nullable=True)  # env-var management logins have no users row (see PurchaseOrder.raised_by_username)
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_by_username = Column(String, nullable=True)
     status = Column(String, default="pending_approval")  # pending_approval | approved | rejected
     changes_json = Column(Text, nullable=False)
     rejection_note = Column(Text, nullable=True)

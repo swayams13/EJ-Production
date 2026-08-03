@@ -72,7 +72,7 @@ def refresh(req: RefreshRequest, db: Session = Depends(get_db)):
         db.rollback()
 
     access_token = create_access_token(
-        data={"sub": username, "role": role},
+        data={"sub": username, "role": role, "uid": user_id},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return {"access_token": access_token, "token_type": "bearer"}
@@ -134,8 +134,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": req.username, "role": role}, expires_delta=access_token_expires
+        data={"sub": req.username, "role": role, "uid": user_id}, expires_delta=access_token_expires
     )
-    refresh_token = create_refresh_token(data={"sub": req.username, "role": role})
+    refresh_token = create_refresh_token(data={"sub": req.username, "role": role, "uid": user_id})
 
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "role": role}

@@ -414,6 +414,12 @@ _run_startup_migration("project_completion_requests table", [
     """,
 ])
 
+_run_startup_migration("change_requests.username_and_nullable_actor_ids", [
+    "ALTER TABLE change_requests ALTER COLUMN proposed_by DROP NOT NULL",
+    "ALTER TABLE change_requests ADD COLUMN proposed_by_username TEXT",
+    "ALTER TABLE change_requests ADD COLUMN approved_by_username TEXT",
+])
+
 _run_startup_migration("notifications table", [
     """
     CREATE TABLE IF NOT EXISTS notifications (

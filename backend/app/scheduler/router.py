@@ -758,7 +758,8 @@ def create_change_request(
         subject_type=payload.subject_type,
         subject_id=payload.subject_id,
         target_date=payload.target_date,
-        proposed_by=current_user["id"],
+        proposed_by=current_user.get("id"),
+        proposed_by_username=current_user["username"],
         changes_json=payload.changes_json,
         status="pending_approval",
     )
@@ -778,7 +779,7 @@ def get_change_requests(
     query = db.query(ChangeRequest).options(joinedload(ChangeRequest.proposer))
 
     if current_user.get("role") == "Supervisor":
-        query = query.filter(ChangeRequest.proposed_by == current_user["id"])
+        query = query.filter(ChangeRequest.proposed_by_username == current_user["username"])
 
     if status:
         query = query.filter(ChangeRequest.status == status)
@@ -801,7 +802,8 @@ def approve_change_request(
         raise HTTPException(status_code=400, detail="Change request is not pending")
 
     cr.status = "approved"
-    cr.approved_by = current_user["id"]
+    cr.approved_by = current_user.get("id")
+    cr.approved_by_username = current_user["username"]
     cr.resolved_at = datetime.utcnow()
 
     if cr.subject_type == "employee_profile" and cr.subject_id:
@@ -832,7 +834,8 @@ def reject_change_request(
         raise HTTPException(status_code=400, detail="Change request is not pending")
 
     cr.status = "rejected"
-    cr.approved_by = current_user["id"]
+    cr.approved_by = current_user.get("id")
+    cr.approved_by_username = current_user["username"]
     cr.rejection_note = payload.rejection_note
     cr.resolved_at = datetime.utcnow()
 

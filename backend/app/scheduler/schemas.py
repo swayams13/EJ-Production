@@ -135,8 +135,10 @@ class ChangeRequestResponse(BaseModel):
     subject_type: str
     subject_id: Optional[int] = None
     target_date: Optional[date] = None
-    proposed_by: int
+    proposed_by: Optional[int] = None
+    proposed_by_username: Optional[str] = None
     approved_by: Optional[int] = None
+    approved_by_username: Optional[str] = None
     status: str
     changes_json: str
     rejection_note: Optional[str] = None

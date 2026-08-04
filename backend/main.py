@@ -436,6 +436,10 @@ _run_startup_migration("notifications table", [
     """,
 ])
 
+_run_startup_migration("work_orders.user_id_nullable", [
+    "ALTER TABLE work_orders ALTER COLUMN user_id DROP NOT NULL",
+])
+
 from backend.services.db_service import SessionLocal
 from backend.services.itemwise_backfill import backfill_itemwise
 backfill_itemwise(SessionLocal)

@@ -1,3 +1,4 @@
+import logging
 from datetime import date, timedelta
 from collections import defaultdict
 
@@ -8,6 +9,8 @@ from backend.services.db_service import (
 )
 from backend.app.users.schemas import UserCreate, UserUpdate
 from passlib.context import CryptContext
+
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
@@ -81,22 +84,24 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: dict 
         raise HTTPException(status_code=404, detail="User not found")
         
     try:
-        from backend.services.db_service import DailyTaskAssignment, AuditLog
+        from backend.services.db_service import DailyTaskAssignment, AuditLog, WorkOrder
         # Nullify references so historical production logs aren't deleted when an operator is removed
         db.query(WeldingLog).filter(WeldingLog.operator_id == user.id).update({WeldingLog.operator_id: None})
         db.query(ProductionLog).filter(ProductionLog.operator_id == user.id).update({ProductionLog.operator_id: None})
         db.query(AuditLog).filter(AuditLog.user_id == user.id).update({AuditLog.user_id: None})
-        
+        db.query(WorkOrder).filter(WorkOrder.user_id == user.id).update({WorkOrder.user_id: None})
+
         # Delete attendance logs and daily task assignments since user_id is non-nullable
         db.query(AttendanceLog).filter(AttendanceLog.user_id == user.id).delete(synchronize_session=False)
         db.query(DailyTaskAssignment).filter(DailyTaskAssignment.user_id == user.id).delete(synchronize_session=False)
-        
+
         db.delete(user)
         db.commit()
         return {"success": True, "message": "User deleted successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Cannot delete user: {str(e)}")
+        logger.exception("Failed to delete user %s", user_id)
+        raise HTTPException(status_code=400, detail="Cannot delete user: still referenced by other records")
 
 
 @router.get("/{user_id}/dashboard")

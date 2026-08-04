@@ -351,6 +351,9 @@ def get_project_bellows(project_id: int, db: Session = Depends(get_db), current_
 
 @router.put("/{project_id}/bellows")
 def update_project_bellows(project_id: int, req: List[BellowItem], db: Session = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
+    if not db.query(Project).filter(Project.id == project_id).first():
+        raise HTTPException(status_code=404, detail="Project not found")
+
     bellows_data = [{
         "size": b.size,
         "qty": b.qty,
@@ -360,8 +363,10 @@ def update_project_bellows(project_id: int, req: List[BellowItem], db: Session =
         "joint_type_code": getattr(b, "joint_type_code", None),
         "variable_qtys": getattr(b, "variable_qtys", None),
     } for b in req]
-    sync_project_production_lines(project_id, bellows_data)
-    
+    ok = sync_project_production_lines(project_id, bellows_data)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Failed to sync bellows — check server logs for details")
+
     assign = db.query(ProjectResourceAssignment).filter(ProjectResourceAssignment.project_id == project_id).first()
     if assign:
         calculate_project_duration(project_id, assign.assigned_tig_welders or 0, assign.assigned_mig_welders or 0, assign.assigned_grinders or 0)
@@ -369,6 +374,8 @@ def update_project_bellows(project_id: int, req: List[BellowItem], db: Session =
 
 @router.post("/duration")
 def get_duration(req: DurationRequest, db: Session = Depends(get_db), current_user: dict = Depends(require_roles(MANAGEMENT))):
+    if not db.query(Project).filter(Project.id == req.project_id).first():
+        raise HTTPException(status_code=404, detail="Project not found")
     dur, t, m, g = calculate_project_duration(req.project_id, req.assigned_tig, req.assigned_mig, req.assigned_grinders)
     return {"success": True, "message": "Duration retrieved", "data": {"estimated_duration_days": dur}}
 

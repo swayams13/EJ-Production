@@ -12,6 +12,7 @@ from backend.services.db_service import (
 from backend.app.auth.rbac import require_roles
 from backend.services.notification_service import create_notification
 from backend.services.email_service import send_system_email_async as send_system_email
+from backend.services.mes_service import MESService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/projects", tags=["Completion"])
@@ -75,6 +76,10 @@ def submit_completion_request(
     if existing:
         raise HTTPException(status_code=409, detail="A completion request is already pending for this project")
 
+    progress = MESService.calculate_project_progress(db, project_id)
+    if progress < 99.5:
+        raise HTTPException(status_code=400, detail=f"Cannot submit completion request: project is only {progress:.1f}% complete. Log remaining welding footage before requesting completion.")
+
     req = ProjectCompletionRequest(
         project_id=project_id,
         requested_by=user["username"],
@@ -136,6 +141,10 @@ def approve_completion(
     req = db.query(ProjectCompletionRequest).filter(ProjectCompletionRequest.id == req_id).first()
     if not req or req.status != "pending":
         raise HTTPException(status_code=404, detail="Pending request not found")
+
+    progress = MESService.calculate_project_progress(db, req.project_id)
+    if progress < 99.5:
+        raise HTTPException(status_code=400, detail=f"Cannot approve: project is only {progress:.1f}% complete.")
 
     proj = _get_project_or_404(req.project_id, db)
     line_ids = [l.id for l in db.query(ProjectProductionLine.id).filter_by(project_id=req.project_id).all()]

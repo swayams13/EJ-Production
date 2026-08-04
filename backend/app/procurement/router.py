@@ -305,8 +305,8 @@ def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), 
     po = db.query(PurchaseOrder).filter_by(id=po_id).first()
     if not po:
         raise HTTPException(404, "PO not found")
-    if po.status == "cancelled":
-        raise HTTPException(400, "Cannot receive against a cancelled PO")
+    if po.status in ("cancelled", "received"):
+        raise HTTPException(400, f"Cannot receive against a {po.status} PO")
 
     u = db.query(User).filter_by(username=user["username"]).first()
 
@@ -325,6 +325,10 @@ def log_receipt(po_id: int, body: ReceiptCreate, db: Session = Depends(get_db), 
         po_line = db.query(PurchaseOrderLine).filter_by(id=rl.po_line_id, purchase_order_id=po_id).first()
         if not po_line:
             raise HTTPException(404, f"PO line {rl.po_line_id} not found on this PO")
+
+        remaining = po_line.ordered_qty - (po_line.received_qty or 0)
+        if rl.qty_received > remaining:
+            raise HTTPException(400, f"Cannot receive {rl.qty_received} against PO line {rl.po_line_id} — only {remaining} remaining (ordered {po_line.ordered_qty}, already received {po_line.received_qty or 0})")
 
         db.add(GoodsReceiptLine(receipt_id=receipt.id, po_line_id=rl.po_line_id, qty_received=rl.qty_received))
 

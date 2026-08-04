@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 from datetime import date as DateType
 
@@ -147,7 +147,7 @@ class POResponse(BaseModel):
 # --- Goods Receipt ---
 class ReceiptLineCreate(BaseModel):
     po_line_id: int
-    qty_received: int
+    qty_received: int = Field(gt=0)
 
 class ReceiptCreate(BaseModel):
     receipt_date: Optional[DateType] = None

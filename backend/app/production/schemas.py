@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Literal
 from datetime import date
 
 class TransactionCreate(BaseModel):
@@ -11,7 +11,7 @@ class TransactionCreate(BaseModel):
 
 class FinalCheckUpdate(BaseModel):
     is_required: Optional[bool] = None
-    status: Optional[str] = None            # pending | required | in_process | ready
+    status: Optional[Literal["pending", "required", "in_process", "ready"]] = None
     test_method: Optional[str] = None
     paint_spec: Optional[str] = None
     weight_kgs: Optional[float] = None

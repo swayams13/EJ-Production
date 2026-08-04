@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 
 from backend.services.db_service import get_db, ProjectProductionLine, PartProcess, ProductionLog, User, AuditLog, JobFinalCheck, AssemblyStep
 from backend.app.production.schemas import TransactionCreate, FinalCheckUpdate
@@ -191,7 +191,7 @@ def update_final_check(check_id: int, body: FinalCheckUpdate, db: Session = Depe
     return {"success": True, "message": f"Updated {check.check_type}"}
 
 class AssemblyStepUpdate(BaseModel):
-    status: Optional[str] = None
+    status: Optional[Literal["pending", "in_process", "ready"]] = None
     completed_qty: Optional[int] = None
     date_ready: Optional[date] = None
     notes: Optional[str] = None
@@ -259,6 +259,19 @@ def add_welding_log(req_id: int, tx: WeldingLogCreate, db: Session = Depends(get
         raise HTTPException(
             status_code=400,
             detail="Dismantling Joint (DJ) lines have no TIG process; log this welding as MIG instead."
+        )
+
+    from sqlalchemy import func as sa_func2
+    target_map = {"TIG": line.tig_feet, "MIG": line.mig_feet, "Grinding": line.grinding_feet}
+    target = target_map.get(tx.process_type) or 0
+    already_logged = db.query(sa_func2.sum(WeldingLog.feet_done)).filter(
+        WeldingLog.production_line_id == req_id,
+        WeldingLog.process_type == tx.process_type,
+    ).scalar() or 0.0
+    if target > 0 and already_logged + tx.feet_done > target + 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot log {tx.feet_done} feet of {tx.process_type}: only {max(0, target - already_logged):.2f} remaining (target {target})"
         )
 
     user = db.query(User).filter_by(id=tx.operator_id).first()

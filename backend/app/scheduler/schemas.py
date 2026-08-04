@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import date, datetime
 
@@ -114,7 +114,7 @@ class WorkOrderResponse(BaseModel):
 
 
 class WorkOrderComplete(BaseModel):
-    actual_feet: float
+    actual_feet: float = Field(ge=0)
     status: str = "Completed"
     mark_step_ready: bool = False
     part_process_id: Optional[int] = None

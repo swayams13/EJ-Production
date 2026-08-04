@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Literal
 from pydantic import BaseModel
 
 from backend.services.db_service import get_db, AttendanceLog, User
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1/workforce", tags=["Workforce"])
 class AttendanceCreate(BaseModel):
     user_id: int
     date: date
-    status: str
+    status: Literal["Present", "Absent", "Leave", "Overtime"]
     hours: Optional[float] = None
 
 class AttendanceResponse(BaseModel):

@@ -37,6 +37,9 @@ def create_custom_welding_size(req: WeldingSizeCreate, db = Depends(get_db), cur
     from backend.services.db_service import WeldingMaster
 
     if req.tag_no:
+        from backend.services import joint_catalog
+        if joint_catalog.weld_family_for(req.tag_no, fallback=None) is None:
+            raise HTTPException(status_code=400, detail=f"Unrecognized tag_no '{req.tag_no}' — not found in the joint catalog")
         from backend.services.production_service import upsert_tag_welding_master
         wm = upsert_tag_welding_master(req.tag_no, req.size, req.tig_feet, req.mig_feet, req.grinding_feet)
         return {
@@ -119,10 +122,12 @@ def auto_sync_all_projects_with_master():
                 target_days = max(1, target_days)
                 req_tig, req_mig, req_grind = calculate_required_resources_for_deadline(p.id, target_days)
                 
-                assign.assigned_tig_welders = req_tig
-                assign.assigned_mig_welders = req_mig
-                assign.assigned_grinders = req_grind
-                assign.estimated_duration_days = target_days
+                if (assign.assigned_tig_welders != req_tig or assign.assigned_mig_welders != req_mig
+                        or assign.assigned_grinders != req_grind or assign.estimated_duration_days != target_days):
+                    assign.assigned_tig_welders = req_tig
+                    assign.assigned_mig_welders = req_mig
+                    assign.assigned_grinders = req_grind
+                    assign.estimated_duration_days = target_days
                 
         db.commit()
     except Exception as e:

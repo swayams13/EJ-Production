@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date, datetime
 
 
@@ -115,7 +115,7 @@ class WorkOrderResponse(BaseModel):
 
 class WorkOrderComplete(BaseModel):
     actual_feet: float = Field(ge=0)
-    status: str = "Completed"
+    status: Literal["Pending", "Completed", "Blocked"] = "Completed"
     mark_step_ready: bool = False
     part_process_id: Optional[int] = None
     notes: Optional[str] = None

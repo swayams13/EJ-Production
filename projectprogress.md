@@ -3,6 +3,82 @@
 ## Pending (deferred 2026-07-28):
 - **Railway Cron Job for daily briefing email** — `scripts/send_daily_briefing.py` exists and works, but the scheduled trigger isn't set up yet. In Railway: create a new service from the same GitHub repo (branch `demo`), then in that service's Settings → Deploy set **Cron Schedule** to `30 2 * * *` (2:30 AM UTC = 8:00 AM IST) and **Custom Start Command** to `python scripts/send_daily_briefing.py`. Needs env vars `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, `JWT_SECRET_KEY` (`CEO_EMAIL`/`MD_EMAIL` not set anywhere yet — need real addresses). Trigger one manual run to confirm before relying on the schedule. User will do this later.
 
+## Date: 2026-08-04 (Session 43 — QA-Sweep Fixes: Tier 2 execution, dynamic Workflow)
+
+### What was done:
+Continued `docs/superpowers/plans/2026-08-03-qa-sweep-fixes.md` starting at Tier 2 (Tasks 5-12, "High: data loss/integrity"), per user's explicit request to run it via a dynamic multi-agent workflow rather than the strictly-sequential `subagent-driven-development` skill used in Sessions 41-42. Mapped the 8 tasks to 5 independent file-tracks by which files each touches (no two concurrent tasks may edit/commit the same file): `[5]`, `[6]`, `[7→8]` (both touch `scheduler/router.py`), `[9]`, `[10→11→12]` (all three touch `procurement/router.py`/`schemas.py`). Ran all 5 tracks concurrently via the `Workflow` tool, fresh implementer + fresh reviewer subagent per task (same review discipline as Sessions 41-42), each track's own chain sequential internally.
+
+**Workflow result — 4 of 8 clean on the first pass, 2 legitimately blocked, 2 skipped as chain-dependents:**
+- **Task 6** (delete_user WorkOrder cascade) and **Task 9** (actual_feet lower bound) — implemented and reviewed clean, no changes needed.
+- **Task 5** (delete_project cascades) — implemented and committed, but review caught a real gap: the diff covered `material_holds`/`job_final_checks`/`assembly_steps`/`project_completion_requests` exactly as the brief specified, but missed `WorkOrder` (also a NOT NULL `project_id` FK, created routinely by the scheduler on any actively-worked project) — reviewer reproduced the 500 live. Fixed in a follow-up commit in the main session (not re-dispatched to the workflow, given ponytail's lazy-but-correct bar and how small the fix was) — added the same `db.query(WorkOrder).filter(...).delete(...)` line, extended the test, reverified clean.
+- **Task 7** (work-order regen preserving Completed rows) — implementer correctly stopped rather than improvise: the brief's own test code block (plan lines 1127-1210) omits the `os.environ.setdefault("JWT_SECRET_KEY", ...)` line that sibling QA-sweep tests use before importing anything that touches the auth chain, so it crashed at import time instead of reaching the actual bug. This is a gap in the brief, not the underlying fix. Added the one missing line in the main session, then the brief's prescribed fix (`WorkOrder.status != "Completed"` filter on the pre-regenerate delete) applied and passed clean on the first try.
+- **Task 10** (PO status state machine) — implementer correctly stopped: the brief's own Step 1 test has an internal contradiction — it constructs `POStatusUpdate(status="received")` expecting `update_po_status` to reject it via an `HTTPException(400)`, but the brief's own Step 3 fix (`Literal["raised","sent","cancelled"]`) makes that construction itself raise a `pydantic.ValidationError` one layer earlier, before the endpoint ever runs. The prescribed schema/router code was correct and applied as-is; only the test needed correcting in the main session — replaced the received-transition case with a `ValidationError` assertion, and added a new `draft→sent` case (a valid `Literal` value, just not an allowed transition) to actually exercise the `PO_ALLOWED_TRANSITIONS` business-logic check the brief intended to test.
+- **Task 8** and **Tasks 11-12** never ran in the workflow (skipped as chain-dependents of the blocked 7 and 10) — implemented directly in the main session once their chain's blocker was cleared: Task 8 adds `User`/`Project` existence checks before insert in `submit_attendance`/`submit_attendance_bulk`/`create_assignment`; Task 11 adds `Field(gt=0)` to `qty_received` plus over-receipt/already-received-PO guards in `log_receipt`; Task 12 adds a 409 on duplicate `po_number` in `create_po` and a 404 on unknown `part_id` in `upsert_daily_log`.
+
+All 8 tasks now complete and committed. Full task-by-task detail, deviations, and review findings logged in `.superpowers/sdd/2026-08-03-qa-sweep-fixes/progress.md`.
+
+**Recurring environment gap, not a defect in any of the fixes:** every root-level `test_*.py` in this repo imports backend modules directly (not `backend.main`, the only place that calls `load_dotenv()`), so running one standalone requires `set -a && source .env && set +a` first, or (for the auth-chain import path specifically) an `os.environ.setdefault("JWT_SECRET_KEY", ...)` before the first backend import. Some of the plan's brief test blocks (Tasks 7, 10) didn't anticipate this. Worth a `conftest.py`-equivalent (a tiny `_env.py` imported first, or a wrapper script) if this repo ever adds more of these tests — not done this session, flagged only.
+
+### Commits (on demo branch, not yet pushed to remote):
+- `7890ae8` — fix: reject negative actual_feet on work-order completion (Task 9)
+- `4fd7adf` — fix: delete_project 500s on any project with material_holds/job_final_checks/assembly_steps/completion_requests (Task 5, part 1)
+- `f893cc7` — fix: delete_user never handled WorkOrder.user_id (Task 6)
+- `1170769` — fix: delete_project still 500s on any project with a WorkOrder row (Task 5, follow-up)
+- `76bdd17` — fix: generate-work-orders no longer deletes already-Completed rows on regenerate (Task 7)
+- `4802ca1` — fix: PO status endpoint now enforces a real transition state machine (Task 10)
+- `5bed38a` — fix: validate user_id/project_id before insert in attendance and scheduler-assignments (Task 8)
+- `456b10e` — fix: goods receipt now rejects non-positive qty, over-receipt, and receipt against a received PO (Task 11)
+- `7e267b9` — fix: duplicate PO number and unknown part_id in daily-log now return clean 4xx, not raw 500 (Task 12)
+
+### What's still pending:
+- **Push to `demo` remote** — all 9 commits above are local only as of this entry; per repo convention, push before considering this session's work "on demo."
+- Tier 3 (Medium: 8 tasks — validation bounds sweep, status enums, completion-request gating on progress, frontend date-range bug) and Tier 4 (Low: 4 tasks — 404 consistency, cosmetic fixes, dead inventory router, env-login hardening) not yet started.
+- The Task 4 PM/Supervisor browser click-through gap from Session 42 is still open (not addressed this session).
+
+### What needs to be done next session:
+- Push this session's 9 commits to `demo` remote (confirm with user first if not already done).
+- Continue the plan at Tier 3, Task 13 onward — the dynamic-workflow file-track approach worked well this session (4/8 clean first-pass, both blockers were brief bugs not implementation bugs, caught cleanly by the stop-don't-improvise instruction) and is worth reusing, mapping tasks to tracks by file overlap same as this session.
+
+---
+
+## Date: 2026-08-03 (Session 42 — QA-Sweep Fixes: Tier 1 execution)
+
+### What was done:
+Continued `docs/superpowers/plans/2026-08-03-qa-sweep-fixes.md` via `superpowers:subagent-driven-development`, per user's request to run it and start with Tier 1. All 3 Tier 1 (Critical) tasks completed, fresh implementer + reviewer subagent per task, all reviews came back Approved with no Critical/Important findings.
+
+**Task 2 — `current_user["id"]` KeyError fix (the whole Change-Request system was 500ing):**
+- `ChangeRequest.proposed_by`/`approved_by` made nullable numeric FKs with new always-populated `proposed_by_username`/`approved_by_username` sidecar columns, mirroring the existing `PurchaseOrder.raised_by`/`raised_by_username` pattern.
+- `get_current_user()` (`backend/app/auth/rbac.py`) now returns an `id` key; JWT `login()`/`refresh()` (`backend/app/auth/router.py`) now embed a `uid` claim, backward-compatible with tokens issued before this change (`payload.get("uid")` → `None`, doesn't raise).
+- All 4 Change-Request call sites in `backend/app/scheduler/router.py` updated to use the new pattern.
+- New `test_change_request_actor_id.py`. Reviewer independently verified the JWT `uid` claim is in scope across all 3 login paths (hardcoded dev user, dynamic env user, DB user) and confirmed zero other unguarded `current_user["id"]` call sites repo-wide.
+
+**Task 3 — PM-initiated employee-deletion request/approval workflow (new feature, decided in Session 40):**
+- Reused the existing `ChangeRequest` + `Notification` infrastructure with a new `subject_type="employee_delete"` — no new tables.
+- PM creates the request (CEO+MD notified instantly); only Developer/GM/Admin can approve/reject (403 for the requesting PM — no self-approval); approving deletes the `Employee` row, rejecting doesn't. Direct `DELETE /scheduler/employees/{id}` for Developer/GM/Admin unchanged.
+- New `test_employee_delete_request.py` covering all 4 required behaviors (notification, self-approve block, self-reject block, actual deletion on approval).
+
+**Task 4 — Frontend wiring (`next-frontend/src/app/(main)/scheduler/page.tsx`):**
+- PM now sees "Request Deletion" (creates a ChangeRequest) instead of a direct-delete button that would 403; Developer/GM/Admin keep direct delete.
+- Wired up the previously-dead `handleProposeEmployeeChanges` handler with a real "Propose Changes" button for Supervisor in the Manage Workforce modal.
+- Every change-request network call (`handleDeleteEmployee`, `handleProposeEmployeeChanges`, `handleSubmitOverride`, `handleApprove`, `handleReject`) now wrapped in try/catch with a toast — closes the original QA-sweep "silent failure" finding where a raw fetch throw was invisible to the user.
+- Pending Approvals table shows a "Delete Request" badge and hides Approve/Reject from PM on `employee_delete` rows, matching Task 3's backend restriction.
+- Verification gap: the brief's manual browser walkthrough (Step 8) wasn't performed live — no browser tool in the implementer's environment. Substituted `tsc --noEmit` + `next build` (both clean) + live curl against the running backend as PM/GM confirming the 403s and the new response fields. Reviewer judged this adequate for the diff's risk (mechanical JSX + try/catch) but flagged it as a real gap worth closing with an actual click-through before this reaches a real user session — the Supervisor "Propose Changes" path in particular has zero live-server coverage of any kind (no Supervisor credentials in `.env` to test with).
+
+### Commits (on demo branch, `dc93692`, `a701047`, `cf20703`):
+- `a701047` — fix: current_user["id"] KeyError kills the entire Change-Request workflow
+- `dc93692` — feat: PM-initiated employee-deletion request/approval workflow
+- `cf20703` — feat(frontend): wire PM employee-deletion requests, fix dead Propose Changes button
+
+### What's still pending:
+- Tiers 2-4 of the plan (22 remaining tasks) not yet started — Tier 2 (High: cascade-delete gaps in `delete_project`/`delete_user`, work-order regeneration destroying completed records, PO status/receipt validation, FK-violation 500s) is next.
+- The unperformed Task 4 browser walkthrough (see above) — do a real click-through as PM and Supervisor before this reaches a real user session.
+- Plan execution ledger at `.superpowers/sdd/2026-08-03-qa-sweep-fixes/progress.md` (git-ignored, session-local) tracks task-by-task state for resuming mid-plan.
+
+### What needs to be done next session:
+- Continue `superpowers:subagent-driven-development` execution of the plan starting at Tier 2, Task 5 (missing cascade deletes in `delete_project`) onward, in the numbered order.
+
+---
+
 ## Date: 2026-08-03 (Session 41 — QA-Sweep Fixes: Tier 0 execution)
 
 ### What was done:

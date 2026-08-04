@@ -5,6 +5,20 @@ Update this alongside `projectprogress.md` whenever a non-trivial problem is sol
 
 ---
 
+## 2026-08-04 — Two QA-sweep plan briefs shipped self-contradicting tests; a third's cascade-delete fix was itself incomplete (Session 43)
+
+**Context:** Tier 2 of `docs/superpowers/plans/2026-08-03-qa-sweep-fixes.md` (8 tasks) was executed via a dynamic `Workflow` run — 5 concurrent file-tracks, fresh implementer + fresh reviewer subagent per task, each told to follow the brief's prescribed steps exactly and **stop rather than improvise** if reality didn't match the brief. Two of the eight legitimately blocked, and a third's reviewer caught a real gap in an "approved-by-the-letter" diff — none were implementer mistakes, all were caught cleanly by the discipline of following the brief literally instead of guessing at intent.
+
+**Task 7's test crashed at import, not at the assertion:** the brief's own test code block (plan lines 1127-1210) imports `backend.app.scheduler.router`, which pulls in the auth chain, which fail-fasts without `JWT_SECRET_KEY` set — but the brief omitted the `os.environ.setdefault("JWT_SECRET_KEY", "test-key-for-unit-tests")` line that sibling QA-sweep tests (e.g. `test_change_request_actor_id.py`) already use for exactly this reason. Fix: added the one missing line to the test; the brief's actual code fix (`WorkOrder.status != "Completed"` filter on the pre-regenerate delete) was correct as written and passed clean once the test could even run.
+
+**Task 10's test contradicted its own fix:** Step 1 constructs `POStatusUpdate(status="received")` inside a `try/except HTTPException`, expecting `update_po_status`'s business-logic check to reject it with a 400. But Step 3's own schema change (`status: Literal["raised", "sent", "cancelled"]`) makes `"received"` un-constructible — Pydantic raises `ValidationError` at the `POStatusUpdate(...)` call itself, one layer before `update_po_status` ever runs, so the `except HTTPException` never fires and the script crashes instead. The brief's schema and router code were both correct; only the test's assumption about *which layer* rejects `"received"` was stale. Fix: replaced that test case with a `ValidationError` assertion, and added a new `draft→sent` case (a valid `Literal` value that's still an invalid transition) to actually exercise the `PO_ALLOWED_TRANSITIONS` table the brief intended to test.
+
+**Task 5's cascade-delete fix was reviewed "approved-by-the-letter, incomplete-by-intent":** the diff matched the brief's enumerated table list (`material_holds`/`job_final_checks`/`assembly_steps`/`project_completion_requests`) exactly and the reviewer's independent re-run passed — but the reviewer went further than "does this match the brief" and reproduced the *stated goal* ("every real, actively-worked project" should delete cleanly) live, which surfaced that `WorkOrder` (also a NOT NULL `project_id` FK, created routinely by the scheduler) still 500s the same way. The brief's table list was simply incomplete. Fixed with one more `db.query(WorkOrder).filter(...).delete(...)` line and an extended test.
+
+**Takeaway:** none of this was implementer error — an agent instructed to follow a written brief exactly, and to stop and report rather than silently patch around a discrepancy, correctly surfaced three separate authoring gaps in a 25-task plan written the previous session. Worth keeping that "stop, don't improvise" instruction in future plan-execution prompts; it's cheaper to fix a brief bug once in the main session than to have 5 concurrent implementers each guess a different workaround.
+
+---
+
 ## 2026-08-03 — Unhandled 500s lost their CORS headers, browser saw generic "Failed to fetch" (Session 41)
 
 **Symptom:** Found during Session 39's QA sweep — any unhandled backend exception produced a 500 response the browser couldn't read at all, reported as a generic network error instead of the real status/body. Raw `psycopg2`/SQLAlchemy exception text could also leak into API responses.

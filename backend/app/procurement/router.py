@@ -126,6 +126,8 @@ def list_pos(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVISORS)
 
 @router.post("/po", response_model=POResponse)
 def create_po(body: POCreate, db: Session = Depends(get_db), user=Depends(require_roles(MANAGEMENT))):
+    if db.query(PurchaseOrder).filter_by(po_number=body.po_number).first():
+        raise HTTPException(status_code=409, detail=f"PO number '{body.po_number}' already exists")
     u = db.query(User).filter_by(username=user["username"]).first()
     po = PurchaseOrder(
         po_number=body.po_number,
@@ -478,6 +480,9 @@ def morning_list(db: Session = Depends(get_db), _=Depends(require_roles(SUPERVIS
 
 @router.post("/daily-log")
 def upsert_daily_log(body: DailyLogCreate, db: Session = Depends(get_db), _=Depends(require_roles(MANAGEMENT))):
+    if not db.query(Part).filter(Part.id == body.part_id).first():
+        raise HTTPException(status_code=404, detail=f"Part {body.part_id} not found")
+
     from datetime import date as _date
     today = _date.today()
     log = db.query(DailyProcurementLog).filter_by(log_date=today, part_id=body.part_id).first()

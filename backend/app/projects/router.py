@@ -280,7 +280,7 @@ def delete_project(project_id: int, db: Session = Depends(get_db), current_user:
         
     from backend.services.db_service import (
         ProjectHoldHistory, DailyTaskAssignment, WeldingLog,
-        MaterialHold, JobFinalCheck, AssemblyStep, ProjectCompletionRequest,
+        MaterialHold, JobFinalCheck, AssemblyStep, ProjectCompletionRequest, WorkOrder,
     )
 
     # 1. Delete manual dependencies not tracked by SQLAlchemy cascades
@@ -288,6 +288,7 @@ def delete_project(project_id: int, db: Session = Depends(get_db), current_user:
     db.query(DailyTaskAssignment).filter(DailyTaskAssignment.project_id == project_id).delete(synchronize_session=False)
     db.query(MaterialHold).filter(MaterialHold.project_id == project_id).delete(synchronize_session=False)
     db.query(ProjectCompletionRequest).filter(ProjectCompletionRequest.project_id == project_id).delete(synchronize_session=False)
+    db.query(WorkOrder).filter(WorkOrder.project_id == project_id).delete(synchronize_session=False)
 
     line_ids = [l.id for l in db.query(ProjectProductionLine.id).filter(ProjectProductionLine.project_id == project_id).all()]
     if line_ids:

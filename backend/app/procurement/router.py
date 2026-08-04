@@ -23,6 +23,12 @@ from backend.services.notification_service import create_notification
 
 router = APIRouter(prefix="/api/v1/procurement", tags=["Procurement"])
 
+PO_ALLOWED_TRANSITIONS = {
+    "draft": {"raised", "cancelled"},
+    "raised": {"sent", "cancelled"},
+    "sent": {"cancelled"},
+}
+
 
 # ── Vendors ────────────────────────────────────────────────────────────────
 
@@ -207,6 +213,9 @@ def update_po_status(po_id: int, body: POStatusUpdate, db: Session = Depends(get
         raise HTTPException(404, "PO not found")
     if po.status == "received":
         raise HTTPException(400, "Cannot change status of a fully received PO")
+    allowed_next = PO_ALLOWED_TRANSITIONS.get(po.status, set())
+    if body.status not in allowed_next:
+        raise HTTPException(400, f"Cannot move a PO from '{po.status}' to '{body.status}'. Allowed: {sorted(allowed_next) or 'none'}")
 
     old_status = po.status
     po.status = body.status

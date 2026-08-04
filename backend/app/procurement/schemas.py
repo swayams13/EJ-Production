@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date as DateType
 
 
@@ -124,7 +124,7 @@ class POCreate(BaseModel):
     lines: List[POLineCreate] = []
 
 class POStatusUpdate(BaseModel):
-    status: str  # raised|sent|cancelled
+    status: Literal["raised", "sent", "cancelled"]
     delay_reason: Optional[str] = None
 
 class POResponse(BaseModel):

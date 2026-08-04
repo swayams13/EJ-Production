@@ -66,6 +66,9 @@ def delete_vendor(vendor_id: int, db: Session = Depends(get_db), _=Depends(requi
     v = db.query(Vendor).filter_by(id=vendor_id).first()
     if not v:
         raise HTTPException(404, "Vendor not found")
+    referencing_pos = db.query(PurchaseOrder).filter_by(vendor_id=vendor_id).count()
+    if referencing_pos > 0:
+        raise HTTPException(400, f"Cannot delete vendor: {referencing_pos} purchase order(s) still reference it. Reassign or cancel them first.")
     db.delete(v)
     db.commit()
     return {"ok": True}
@@ -108,10 +111,8 @@ def list_lead_times(db: Session = Depends(get_db), _=Depends(require_roles(SUPER
 def update_lead_time(material_name: str, body: LeadTimeUpdate, db: Session = Depends(get_db), _=Depends(require_roles(MANAGEMENT))):
     lt = db.query(MaterialLeadTime).filter_by(material_name=material_name).first()
     if not lt:
-        lt = MaterialLeadTime(material_name=material_name, lead_time_days=body.lead_time_days)
-        db.add(lt)
-    else:
-        lt.lead_time_days = body.lead_time_days
+        raise HTTPException(status_code=404, detail=f"No lead-time record exists for material '{material_name}'")
+    lt.lead_time_days = body.lead_time_days
     db.commit()
     db.refresh(lt)
     return lt

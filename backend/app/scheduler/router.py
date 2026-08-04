@@ -101,7 +101,7 @@ def generate_work_orders(
     from backend.services.mes_service import MESService
     from backend.services.production_service import aggregate_line_feet
 
-    db.query(WorkOrder).filter(WorkOrder.date == target_date).delete()
+    db.query(WorkOrder).filter(WorkOrder.date == target_date, WorkOrder.status != "Completed").delete()
     db.commit()
 
     # ── Step 1: present workers ───────────────────────────────────────────────

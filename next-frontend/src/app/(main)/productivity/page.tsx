@@ -24,7 +24,9 @@ function presetRange(preset: string): [string, string] {
   const today = new Date();
   if (preset === "week") {
     const start = new Date(today);
-    start.setDate(today.getDate() - today.getDay() + 1); // Mon
+    const day = today.getDay(); // 0=Sun..6=Sat
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    start.setDate(today.getDate() + diffToMonday);
     return [isoDate(start), isoDate(today)];
   }
   if (preset === "month") {

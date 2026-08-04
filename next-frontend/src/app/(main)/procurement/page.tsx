@@ -672,7 +672,7 @@ export default function ProcurementDashboard() {
                   )}
                 </TBody>
               </Table>
-              {selectedPartIds.size > 0 && (
+              {isManagement && selectedPartIds.size > 0 && (
                 <CardBody className="flex justify-end p-4">
                   <Button variant="primary" onClick={handleRaisePOFromSelection}>
                     Raise PO ({selectedPartIds.size} selected)

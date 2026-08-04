@@ -36,6 +36,9 @@ def submit_attendance(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"]))
 ):
+    if not db.query(User).filter(User.id == attendance.user_id).first():
+        raise HTTPException(status_code=404, detail=f"User {attendance.user_id} not found")
+
     # Upsert on the (user_id, date) unique constraint instead of check-then-insert,
     # which raced under concurrent submits (two requests could both pass the
     # "does it exist" check and both insert, producing duplicate attendance rows).
@@ -62,6 +65,12 @@ def submit_attendance_bulk(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles(SUPERVISORS)),
 ):
+    user_ids = {rec.user_id for rec in records}
+    existing_ids = {u.id for u in db.query(User.id).filter(User.id.in_(user_ids)).all()}
+    missing = user_ids - existing_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"User id(s) not found: {sorted(missing)}")
+
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     for rec in records:
         stmt = pg_insert(AttendanceLog).values(

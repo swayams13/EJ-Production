@@ -346,6 +346,11 @@ def create_assignment(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_roles(["Developer", "GM", "Admin", "Production Manager", "Supervisor"]))
 ):
+    if not db.query(Project).filter(Project.id == assignment.project_id).first():
+        raise HTTPException(status_code=404, detail=f"Project {assignment.project_id} not found")
+    if not db.query(User).filter(User.id == assignment.user_id).first():
+        raise HTTPException(status_code=404, detail=f"User {assignment.user_id} not found")
+
     new_assignment = DailyTaskAssignment(
         project_id=assignment.project_id,
         user_id=assignment.user_id,

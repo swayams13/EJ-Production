@@ -278,16 +278,23 @@ def delete_project(project_id: int, db: Session = Depends(get_db), current_user:
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    from backend.services.db_service import ProjectHoldHistory, DailyTaskAssignment, WeldingLog
-    
+    from backend.services.db_service import (
+        ProjectHoldHistory, DailyTaskAssignment, WeldingLog,
+        MaterialHold, JobFinalCheck, AssemblyStep, ProjectCompletionRequest,
+    )
+
     # 1. Delete manual dependencies not tracked by SQLAlchemy cascades
     db.query(ProjectHoldHistory).filter(ProjectHoldHistory.project_id == project_id).delete(synchronize_session=False)
     db.query(DailyTaskAssignment).filter(DailyTaskAssignment.project_id == project_id).delete(synchronize_session=False)
-    
+    db.query(MaterialHold).filter(MaterialHold.project_id == project_id).delete(synchronize_session=False)
+    db.query(ProjectCompletionRequest).filter(ProjectCompletionRequest.project_id == project_id).delete(synchronize_session=False)
+
     line_ids = [l.id for l in db.query(ProjectProductionLine.id).filter(ProjectProductionLine.project_id == project_id).all()]
     if line_ids:
         db.query(WeldingLog).filter(WeldingLog.production_line_id.in_(line_ids)).delete(synchronize_session=False)
-        
+        db.query(JobFinalCheck).filter(JobFinalCheck.production_line_id.in_(line_ids)).delete(synchronize_session=False)
+        db.query(AssemblyStep).filter(AssemblyStep.production_line_id.in_(line_ids)).delete(synchronize_session=False)
+
     # 2. Use SQLAlchemy python-level cascade to delete proj -> production_lines -> parts -> processes -> logs
     db.delete(proj)
     db.commit()

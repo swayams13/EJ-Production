@@ -213,3 +213,17 @@ Hot loop became pure in-memory dict lookups — zero DB calls inside it.
 **Fix:** Migrated all 22 pages to the design system. See `docs/UI_DESIGN_SYSTEM.md` for design tokens, component list, and migration rules (no runtime Tailwind interpolation, no `alert()`/`confirm()`, keep `Th`/`Td` `numeric` props in sync).
 
 **Commit:** merged to `main` on 2026-07-15.
+
+---
+
+## 2026-08-04 — Concurrent dynamic-Workflow agents bundled two unrelated commits together
+
+**Symptom:** Running Tier 3 of the QA-sweep plan (9 tasks, all touching disjoint files) via the dynamic `Workflow` tool with 9 fully-parallel implement→review tracks, Tasks 13 and 14's changes landed in a single commit (`e1039cb`) under Task 13's message alone, instead of two separate commits.
+
+**Root cause:** Even though the two tasks' files never overlapped, both agents work directly on the `demo` branch with no worktree isolation (by design — see `mistakes.md`/repo convention: single-branch workflow, worktrees skipped). Both agents ran `git add <their exact files>` followed immediately by `git commit` within the same second. Git's index is a single shared file per working tree; when Agent A's `git add` finished staging its 3 files but before Agent A's `git commit` ran, Agent B's `git add` staged its own 3 files into the *same* index — so Agent A's `git commit` captured all 6 staged files under Agent A's message.
+
+**Why it wasn't caught by "stage only your exact files":** That instruction prevents an agent from accidentally including files it didn't intend to touch, but it can't prevent a *second* agent's `git add` from running in the gap between the first agent's `git add` and `git commit` — the race is on the shared index file, not on which paths either agent names.
+
+**Resolution:** Not rebased/split — both independent reviewers verified the bundled commit's diff is byte-correct and uncontaminated for both tasks (only the message/attribution is narrower than the contents), and rewriting local history to "fix" a message is not worth the risk for a purely cosmetic issue. Documented in `projectprogress.md` Session 44 and the plan's ledger.
+
+**For next time:** File-disjoint tasks are necessary but not sufficient for safe unisolated concurrency — the `git add`+`git commit` pair itself needs to be atomic per agent to fully avoid this. If commit hygiene matters more than it did here (e.g. if commits need to map 1:1 to tickets for changelog automation), either serialize the final `git add && git commit` step behind a lock the agents share, or accept occasional bundling and only verify diff *content* is correct per task (which is what actually matters).

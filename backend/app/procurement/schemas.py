@@ -42,8 +42,8 @@ class StockAdjust(BaseModel):
     material_name: str
     size: int
     joint_type: str
-    qty_on_hand: Optional[int] = None
-    minimum_stock: Optional[int] = None
+    qty_on_hand: Optional[int] = Field(default=None, ge=0)
+    minimum_stock: Optional[int] = Field(default=None, ge=0)
     reason: Optional[str] = None
 
 class StockResponse(BaseModel):
@@ -61,7 +61,7 @@ class StockResponse(BaseModel):
 
 # --- Lead Times ---
 class LeadTimeUpdate(BaseModel):
-    lead_time_days: int
+    lead_time_days: int = Field(ge=0)
 
 class LeadTimeResponse(BaseModel):
     id: int

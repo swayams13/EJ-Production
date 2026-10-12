@@ -3,6 +3,25 @@
 ## Pending (deferred 2026-07-28):
 - **Railway Cron Job for daily briefing email** — `scripts/send_daily_briefing.py` exists and works, but the scheduled trigger isn't set up yet. In Railway: create a new service from the same GitHub repo (branch `demo`), then in that service's Settings → Deploy set **Cron Schedule** to `30 2 * * *` (2:30 AM UTC = 8:00 AM IST) and **Custom Start Command** to `python scripts/send_daily_briefing.py`. Needs env vars `DATABASE_URL`, `BREVO_API_KEY`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `CEO_EMAIL`, `MD_EMAIL`, `JWT_SECRET_KEY` (`CEO_EMAIL`/`MD_EMAIL` not set anywhere yet — need real addresses). Trigger one manual run to confirm before relying on the schedule. User will do this later.
 
+## Date: 2026-10-12 (Session 45 — Production login outage: backend crash-looping on SQLAlchemy 2.1.0)
+
+### What was done:
+- User reported login failing on production. Traced via Railway CLI + dashboard: frontend (`bountiful-commitment`) healthy; backend (`EJ-Production`, production env) had **0 active deployments** — Railway removed it after repeated crashes. Frontend's `NEXT_PUBLIC_API_URL` pointed at the dead backend domain.
+- Redeployed from source (`railway redeploy --from-source`, same commit `d3cc0fc`) — built fine but crashed again on import: `ModuleNotFoundError: No module named 'psycopg'`.
+- Root cause: unbounded `SQLAlchemy>=2.0.30` → 2.1.0 on rebuild (default driver for `postgresql://` changed to psycopg v3). Fixed with `SQLAlchemy>=2.0.30,<2.1` in root `requirements.txt`; reproduced + verified locally. Details in `problemsresolved.md`.
+
+### Correct Railway topology (the URLs recorded in older entries are stale/dead):
+- Project `amusing-charisma`, envs `production` and `demo`. Services: `bountiful-commitment` (frontend), `EJ-Production` (backend), `Postgres`.
+- Production frontend `bountiful-commitment-production-1172.up.railway.app`; backend `ej-production-production-36ac.up.railway.app`.
+- Demo frontend `bountiful-commitment-demo.up.railway.app`; demo `EJ-Production` has **never been deployed** (no deployment exists).
+
+### What's still pending:
+- **Production is still down until this fix reaches `main`** (Railway deploys prod from `main`). Needs explicit user approval to merge `demo` → `main` per repo rules.
+- After merge: confirm deploy goes ACTIVE, `/health` returns 200, and login works end-to-end.
+- Consider bounding/pinning `fastapi`, `uvicorn`, `pydantic` — same latent drift risk.
+
+---
+
 ## Date: 2026-08-04 (Session 44 — QA-Sweep Fixes: Tier 3 execution, dynamic Workflow)
 
 ### What was done:

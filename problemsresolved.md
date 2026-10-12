@@ -5,6 +5,20 @@ Update this alongside `projectprogress.md` whenever a non-trivial problem is sol
 
 ---
 
+## 2026-10-12 — Production login dead: unbounded `SQLAlchemy>=2.0.30` resolved to 2.1.0, backend crashed on import (Session 45)
+
+**Symptom:** Login on the production frontend (`bountiful-commitment-production-1172.up.railway.app`) did nothing. The backend domain returned Railway's `{"message":"Application not found"}`; the `EJ-Production` service showed "Deployment was removed because it's been crashed for too long".
+
+**Root cause:** Root `requirements.txt` had `SQLAlchemy>=2.0.30` with no upper bound. The 2026-08-02 build resolved 2.0.51 (worked). A 2026-09-25 platform-wide redeploy (same commit `d3cc0fc`, no code change) re-resolved to **2.1.0**, which defaults a plain `postgresql://` URL to the `psycopg` (v3) driver. Only `psycopg2-binary` is in requirements, so `create_engine()` in `backend/services/db_service.py` raised `ModuleNotFoundError: No module named 'psycopg'` at import, before uvicorn could serve anything. Railway's ON_FAILURE retries (max 10) were exhausted and the deployment was removed.
+
+**Why it was hard to see:** the original crash logs had expired, and the first redeploy attempt (to the same commit) crashed identically — the actual traceback only appeared in the new deployment's deploy logs.
+
+**Fix:** `SQLAlchemy>=2.0.30,<2.1` in the root `requirements.txt`. Reproduced locally in a scratch venv: 2.1.0 + psycopg2-binary → `ModuleNotFoundError: psycopg`; `<2.1` → 2.0.54 on the `psycopg2` driver. Chosen over rewriting `DATABASE_URL` to `postgresql+psycopg2://` because it keeps the stored Railway variable valid and fixes the drift at its source.
+
+**Takeaway:** a rebuild with no code change can break prod when dependencies are unbounded. `fastapi`, `uvicorn` and `pydantic` are also unpinned — same latent risk.
+
+---
+
 ## 2026-08-04 — Two QA-sweep plan briefs shipped self-contradicting tests; a third's cascade-delete fix was itself incomplete (Session 43)
 
 **Context:** Tier 2 of `docs/superpowers/plans/2026-08-03-qa-sweep-fixes.md` (8 tasks) was executed via a dynamic `Workflow` run — 5 concurrent file-tracks, fresh implementer + fresh reviewer subagent per task, each told to follow the brief's prescribed steps exactly and **stop rather than improvise** if reality didn't match the brief. Two of the eight legitimately blocked, and a third's reviewer caught a real gap in an "approved-by-the-letter" diff — none were implementer mistakes, all were caught cleanly by the discipline of following the brief literally instead of guessing at intent.

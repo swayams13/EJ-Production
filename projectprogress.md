@@ -15,9 +15,14 @@
 - Production frontend `bountiful-commitment-production-1172.up.railway.app`; backend `ej-production-production-36ac.up.railway.app`.
 - Demo frontend `bountiful-commitment-demo.up.railway.app`; demo `EJ-Production` has **never been deployed** (no deployment exists).
 
+### Resolution:
+- User approved a requirements-only change to `main` (not a full demo→main merge — `demo` is 63 commits ahead / `main` 37 ahead of `demo`, so a merge would have shipped all of QA-sweep Tiers 0–3 at once). Commit `863c0dd` on `main` = the one-line `requirements.txt` change; same change is `7f5f138` on `demo`.
+- Railway auto-deployed `8fdc9ebc` (SUCCESS); deploy logs show "Application startup complete", `/docs` 200, `POST /api/v1/auth/login` returns 422 validation (route live), CORS preflight allows the production frontend origin. Note there is no `/health` route (404 is the app's own).
+- Not verified: a real login with credentials (not entered by the assistant) — user to confirm in the browser.
+
 ### What's still pending:
-- **Production is still down until this fix reaches `main`** (Railway deploys prod from `main`). Needs explicit user approval to merge `demo` → `main` per repo rules.
-- After merge: confirm deploy goes ACTIVE, `/health` returns 200, and login works end-to-end.
+- `demo` still has 63 commits not on `main` and `main` has 37 not on `demo` — branches have diverged; reconcile before the next demo→main merge.
+- Demo environment's `EJ-Production` backend has never been deployed on Railway.
 - Consider bounding/pinning `fastapi`, `uvicorn`, `pydantic` — same latent drift risk.
 
 ---
